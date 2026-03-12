@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
 
+	"diffx/gitstatus"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -30,10 +33,58 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func filesHandler(service *gitstatus.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		files, err := service.ListChangedFiles(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"files": files,
+		})
+	}
+}
+
+func fileContentHandler(service *gitstatus.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			http.Error(w, "path is required", http.StatusBadRequest)
+			return
+		}
+
+		content, contentKey, err := service.ReadFileContent(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				http.Error(w, "file content unavailable", http.StatusNotFound)
+				return
+			}
+
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("X-Content-Key", contentKey)
+		w.Write([]byte(content))
+	}
+}
+
 func main() {
+	repoRoot, err := gitstatus.FindRepoRoot()
+	if err != nil {
+		panic(err)
+	}
+
+	service := gitstatus.NewService(repoRoot)
 	r := chi.NewRouter()
 	r.Use(corsMiddleware)
 	r.Get("/api/hello", helloHandler)
+	r.Get("/api/files", filesHandler(service))
+	r.Get("/api/file-content", fileContentHandler(service))
 
 	println("Server running on :8080")
 	http.ListenAndServe(":8080", r)

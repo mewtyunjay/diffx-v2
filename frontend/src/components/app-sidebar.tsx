@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import type { ChangedFileItem, ChangedFileStatus } from "@/app/changed-files/mock"
+import type { ChangedFileItem, ChangedFileStatus } from "@/app/changed-files/api"
 import {
   Sidebar,
   SidebarContent,
@@ -18,8 +18,13 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 }
 
 type ChangedFileListRow = ChangedFileItem & {
-  displayPrefix: string
+  displaySuffix: string
   fileName: string
+}
+
+type ChangedFileSections = {
+  tracked: ChangedFileListRow[]
+  untracked: ChangedFileListRow[]
 }
 
 const statusClassNames: Record<ChangedFileStatus, string> = {
@@ -123,9 +128,22 @@ function buildChangedFileListRows(files: ChangedFileItem[]) {
     return {
       ...file,
       fileName,
-      displayPrefix: duplicatePrefixes.get(file.id) ?? "",
+      displaySuffix: duplicatePrefixes.get(file.id) ?? "",
     }
   }) satisfies ChangedFileListRow[]
+}
+
+function splitChangedFileSections(rows: ChangedFileListRow[]) {
+  return rows.reduce<ChangedFileSections>(
+    (sections, row) => {
+      sections[row.isTracked ? "tracked" : "untracked"].push(row)
+      return sections
+    },
+    {
+      tracked: [],
+      untracked: [],
+    }
+  )
 }
 
 export function AppSidebar({
@@ -135,6 +153,7 @@ export function AppSidebar({
   ...props
 }: AppSidebarProps) {
   const rows = React.useMemo(() => buildChangedFileListRows(files), [files])
+  const sections = React.useMemo(() => splitChangedFileSections(rows), [rows])
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -162,36 +181,50 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarMenu>
-          {rows.map((file) => (
-            <SidebarMenuItem key={file.id}>
-              <SidebarMenuButton
-                isActive={file.path === selectedFilePath}
-                onClick={() => onSelectFile(file.path)}
-                className="gap-2"
-              >
-                <span
-                  aria-hidden="true"
-                  className={`size-2 shrink-0 rounded-full ${statusClassNames[file.status]}`}
-                />
-                <span className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden">
-                  {file.displayPrefix ? (
+        {(
+          [
+            ["tracked", "Tracked"],
+            ["untracked", "Untracked"],
+          ] as const
+        ).map(([sectionName, label]) => (
+          <div key={sectionName} className="px-2 pb-3">
+            <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55">
+              {label}
+            </p>
+            <SidebarMenu>
+              {sections[sectionName].map((file) => (
+                <SidebarMenuItem key={file.id}>
+                  <SidebarMenuButton
+                    isActive={file.path === selectedFilePath}
+                    onClick={() => onSelectFile(file.path)}
+                    className="gap-2 rounded-lg"
+                  >
                     <span
-                      dir="rtl"
-                      className="min-w-0 shrink truncate text-xs text-sidebar-foreground/55"
+                      aria-hidden="true"
+                      className={`size-2 shrink-0 rounded-full ${statusClassNames[file.status]}`}
+                    />
+                    <span
+                      className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden"
                       title={file.path}
                     >
-                      {file.displayPrefix}
+                      <span className="shrink-0 font-medium text-sidebar-foreground">
+                        {file.fileName}
+                      </span>
+                      {file.displaySuffix ? (
+                        <span
+                          dir="rtl"
+                          className="min-w-0 shrink truncate text-xs text-sidebar-foreground/55"
+                        >
+                          ...{file.displaySuffix}
+                        </span>
+                      ) : null}
                     </span>
-                  ) : null}
-                  <span className="shrink-0 font-medium text-sidebar-foreground">
-                    {file.fileName}
-                  </span>
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </div>
+        ))}
       </SidebarContent>
     </Sidebar>
   )

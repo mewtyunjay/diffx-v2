@@ -4,6 +4,9 @@ export type ChangedFileItem = {
   id: string
   path: string
   status: ChangedFileStatus
+  isTracked: boolean
+  hasStagedChanges: boolean
+  hasUnstagedChanges: boolean
 }
 
 const statusCycle: ChangedFileStatus[] = [
@@ -290,6 +293,9 @@ function buildChangedFiles(): ChangedFileItem[] {
         id: path,
         path,
         status: statusCycle[(offset + index) % statusCycle.length],
+        isTracked: false,
+        hasStagedChanges: false,
+        hasUnstagedChanges: true,
       }
     })
 
@@ -299,3 +305,33 @@ function buildChangedFiles(): ChangedFileItem[] {
 }
 
 export const mockChangedFiles = buildChangedFiles()
+
+function buildMockFileContent(file: ChangedFileItem) {
+  const fileName = file.path.split("/").at(-1) ?? file.path
+  const exportName = fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[^a-zA-Z0-9]+(.)/g, (_, char: string) => char.toUpperCase())
+    .replace(/^[A-Z]/, (char) => char.toLowerCase())
+
+  return [
+    `// Plain text preview for ${file.path}`,
+    "",
+    `export const ${exportName || "selectedFile"}Meta = {`,
+    `  path: "${file.path}",`,
+    `  status: "${file.status}",`,
+    `  isTracked: ${file.isTracked},`,
+    `  hasStagedChanges: ${file.hasStagedChanges},`,
+    `  hasUnstagedChanges: ${file.hasUnstagedChanges},`,
+    "}",
+    "",
+    "export function describeSelection() {",
+    `  return "${fileName} is selected in the plain text preview panel."`,
+    "}",
+    "",
+    "describeSelection()",
+  ].join("\n")
+}
+
+export const mockFileContentsByPath = Object.fromEntries(
+  mockChangedFiles.map((file) => [file.path, buildMockFileContent(file)])
+)
