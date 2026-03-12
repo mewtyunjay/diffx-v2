@@ -176,7 +176,7 @@ export function AppSidebar({
             Changed files
           </p>
           <p className="mt-1 text-sm text-sidebar-foreground/70">
-            {files.length} mocked changes
+            {files.length} changed {files.length === 1 ? "file" : "files"}
           </p>
         </div>
       </SidebarHeader>

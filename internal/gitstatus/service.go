@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 type ChangedFileStatus string
@@ -21,24 +22,127 @@ const (
 	StatusModified ChangedFileStatus = "modified"
 	StatusDeleted  ChangedFileStatus = "deleted"
 	StatusRenamed  ChangedFileStatus = "renamed"
+
+	maxDiffFileBytes  = 256 * 1024
+	versionCacheLimit = 256
 )
+
+var emptyContentHash = hashContents(nil)
 
 type ChangedFileItem struct {
 	ID                 string            `json:"id"`
 	Path               string            `json:"path"`
+	PreviousPath       string            `json:"previousPath,omitempty"`
 	Status             ChangedFileStatus `json:"status"`
 	IsTracked          bool              `json:"isTracked"`
 	HasStagedChanges   bool              `json:"hasStagedChanges"`
 	HasUnstagedChanges bool              `json:"hasUnstagedChanges"`
 	ContentKey         string            `json:"contentKey"`
+	Language           string            `json:"language,omitempty"`
+}
+
+type ChangedFilesResult struct {
+	HeadCommit string            `json:"headCommit"`
+	Files      []ChangedFileItem `json:"files"`
+}
+
+type FileVersion struct {
+	Name     string `json:"name"`
+	Contents string `json:"contents"`
+	CacheKey string `json:"cacheKey"`
+}
+
+type FileDiffResult struct {
+	HeadCommit   string            `json:"headCommit"`
+	Path         string            `json:"path"`
+	PreviousPath string            `json:"previousPath,omitempty"`
+	Status       ChangedFileStatus `json:"status"`
+	Language     string            `json:"language,omitempty"`
+	Before       FileVersion       `json:"before"`
+	After        FileVersion       `json:"after"`
+	Binary       bool              `json:"binary,omitempty"`
+	TooLarge     bool              `json:"tooLarge,omitempty"`
 }
 
 type Service struct {
-	repoRoot string
+	repoRoot     string
+	versionCache *versionCache
+}
+
+type cachedFileVersion struct {
+	version  FileVersion
+	binary   bool
+	tooLarge bool
+}
+
+type versionCache struct {
+	mu         sync.Mutex
+	maxEntries int
+	order      []string
+	items      map[string]cachedFileVersion
 }
 
 func NewService(repoRoot string) *Service {
-	return &Service{repoRoot: repoRoot}
+	return &Service{
+		repoRoot:     repoRoot,
+		versionCache: newVersionCache(versionCacheLimit),
+	}
+}
+
+func newVersionCache(maxEntries int) *versionCache {
+	return &versionCache{
+		maxEntries: maxEntries,
+		items:      make(map[string]cachedFileVersion, maxEntries),
+	}
+}
+
+func (c *versionCache) Get(key string) (cachedFileVersion, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	value, ok := c.items[key]
+	if !ok {
+		return cachedFileVersion{}, false
+	}
+
+	c.touch(key)
+
+	return value, true
+}
+
+func (c *versionCache) Set(key string, value cachedFileVersion) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, ok := c.items[key]; ok {
+		c.items[key] = value
+		c.touch(key)
+		return
+	}
+
+	c.items[key] = value
+	c.order = append(c.order, key)
+
+	if len(c.order) <= c.maxEntries {
+		return
+	}
+
+	evicted := c.order[0]
+	c.order = c.order[1:]
+	delete(c.items, evicted)
+}
+
+func (c *versionCache) touch(key string) {
+	for index, existing := range c.order {
+		if existing != key {
+			continue
+		}
+
+		c.order = append(c.order[:index], c.order[index+1:]...)
+		break
+	}
+
+	c.order = append(c.order, key)
 }
 
 func FindRepoRoot() (string, error) {
@@ -51,7 +155,22 @@ func FindRepoRoot() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func (s *Service) ListChangedFiles(ctx context.Context) ([]ChangedFileItem, error) {
+func (s *Service) HeadCommit(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", s.repoRoot, "rev-parse", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse HEAD: %w", err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func (s *Service) ListChangedFiles(ctx context.Context) (ChangedFilesResult, error) {
+	headCommit, err := s.HeadCommit(ctx)
+	if err != nil {
+		return ChangedFilesResult{}, err
+	}
+
 	cmd := exec.CommandContext(
 		ctx,
 		"git",
@@ -64,10 +183,18 @@ func (s *Service) ListChangedFiles(ctx context.Context) ([]ChangedFileItem, erro
 	)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("git status: %w", err)
+		return ChangedFilesResult{}, fmt.Errorf("git status: %w", err)
 	}
 
-	return parsePorcelainStatus(output, s.repoRoot)
+	files, err := parsePorcelainStatus(output, s.repoRoot)
+	if err != nil {
+		return ChangedFilesResult{}, err
+	}
+
+	return ChangedFilesResult{
+		HeadCommit: headCommit,
+		Files:      files,
+	}, nil
 }
 
 func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, error) {
@@ -93,8 +220,10 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 			return nil, fmt.Errorf("missing path for status token %q", string(token))
 		}
 
+		previousPath := ""
 		if code[0] == 'R' || code[1] == 'R' {
 			if index+1 < len(tokens) && len(tokens[index+1]) > 0 {
+				previousPath = string(tokens[index+1])
 				index++
 			}
 		}
@@ -102,11 +231,13 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 		item := ChangedFileItem{
 			ID:                 path,
 			Path:               path,
+			PreviousPath:       previousPath,
 			Status:             mapChangedStatus(code),
 			IsTracked:          code != "??",
 			HasStagedChanges:   code[0] != ' ' && code[0] != '?',
 			HasUnstagedChanges: code == "??" || (code[1] != ' ' && code[1] != '?'),
 			ContentKey:         "missing",
+			Language:           detectLanguage(path),
 		}
 
 		if key, err := buildContentKey(repoRoot, path); err == nil {
@@ -133,6 +264,15 @@ func mapChangedStatus(code string) ChangedFileStatus {
 		return StatusAdded
 	default:
 		return StatusModified
+	}
+}
+
+func (status ChangedFileStatus) IsValid() bool {
+	switch status {
+	case StatusAdded, StatusModified, StatusDeleted, StatusRenamed:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -177,18 +317,249 @@ func ResolveRepoPath(repoRoot, relPath string) (string, error) {
 }
 
 func (s *Service) ReadFileContent(relPath string) (string, string, error) {
-	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
+	result, err := s.readWorkingTreeVersion(relPath)
 	if err != nil {
 		return "", "", err
+	}
+
+	return result.version.Contents, result.version.CacheKey, nil
+}
+
+func (s *Service) ReadFileDiff(
+	ctx context.Context,
+	path string,
+	status ChangedFileStatus,
+	previousPath string,
+) (FileDiffResult, error) {
+	if path == "" {
+		return FileDiffResult{}, fmt.Errorf("path is required")
+	}
+	if !status.IsValid() {
+		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
+	}
+
+	headCommit, err := s.HeadCommit(ctx)
+	if err != nil {
+		return FileDiffResult{}, err
+	}
+
+	beforeName := path
+	if previousPath != "" {
+		beforeName = previousPath
+	}
+
+	result := FileDiffResult{
+		HeadCommit:   headCommit,
+		Path:         path,
+		PreviousPath: previousPath,
+		Status:       status,
+		Language:     detectLanguage(path),
+		Before:       emptyFileVersion(beforeName),
+		After:        emptyFileVersion(path),
+	}
+
+	var beforeResult cachedFileVersion
+	var afterResult cachedFileVersion
+
+	switch status {
+	case StatusAdded:
+		afterResult, err = s.readWorkingTreeVersion(path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+		result.After = afterResult.version
+	case StatusDeleted:
+		beforeResult, err = s.readGitVersion(ctx, headCommit, path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+		result.Before = beforeResult.version
+	case StatusRenamed:
+		beforePath := previousPath
+		if beforePath == "" {
+			beforePath = path
+			result.PreviousPath = beforePath
+		}
+
+		beforeResult, err = s.readGitVersion(ctx, headCommit, beforePath)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+		afterResult, err = s.readWorkingTreeVersion(path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+
+		result.Before = beforeResult.version
+		result.After = afterResult.version
+	default:
+		beforeResult, err = s.readGitVersion(ctx, headCommit, path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+		afterResult, err = s.readWorkingTreeVersion(path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+
+		result.Before = beforeResult.version
+		result.After = afterResult.version
+	}
+
+	result.Binary = beforeResult.binary || afterResult.binary
+	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
+
+	return result, nil
+}
+
+func (s *Service) readWorkingTreeVersion(relPath string) (cachedFileVersion, error) {
+	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
+	if err != nil {
+		return cachedFileVersion{}, err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return cachedFileVersion{}, err
+	}
+
+	cacheKey := fmt.Sprintf(
+		"worktree:%s:%d-%d",
+		relPath,
+		info.Size(),
+		info.ModTime().UnixNano(),
+	)
+	if cached, ok := s.versionCache.Get(cacheKey); ok {
+		return cached, nil
 	}
 
 	contents, err := os.ReadFile(absPath)
 	if err != nil {
-		return "", "", err
+		return cachedFileVersion{}, err
+	}
+
+	result := buildCachedFileVersion(relPath, contents)
+	s.versionCache.Set(cacheKey, result)
+
+	return result, nil
+}
+
+func (s *Service) readGitVersion(
+	ctx context.Context,
+	headCommit string,
+	relPath string,
+) (cachedFileVersion, error) {
+	cacheKey := fmt.Sprintf("git:%s:%s", headCommit, relPath)
+	if cached, ok := s.versionCache.Get(cacheKey); ok {
+		return cached, nil
+	}
+
+	cmd := exec.CommandContext(
+		ctx,
+		"git",
+		"-C",
+		s.repoRoot,
+		"show",
+		fmt.Sprintf("%s:%s", headCommit, relPath),
+	)
+	contents, err := cmd.Output()
+	if err != nil {
+		return cachedFileVersion{}, fmt.Errorf("git show %s:%s: %w", headCommit, relPath, err)
+	}
+
+	result := buildCachedFileVersion(relPath, contents)
+	s.versionCache.Set(cacheKey, result)
+
+	return result, nil
+}
+
+func buildCachedFileVersion(name string, contents []byte) cachedFileVersion {
+	result := cachedFileVersion{
+		version: FileVersion{
+			Name:     name,
+			CacheKey: hashContents(contents),
+		},
+	}
+
+	if len(contents) > maxDiffFileBytes {
+		result.tooLarge = true
+		return result
+	}
+
+	if bytes.IndexByte(contents, 0) >= 0 {
+		result.binary = true
+		return result
 	}
 
 	normalized := bytes.ToValidUTF8(contents, []byte("\uFFFD"))
-	hash := sha1.Sum(normalized)
+	result.version.Contents = string(normalized)
+	result.version.CacheKey = hashContents(normalized)
 
-	return string(normalized), hex.EncodeToString(hash[:]), nil
+	return result
+}
+
+func emptyFileVersion(name string) FileVersion {
+	return FileVersion{
+		Name:     name,
+		Contents: "",
+		CacheKey: emptyContentHash,
+	}
+}
+
+func hashContents(contents []byte) string {
+	hash := sha1.Sum(contents)
+	return hex.EncodeToString(hash[:])
+}
+
+func detectLanguage(path string) string {
+	if path == "" {
+		return "text"
+	}
+
+	base := filepath.Base(path)
+	if language, ok := languageByBaseName[base]; ok {
+		return language
+	}
+
+	if language, ok := languageByExtension[strings.ToLower(filepath.Ext(base))]; ok {
+		return language
+	}
+
+	return "text"
+}
+
+var languageByBaseName = map[string]string{
+	"Dockerfile":        "docker",
+	"README":            "md",
+	"README.md":         "md",
+	"go.mod":            "go",
+	"go.sum":            "go",
+	"package.json":      "json",
+	"package-lock.json": "json",
+}
+
+var languageByExtension = map[string]string{
+	".bash": "bash",
+	".css":  "css",
+	".go":   "go",
+	".html": "html",
+	".java": "java",
+	".js":   "js",
+	".json": "json",
+	".jsx":  "jsx",
+	".md":   "md",
+	".mjs":  "js",
+	".py":   "python",
+	".rb":   "ruby",
+	".rs":   "rust",
+	".sh":   "bash",
+	".sql":  "sql",
+	".toml": "toml",
+	".ts":   "ts",
+	".tsx":  "tsx",
+	".txt":  "text",
+	".xml":  "xml",
+	".yaml": "yaml",
+	".yml":  "yaml",
+	".zsh":  "bash",
 }

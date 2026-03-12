@@ -3,20 +3,36 @@ export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed"
 export type ChangedFileItem = {
   id: string
   path: string
+  previousPath?: string
   status: ChangedFileStatus
   isTracked: boolean
   hasStagedChanges: boolean
   hasUnstagedChanges: boolean
   contentKey: string
+  language?: string
 }
 
-type ChangedFilesResponse = {
+export type ChangedFilesResult = {
+  headCommit: string
   files: ChangedFileItem[]
 }
 
-export type FileContentResult = {
-  contentKey: string
-  text: string
+export type FileVersionResult = {
+  name: string
+  contents: string
+  cacheKey: string
+}
+
+export type FileDiffResult = {
+  headCommit: string
+  path: string
+  previousPath?: string
+  status: ChangedFileStatus
+  language?: string
+  before: FileVersionResult
+  after: FileVersionResult
+  binary?: boolean
+  tooLarge?: boolean
 }
 
 async function readError(response: Response) {
@@ -30,29 +46,28 @@ export async function fetchChangedFiles(signal?: AbortSignal) {
     throw new Error(await readError(response))
   }
 
-  const data = (await response.json()) as ChangedFilesResponse
-  return data.files
+  return (await response.json()) as ChangedFilesResult
 }
 
-export async function fetchFileContent(
-  path: string,
-  contentKey: string,
+export async function fetchFileDiff(
+  file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
   signal?: AbortSignal
 ) {
-  const params = new URLSearchParams({ path })
-  if (contentKey) {
-    params.set("contentKey", contentKey)
+  const params = new URLSearchParams({
+    path: file.path,
+    status: file.status,
+  })
+
+  if (file.previousPath) {
+    params.set("previousPath", file.previousPath)
   }
 
-  const response = await fetch(`/api/file-content?${params.toString()}`, {
+  const response = await fetch(`/api/file-diff?${params.toString()}`, {
     signal,
   })
   if (!response.ok) {
     throw new Error(await readError(response))
   }
 
-  return {
-    contentKey: response.headers.get("X-Content-Key") ?? contentKey,
-    text: await response.text(),
-  } satisfies FileContentResult
+  return (await response.json()) as FileDiffResult
 }

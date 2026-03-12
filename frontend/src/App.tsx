@@ -1,59 +1,129 @@
+import { preloadHighlighter, type SupportedLanguages } from "@pierre/diffs"
 import {
   fetchChangedFiles,
-  fetchFileContent,
+  fetchFileDiff,
   type ChangedFileItem,
-  type FileContentResult,
+  type ChangedFileStatus,
+  type FileDiffResult,
 } from "@/app/changed-files/api"
 import { AppSidebar } from "@/components/app-sidebar"
+import { DiffPane } from "@/components/diff/DiffPane"
 import { SiteHeader } from "@/components/site-header"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { useEffect, useRef, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 
-type CachedFileContent = FileContentResult & {
-  path: string
+const HIGH_PRIORITY_LANGUAGE_PRELOAD_COUNT = 5
+
+function createDiffCacheKey(headCommit: string, file: Pick<ChangedFileItem, "path" | "contentKey">) {
+  return `${headCommit}:${file.path}:${file.contentKey}`
 }
 
-const EMPTY_CONTENT = "Select a file to preview."
+function formatStatus(status: ChangedFileStatus) {
+  switch (status) {
+    case "added":
+      return "added"
+    case "deleted":
+      return "deleted"
+    case "renamed":
+      return "renamed"
+    default:
+      return "modified"
+  }
+}
+
+function toSupportedLanguage(language?: string) {
+  return (language ?? "text") as SupportedLanguages
+}
 
 function App() {
+  const [headCommit, setHeadCommit] = useState("")
   const [files, setFiles] = useState<ChangedFileItem[]>([])
   const [filesError, setFilesError] = useState<string | null>(null)
   const [isFilesLoading, setIsFilesLoading] = useState(true)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
-  const [displayedContent, setDisplayedContent] = useState<CachedFileContent>({
-    path: "",
-    contentKey: "",
-    text: EMPTY_CONTENT,
-  })
-  const [contentError, setContentError] = useState<string | null>(null)
-  const [isContentLoading, setIsContentLoading] = useState(false)
-  const contentCacheRef = useRef(new Map<string, CachedFileContent>())
-  const inflightContentRef = useRef(new Map<string, Promise<FileContentResult>>())
-  const contentAbortRef = useRef<AbortController | null>(null)
+  const [viewMode, setViewMode] = useState<"unified" | "split">("unified")
+  const [displayedDiff, setDisplayedDiff] = useState<FileDiffResult | null>(null)
+  const [diffError, setDiffError] = useState<string | null>(null)
+  const [isDiffLoading, setIsDiffLoading] = useState(false)
+  const selectedFilePathRef = useRef<string | null>(null)
+  const diffCacheRef = useRef(new Map<string, FileDiffResult>())
+  const diffRequestCacheRef = useRef(new Map<string, Promise<FileDiffResult>>())
+  const diffAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    selectedFilePathRef.current = selectedFilePath
+  }, [selectedFilePath])
+
+  const loadDiff = useCallback(
+    (
+      nextHeadCommit: string,
+      file: Pick<ChangedFileItem, "path" | "previousPath" | "status" | "contentKey">,
+      signal?: AbortSignal
+    ) => {
+      const cacheKey = createDiffCacheKey(nextHeadCommit, file)
+      const cachedDiff = diffCacheRef.current.get(cacheKey)
+      if (cachedDiff) {
+        return Promise.resolve(cachedDiff)
+      }
+
+      const inFlightRequest = diffRequestCacheRef.current.get(cacheKey)
+      if (inFlightRequest) {
+        return inFlightRequest
+      }
+
+      const request = fetchFileDiff(file, signal)
+        .then((result) => {
+          diffCacheRef.current.set(cacheKey, result)
+          return result
+        })
+        .finally(() => {
+          diffRequestCacheRef.current.delete(cacheKey)
+        })
+
+      diffRequestCacheRef.current.set(cacheKey, request)
+
+      return request
+    },
+    []
+  )
 
   useEffect(() => {
     const controller = new AbortController()
 
     fetchChangedFiles(controller.signal)
-      .then((nextFiles) => {
-        setFiles(nextFiles)
+      .then((result) => {
+        const nextSelectedPath =
+          selectedFilePathRef.current &&
+          result.files.some((file) => file.path === selectedFilePathRef.current)
+            ? selectedFilePathRef.current
+            : result.files[0]?.path ?? null
+        const nextSelectedFile =
+          result.files.find((file) => file.path === nextSelectedPath) ?? result.files[0] ?? null
+
+        setHeadCommit(result.headCommit)
+        setFiles(result.files)
         setFilesError(null)
-        setSelectedFilePath((currentPath) => {
-          if (currentPath && nextFiles.some((file) => file.path === currentPath)) {
-            return currentPath
-          }
-          return nextFiles[0]?.path ?? null
-        })
+        setSelectedFilePath(nextSelectedPath)
+
+        if (nextSelectedFile) {
+          void loadDiff(result.headCommit, nextSelectedFile, controller.signal).catch(
+            () => undefined
+          )
+        }
       })
       .catch((error: Error) => {
         if (controller.signal.aborted) {
           return
         }
+
+        setHeadCommit("")
+        setFiles([])
         setFilesError(error.message)
       })
       .finally(() => {
@@ -63,85 +133,81 @@ function App() {
       })
 
     return () => controller.abort()
-  }, [])
+  }, [loadDiff])
 
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
 
+  const preloadLanguages = useMemo(() => {
+    const nextLanguages = new Set<SupportedLanguages>(["text"])
+
+    files.slice(0, HIGH_PRIORITY_LANGUAGE_PRELOAD_COUNT).forEach((file) => {
+      nextLanguages.add(toSupportedLanguage(file.language))
+    })
+
+    if (selectedFile) {
+      nextLanguages.add(toSupportedLanguage(selectedFile.language))
+    }
+
+    return Array.from(nextLanguages)
+  }, [files, selectedFile])
+
   useEffect(() => {
-    if (!selectedFile) {
+    preloadHighlighter({
+      themes: ["pierre-dark"],
+      langs: preloadLanguages,
+    }).catch(() => undefined)
+  }, [preloadLanguages])
+
+  useEffect(() => {
+    if (!selectedFile || !headCommit) {
+      diffAbortRef.current?.abort()
       return
     }
 
-    const cacheKey = `${selectedFile.path}::${selectedFile.contentKey}`
-    const cachedContent = contentCacheRef.current.get(cacheKey)
-    if (cachedContent) {
-      setDisplayedContent(cachedContent)
-      setContentError(null)
-      setIsContentLoading(false)
+    const cacheKey = createDiffCacheKey(headCommit, selectedFile)
+    const cachedDiff = diffCacheRef.current.get(cacheKey)
+    if (cachedDiff) {
+      setDisplayedDiff(cachedDiff)
+      setDiffError(null)
+      setIsDiffLoading(false)
       return
     }
 
-    contentAbortRef.current?.abort()
+    diffAbortRef.current?.abort()
 
     const controller = new AbortController()
-    contentAbortRef.current = controller
-    setContentError(null)
-    setIsContentLoading(true)
+    diffAbortRef.current = controller
+    setDiffError(null)
+    setIsDiffLoading(true)
 
-    let request = inflightContentRef.current.get(cacheKey)
-    if (!request) {
-      request = fetchFileContent(
-        selectedFile.path,
-        selectedFile.contentKey,
-        controller.signal
-      ).finally(() => {
-        inflightContentRef.current.delete(cacheKey)
-      })
-      inflightContentRef.current.set(cacheKey, request)
-    }
-
-    request
+    loadDiff(headCommit, selectedFile, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) {
           return
         }
 
-        const nextContent = {
-          path: selectedFile.path,
-          contentKey: result.contentKey,
-          text: result.text,
-        } satisfies CachedFileContent
-
-        contentCacheRef.current.set(cacheKey, nextContent)
-        setDisplayedContent(nextContent)
-        setIsContentLoading(false)
+        setDisplayedDiff(result)
+        setIsDiffLoading(false)
       })
       .catch((error: Error) => {
         if (controller.signal.aborted) {
           return
         }
 
-        setDisplayedContent({
-          path: selectedFile.path,
-          contentKey: selectedFile.contentKey,
-          text: "Content unavailable.",
-        })
-        setContentError(error.message)
-        setIsContentLoading(false)
+        setDisplayedDiff(null)
+        setDiffError(error.message)
+        setIsDiffLoading(false)
       })
 
     return () => controller.abort()
-  }, [filesError, selectedFile])
+  }, [headCommit, loadDiff, selectedFile])
 
-  const isShowingStaleContent =
-    isContentLoading &&
+  const isShowingStaleDiff =
+    isDiffLoading &&
     !!selectedFile &&
-    displayedContent.path !== "" &&
-    displayedContent.path !== selectedFile.path
-  const mainPanelText = selectedFile
-    ? displayedContent.text
-    : filesError ?? (isFilesLoading ? "Loading files..." : EMPTY_CONTENT)
+    !!displayedDiff &&
+    (displayedDiff.path !== selectedFile.path || displayedDiff.headCommit !== headCommit)
 
   return (
     <ThemeProvider>
@@ -163,38 +229,75 @@ function App() {
           />
           <SidebarInset>
             <SiteHeader />
-            <main className="flex min-h-0 flex-1 flex-col p-4">
-              <section className="flex flex-1 flex-col rounded-xl border border-border/50 bg-card/30 shadow-sm">
-                <div className="border-b border-border/60 px-5 py-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Plain text preview
-                  </p>
-                  <h1 className="mt-2 text-xl font-semibold text-foreground">
-                    {selectedFile?.path ??
-                      (isFilesLoading ? "Loading files..." : "No file selected")}
-                  </h1>
-                  {selectedFile ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {selectedFile.isTracked ? "tracked" : "untracked"} ·{" "}
-                      {selectedFile.hasStagedChanges ? "staged" : "not staged"} ·{" "}
-                      {selectedFile.hasUnstagedChanges
-                        ? "has unstaged changes"
-                        : "no unstaged changes"}
+            <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
+              <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-sm">
+                <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                      Fast file diff
                     </p>
-                  ) : null}
-                  {isShowingStaleContent ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Loading content...
-                    </p>
-                  ) : null}
-                  {contentError && !isContentLoading ? (
-                    <p className="mt-2 text-sm text-destructive">{contentError}</p>
-                  ) : null}
+                    <h1 className="mt-2 text-xl font-semibold text-foreground">
+                      {selectedFile?.path ??
+                        (isFilesLoading ? "Loading files..." : "No file selected")}
+                    </h1>
+                    {selectedFile ? (
+                      <>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {formatStatus(selectedFile.status)} ·{" "}
+                          {selectedFile.isTracked ? "tracked" : "untracked"} ·{" "}
+                          {selectedFile.hasStagedChanges ? "staged" : "not staged"} ·{" "}
+                          {selectedFile.hasUnstagedChanges
+                            ? "has unstaged changes"
+                            : "no unstaged changes"}
+                        </p>
+                        {selectedFile.previousPath ? (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            from {selectedFile.previousPath}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
+                    {isShowingStaleDiff ? (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Loading diff...
+                      </p>
+                    ) : null}
+                    {filesError && !isFilesLoading ? (
+                      <p className="mt-2 text-sm text-destructive">{filesError}</p>
+                    ) : null}
+                    {selectedFile && diffError && !isDiffLoading ? (
+                      <p className="mt-2 text-sm text-destructive">{diffError}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center gap-2 self-start rounded-lg border border-border/70 bg-background/60 p-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={viewMode === "unified" ? "secondary" : "ghost"}
+                      onClick={() => setViewMode("unified")}
+                    >
+                      Unified
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={viewMode === "split" ? "secondary" : "ghost"}
+                      onClick={() => setViewMode("split")}
+                    >
+                      Split
+                    </Button>
+                  </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto p-5">
-                  <pre className="font-mono text-sm leading-6 whitespace-pre-wrap text-foreground">
-                    {mainPanelText}
-                  </pre>
+
+                <div className="min-h-0 min-w-0 flex-1 overflow-auto p-5">
+                  {isDiffLoading && !displayedDiff ? (
+                    <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
+                      Loading diff...
+                    </div>
+                  ) : (
+                    <DiffPane diff={selectedFile ? displayedDiff : null} viewMode={viewMode} />
+                  )}
                 </div>
               </section>
             </main>

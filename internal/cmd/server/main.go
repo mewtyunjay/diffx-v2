@@ -35,16 +35,49 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 func filesHandler(service *gitstatus.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		files, err := service.ListChangedFiles(r.Context())
+		result, err := service.ListChangedFiles(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"files": files,
-		})
+		json.NewEncoder(w).Encode(result)
+	}
+}
+
+func fileDiffHandler(service *gitstatus.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Query().Get("path")
+		if path == "" {
+			http.Error(w, "path is required", http.StatusBadRequest)
+			return
+		}
+
+		status := gitstatus.ChangedFileStatus(r.URL.Query().Get("status"))
+		if !status.IsValid() {
+			http.Error(w, "status is required", http.StatusBadRequest)
+			return
+		}
+
+		result, err := service.ReadFileDiff(
+			r.Context(),
+			path,
+			status,
+			r.URL.Query().Get("previousPath"),
+		)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				http.Error(w, "file diff unavailable", http.StatusNotFound)
+				return
+			}
+
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
 	}
 }
 
@@ -84,6 +117,7 @@ func main() {
 	r.Use(corsMiddleware)
 	r.Get("/api/hello", helloHandler)
 	r.Get("/api/files", filesHandler(service))
+	r.Get("/api/file-diff", fileDiffHandler(service))
 	r.Get("/api/file-content", fileContentHandler(service))
 
 	println("Server running on :8080")
