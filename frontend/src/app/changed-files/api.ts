@@ -15,6 +15,7 @@ export type ChangedFileItem = {
 export type ChangedFilesResult = {
   headCommit: string
   files: ChangedFileItem[]
+  initialDiff?: FileDiffResult
 }
 
 export type FileVersionResult = {
@@ -51,6 +52,7 @@ export async function fetchChangedFiles(signal?: AbortSignal) {
 
 export async function fetchFileDiff(
   file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
+  headCommit?: string,
   signal?: AbortSignal
 ) {
   const params = new URLSearchParams({
@@ -60,6 +62,10 @@ export async function fetchFileDiff(
 
   if (file.previousPath) {
     params.set("previousPath", file.previousPath)
+  }
+
+  if (headCommit) {
+    params.set("headCommit", headCommit)
   }
 
   const response = await fetch(`/api/file-diff?${params.toString()}`, {

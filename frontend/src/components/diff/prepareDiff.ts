@@ -16,6 +16,21 @@ export type PreparedFileDiffResult = FileDiffResult & {
   isPureRename: boolean
 }
 
+export type PrepareDiffWorkerRequest = {
+  id: number
+  diff: FileDiffResult
+}
+
+export type PrepareDiffWorkerResponse =
+  | {
+      id: number
+      preparedDiff: PreparedFileDiffResult
+    }
+  | {
+      id: number
+      error: string
+    }
+
 function toSupportedLanguage(language?: string) {
   return (language ?? "text") as SupportedLanguages
 }
@@ -63,4 +78,8 @@ export function prepareFileDiff(diff: FileDiffResult): PreparedFileDiffResult {
     isLargeDiff,
     isPureRename,
   }
+}
+
+export function clonePreparedFileDiff(diff: PreparedFileDiffResult): PreparedFileDiffResult {
+  return structuredClone(diff)
 }

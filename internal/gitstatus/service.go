@@ -42,8 +42,9 @@ type ChangedFileItem struct {
 }
 
 type ChangedFilesResult struct {
-	HeadCommit string            `json:"headCommit"`
-	Files      []ChangedFileItem `json:"files"`
+	HeadCommit  string            `json:"headCommit"`
+	Files       []ChangedFileItem `json:"files"`
+	InitialDiff *FileDiffResult   `json:"initialDiff,omitempty"`
 }
 
 type FileVersion struct {
@@ -330,6 +331,7 @@ func (s *Service) ReadFileDiff(
 	path string,
 	status ChangedFileStatus,
 	previousPath string,
+	headCommit string,
 ) (FileDiffResult, error) {
 	if path == "" {
 		return FileDiffResult{}, fmt.Errorf("path is required")
@@ -338,7 +340,7 @@ func (s *Service) ReadFileDiff(
 		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
 	}
 
-	headCommit, err := s.HeadCommit(ctx)
+	headCommit, err := s.resolveHeadCommit(ctx, headCommit)
 	if err != nil {
 		return FileDiffResult{}, err
 	}
@@ -410,6 +412,14 @@ func (s *Service) ReadFileDiff(
 	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
 
 	return result, nil
+}
+
+func (s *Service) resolveHeadCommit(ctx context.Context, headCommit string) (string, error) {
+	if headCommit != "" {
+		return headCommit, nil
+	}
+
+	return s.HeadCommit(ctx)
 }
 
 func (s *Service) readWorkingTreeVersion(relPath string) (cachedFileVersion, error) {

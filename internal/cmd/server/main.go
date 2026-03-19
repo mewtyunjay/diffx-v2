@@ -41,6 +41,20 @@ func filesHandler(service *gitstatus.Service) http.HandlerFunc {
 			return
 		}
 
+		if len(result.Files) > 0 {
+			initialFile := result.Files[0]
+			initialDiff, err := service.ReadFileDiff(
+				r.Context(),
+				initialFile.Path,
+				initialFile.Status,
+				initialFile.PreviousPath,
+				result.HeadCommit,
+			)
+			if err == nil {
+				result.InitialDiff = &initialDiff
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
 	}
@@ -65,6 +79,7 @@ func fileDiffHandler(service *gitstatus.Service) http.HandlerFunc {
 			path,
 			status,
 			r.URL.Query().Get("previousPath"),
+			r.URL.Query().Get("headCommit"),
 		)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {

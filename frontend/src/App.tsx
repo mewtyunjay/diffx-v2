@@ -1,4 +1,3 @@
-import { preloadHighlighter, type SupportedLanguages } from "@pierre/diffs"
 import {
   fetchChangedFiles,
   fetchFileDiff,
@@ -16,9 +15,12 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
-
-const HIGH_PRIORITY_LANGUAGE_PRELOAD_COUNT = 5
+import {
+  clonePreparedFileDiff,
+  type PreparedFileDiffResult,
+} from "@/components/diff/prepareDiff"
+import { prepareFileDiffAsync } from "@/components/diff/prepareDiffAsync"
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react"
 
 function createDiffCacheKey(headCommit: string, file: Pick<ChangedFileItem, "path" | "contentKey">) {
   return `${headCommit}:${file.path}:${file.contentKey}`
@@ -37,10 +39,6 @@ function formatStatus(status: ChangedFileStatus) {
   }
 }
 
-function toSupportedLanguage(language?: string) {
-  return (language ?? "text") as SupportedLanguages
-}
-
 function App() {
   const [headCommit, setHeadCommit] = useState("")
   const [files, setFiles] = useState<ChangedFileItem[]>([])
@@ -48,17 +46,60 @@ function App() {
   const [isFilesLoading, setIsFilesLoading] = useState(true)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"unified" | "split">("unified")
-  const [displayedDiff, setDisplayedDiff] = useState<FileDiffResult | null>(null)
+  const [displayedDiff, setDisplayedDiff] = useState<PreparedFileDiffResult | null>(null)
   const [diffError, setDiffError] = useState<string | null>(null)
   const [isDiffLoading, setIsDiffLoading] = useState(false)
   const selectedFilePathRef = useRef<string | null>(null)
-  const diffCacheRef = useRef(new Map<string, FileDiffResult>())
-  const diffRequestCacheRef = useRef(new Map<string, Promise<FileDiffResult>>())
+  const diffCacheRef = useRef(new Map<string, PreparedFileDiffResult>())
+  const diffPrepareRequestCacheRef = useRef(new Map<string, Promise<PreparedFileDiffResult>>())
+  const diffRequestCacheRef = useRef(new Map<string, Promise<PreparedFileDiffResult>>())
   const diffAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     selectedFilePathRef.current = selectedFilePath
   }, [selectedFilePath])
+
+  const readCachedDiff = useCallback((cacheKey: string) => {
+    const cachedDiff = diffCacheRef.current.get(cacheKey)
+    if (!cachedDiff) {
+      return null
+    }
+
+    return clonePreparedFileDiff(cachedDiff)
+  }, [])
+
+  const prepareLoadedDiff = useCallback(
+    (
+      nextHeadCommit: string,
+      file: Pick<ChangedFileItem, "path" | "contentKey">,
+      diff: FileDiffResult
+    ) => {
+      const cacheKey = createDiffCacheKey(nextHeadCommit, file)
+      const cachedDiff = readCachedDiff(cacheKey)
+      if (cachedDiff) {
+        return Promise.resolve(cachedDiff)
+      }
+
+      const inFlightRequest = diffPrepareRequestCacheRef.current.get(cacheKey)
+      if (inFlightRequest) {
+        return inFlightRequest
+      }
+
+      const request = prepareFileDiffAsync(diff)
+        .then((preparedDiff) => {
+          diffCacheRef.current.set(cacheKey, clonePreparedFileDiff(preparedDiff))
+          return preparedDiff
+        })
+        .finally(() => {
+          diffPrepareRequestCacheRef.current.delete(cacheKey)
+        })
+
+      diffPrepareRequestCacheRef.current.set(cacheKey, request)
+
+      return request
+    },
+    [readCachedDiff]
+  )
 
   const loadDiff = useCallback(
     (
@@ -67,7 +108,7 @@ function App() {
       signal?: AbortSignal
     ) => {
       const cacheKey = createDiffCacheKey(nextHeadCommit, file)
-      const cachedDiff = diffCacheRef.current.get(cacheKey)
+      const cachedDiff = readCachedDiff(cacheKey)
       if (cachedDiff) {
         return Promise.resolve(cachedDiff)
       }
@@ -77,11 +118,8 @@ function App() {
         return inFlightRequest
       }
 
-      const request = fetchFileDiff(file, signal)
-        .then((result) => {
-          diffCacheRef.current.set(cacheKey, result)
-          return result
-        })
+      const request = fetchFileDiff(file, nextHeadCommit, signal)
+        .then((result) => prepareLoadedDiff(nextHeadCommit, file, result))
         .finally(() => {
           diffRequestCacheRef.current.delete(cacheKey)
         })
@@ -90,7 +128,7 @@ function App() {
 
       return request
     },
-    []
+    [prepareLoadedDiff, readCachedDiff]
   )
 
   useEffect(() => {
@@ -98,6 +136,7 @@ function App() {
 
     fetchChangedFiles(controller.signal)
       .then((result) => {
+        const initialDiff = result.initialDiff ?? null
         const nextSelectedPath =
           selectedFilePathRef.current &&
           result.files.some((file) => file.path === selectedFilePathRef.current)
@@ -105,16 +144,23 @@ function App() {
             : result.files[0]?.path ?? null
         const nextSelectedFile =
           result.files.find((file) => file.path === nextSelectedPath) ?? result.files[0] ?? null
+        const initialDiffFile = initialDiff
+          ? result.files.find((file) => file.path === initialDiff.path) ?? null
+          : null
 
         setHeadCommit(result.headCommit)
         setFiles(result.files)
         setFilesError(null)
         setSelectedFilePath(nextSelectedPath)
 
-        if (nextSelectedFile) {
-          void loadDiff(result.headCommit, nextSelectedFile, controller.signal).catch(
-            () => undefined
-          )
+        if (initialDiff && initialDiffFile) {
+          void prepareLoadedDiff(result.headCommit, initialDiffFile, initialDiff).catch(() => undefined)
+        }
+
+        if (!nextSelectedFile) {
+          setDisplayedDiff(null)
+          setDiffError(null)
+          setIsDiffLoading(false)
         }
       })
       .catch((error: Error) => {
@@ -124,6 +170,8 @@ function App() {
 
         setHeadCommit("")
         setFiles([])
+        setDisplayedDiff(null)
+        setDiffError(null)
         setFilesError(error.message)
       })
       .finally(() => {
@@ -133,31 +181,10 @@ function App() {
       })
 
     return () => controller.abort()
-  }, [loadDiff])
+  }, [prepareLoadedDiff])
 
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
-
-  const preloadLanguages = useMemo(() => {
-    const nextLanguages = new Set<SupportedLanguages>(["text"])
-
-    files.slice(0, HIGH_PRIORITY_LANGUAGE_PRELOAD_COUNT).forEach((file) => {
-      nextLanguages.add(toSupportedLanguage(file.language))
-    })
-
-    if (selectedFile) {
-      nextLanguages.add(toSupportedLanguage(selectedFile.language))
-    }
-
-    return Array.from(nextLanguages)
-  }, [files, selectedFile])
-
-  useEffect(() => {
-    preloadHighlighter({
-      themes: ["pierre-dark"],
-      langs: preloadLanguages,
-    }).catch(() => undefined)
-  }, [preloadLanguages])
 
   useEffect(() => {
     if (!selectedFile || !headCommit) {
@@ -165,23 +192,29 @@ function App() {
       return
     }
 
-    const cacheKey = createDiffCacheKey(headCommit, selectedFile)
-    const cachedDiff = diffCacheRef.current.get(cacheKey)
-    if (cachedDiff) {
-      setDisplayedDiff(cachedDiff)
-      setDiffError(null)
-      setIsDiffLoading(false)
-      return
-    }
-
     diffAbortRef.current?.abort()
 
+    const cacheKey = createDiffCacheKey(headCommit, selectedFile)
+    const cachedDiff = readCachedDiff(cacheKey)
     const controller = new AbortController()
     diffAbortRef.current = controller
-    setDiffError(null)
-    setIsDiffLoading(true)
+    if (!cachedDiff) {
+      queueMicrotask(() => {
+        if (controller.signal.aborted) {
+          return
+        }
 
-    loadDiff(headCommit, selectedFile, controller.signal)
+        setDiffError(null)
+        setIsDiffLoading(true)
+      })
+    }
+
+    const inFlightPreparedDiff = diffPrepareRequestCacheRef.current.get(cacheKey)
+    const request = cachedDiff
+      ? Promise.resolve(cachedDiff)
+      : inFlightPreparedDiff ?? loadDiff(headCommit, selectedFile, controller.signal)
+
+    request
       .then((result) => {
         if (controller.signal.aborted) {
           return
@@ -201,13 +234,7 @@ function App() {
       })
 
     return () => controller.abort()
-  }, [headCommit, loadDiff, selectedFile])
-
-  const isShowingStaleDiff =
-    isDiffLoading &&
-    !!selectedFile &&
-    !!displayedDiff &&
-    (displayedDiff.path !== selectedFile.path || displayedDiff.headCommit !== headCommit)
+  }, [headCommit, loadDiff, readCachedDiff, selectedFile])
 
   return (
     <ThemeProvider>
@@ -257,11 +284,6 @@ function App() {
                         ) : null}
                       </>
                     ) : null}
-                    {isShowingStaleDiff ? (
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Loading diff...
-                      </p>
-                    ) : null}
                     {filesError && !isFilesLoading ? (
                       <p className="mt-2 text-sm text-destructive">{filesError}</p>
                     ) : null}
@@ -291,13 +313,11 @@ function App() {
                 </div>
 
                 <div className="min-h-0 min-w-0 flex-1 overflow-auto p-5">
-                  {isDiffLoading && !displayedDiff ? (
-                    <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
-                      Loading diff...
-                    </div>
-                  ) : (
-                    <DiffPane diff={selectedFile ? displayedDiff : null} viewMode={viewMode} />
-                  )}
+                  <DiffPane
+                    diff={selectedFile ? displayedDiff : null}
+                    hasSelectedFile={!!selectedFile}
+                    viewMode={viewMode}
+                  />
                 </div>
               </section>
             </main>
