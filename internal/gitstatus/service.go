@@ -43,6 +43,7 @@ type ChangedFileItem struct {
 
 type ChangedFilesResult struct {
 	HeadCommit  string            `json:"headCommit"`
+	ScopePath   string            `json:"scopePath"`
 	Files       []ChangedFileItem `json:"files"`
 	InitialDiff *FileDiffResult   `json:"initialDiff,omitempty"`
 }
@@ -67,6 +68,7 @@ type FileDiffResult struct {
 
 type Service struct {
 	repoRoot     string
+	scopePath    string
 	versionCache *versionCache
 }
 
@@ -83,9 +85,10 @@ type versionCache struct {
 	items      map[string]cachedFileVersion
 }
 
-func NewService(repoRoot string) *Service {
+func NewService(repoRoot, scopePath string) *Service {
 	return &Service{
 		repoRoot:     repoRoot,
+		scopePath:    normalizeScopePath(scopePath),
 		versionCache: newVersionCache(versionCacheLimit),
 	}
 }
@@ -166,6 +169,18 @@ func (s *Service) HeadCommit(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+func (s *Service) ScopePath() string {
+	return s.scopePath
+}
+
+func (s *Service) AllowsFile(path string) bool {
+	return matchesScope(path, s.scopePath)
+}
+
+func (s *Service) AllowsDiff(path, previousPath string) bool {
+	return matchesScope(path, s.scopePath) || matchesScope(previousPath, s.scopePath)
+}
+
 func (s *Service) ListChangedFiles(ctx context.Context) (ChangedFilesResult, error) {
 	headCommit, err := s.HeadCommit(ctx)
 	if err != nil {
@@ -192,9 +207,17 @@ func (s *Service) ListChangedFiles(ctx context.Context) (ChangedFilesResult, err
 		return ChangedFilesResult{}, err
 	}
 
+	filteredFiles := make([]ChangedFileItem, 0, len(files))
+	for _, file := range files {
+		if s.AllowsDiff(file.Path, file.PreviousPath) {
+			filteredFiles = append(filteredFiles, file)
+		}
+	}
+
 	return ChangedFilesResult{
 		HeadCommit: headCommit,
-		Files:      files,
+		ScopePath:  s.scopePath,
+		Files:      filteredFiles,
 	}, nil
 }
 
@@ -266,6 +289,36 @@ func mapChangedStatus(code string) ChangedFileStatus {
 	default:
 		return StatusModified
 	}
+}
+
+func normalizeScopePath(scopePath string) string {
+	if scopePath == "" {
+		return "."
+	}
+
+	normalized := filepath.ToSlash(filepath.Clean(scopePath))
+	normalized = strings.TrimPrefix(normalized, "./")
+	if normalized == "" {
+		return "."
+	}
+
+	return normalized
+}
+
+func matchesScope(path, scopePath string) bool {
+	if path == "" {
+		return false
+	}
+
+	normalizedScope := normalizeScopePath(scopePath)
+	if normalizedScope == "." {
+		return true
+	}
+
+	normalizedPath := filepath.ToSlash(filepath.Clean(path))
+	normalizedPath = strings.TrimPrefix(normalizedPath, "./")
+
+	return normalizedPath == normalizedScope || strings.HasPrefix(normalizedPath, normalizedScope+"/")
 }
 
 func (status ChangedFileStatus) IsValid() bool {

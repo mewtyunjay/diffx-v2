@@ -23,6 +23,8 @@ func TestParseCommand(t *testing.T) {
 		{name: "dev", args: []string{"dev"}, want: commandDev},
 		{name: "install", args: []string{"install"}, want: commandInstall},
 		{name: "build", args: []string{"build"}, want: commandBuild},
+		{name: "package", args: []string{"package"}, want: commandPackage},
+		{name: "build-package alias", args: []string{"build-package"}, want: commandPackage},
 		{name: "help flag", args: []string{"--help"}, want: commandHelp},
 		{name: "unknown", args: []string{"unknown"}, wantErr: true},
 		{name: "extra args", args: []string{"dev", "now"}, wantErr: true},

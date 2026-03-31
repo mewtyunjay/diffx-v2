@@ -95,7 +95,7 @@ function RenderedDiffPane({ diff, viewMode }: RenderedDiffPaneProps) {
           <button
             type="button"
             aria-label="Add inline comment"
-            className="pointer-events-auto z-10 mr-[-0.35rem] translate-x-1.5 rounded-md text-foreground"
+            className="pointer-events-auto z-10 inline-flex items-center justify-center -translate-x-1.5 rounded-md text-foreground"
             style={{
               width: "1.5rem",
               height: "1.5rem",

@@ -14,6 +14,7 @@ export type ChangedFileItem = {
 
 export type ChangedFilesResult = {
   headCommit: string
+  scopePath: string
   files: ChangedFileItem[]
   initialDiff?: FileDiffResult
 }

@@ -1,0 +1,23 @@
+{
+  "name": "diffx",
+  "version": "0.1.0",
+  "description": "Open a local git diff review UI for the current working directory.",
+  "type": "module",
+  "bin": {
+    "diffx": "./bin/diffx.js"
+  },
+  "files": [
+    "bin",
+    "runtime",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build:web": "npm --prefix frontend run build",
+    "build:package": "node ./scripts/build-package.mjs",
+    "prepack": "npm run build:package",
+    "test:cli": "node --test ./test/*.test.mjs"
+  }
+}

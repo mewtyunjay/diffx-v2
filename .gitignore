@@ -2,6 +2,8 @@
 internal/dev
 internal/cmd/bin/
 internal/server
+runtime/
+*.tgz
 
 *.md
 cli

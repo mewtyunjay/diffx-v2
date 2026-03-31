@@ -2,6 +2,10 @@ package gitstatus
 
 import (
 	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -62,5 +66,93 @@ func TestBuildCachedFileVersionMarksLargeFiles(t *testing.T) {
 	}
 	if result.version.Contents != "" {
 		t.Fatalf("expected large contents to stay empty, got %q", result.version.Contents)
+	}
+}
+
+func TestMatchesScope(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		path      string
+		scopePath string
+		want      bool
+	}{
+		{name: "repo root", path: "frontend/src/App.tsx", scopePath: ".", want: true},
+		{name: "nested match", path: "frontend/src/App.tsx", scopePath: "frontend/src", want: true},
+		{name: "exact match", path: "frontend/src", scopePath: "frontend/src", want: true},
+		{name: "outside scope", path: "frontend/package.json", scopePath: "frontend/src", want: false},
+		{name: "empty path", path: "", scopePath: ".", want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := matchesScope(tt.path, tt.scopePath); got != tt.want {
+				t.Fatalf("matchesScope(%q, %q) = %v, want %v", tt.path, tt.scopePath, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAllowsDiffUsesPreviousPath(t *testing.T) {
+	t.Parallel()
+
+	service := NewService("/tmp/repo", "frontend/src")
+	if !service.AllowsDiff("docs/new-name.tsx", "frontend/src/old-name.tsx") {
+		t.Fatal("expected rename crossing scope boundary to be allowed")
+	}
+}
+
+func TestResolveWorkspaceTarget(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init")
+
+	nestedDir := filepath.Join(repoRoot, "frontend", "src")
+	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		t.Fatalf("create nested dir: %v", err)
+	}
+
+	target, err := ResolveWorkspaceTarget(nestedDir)
+	if err != nil {
+		t.Fatalf("ResolveWorkspaceTarget returned error: %v", err)
+	}
+
+	resolvedRepoRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(repoRoot): %v", err)
+	}
+
+	if target.RepoRoot != resolvedRepoRoot {
+		t.Fatalf("expected repo root %q, got %q", resolvedRepoRoot, target.RepoRoot)
+	}
+	if target.ScopePath != "frontend/src" {
+		t.Fatalf("expected scope path frontend/src, got %q", target.ScopePath)
+	}
+}
+
+func TestResolveWorkspaceTargetRejectsNonGitDirectories(t *testing.T) {
+	t.Parallel()
+
+	_, err := ResolveWorkspaceTarget(t.TempDir())
+	if err == nil {
+		t.Fatal("expected non-git directory to be rejected")
+	}
+	if !strings.Contains(err.Error(), ErrNotGitRepo.Error()) {
+		t.Fatalf("expected not-git error, got %v", err)
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(output))
 	}
 }

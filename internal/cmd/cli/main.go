@@ -24,6 +24,7 @@ const (
 	commandDev
 	commandInstall
 	commandBuild
+	commandPackage
 )
 
 const usageText = `diffx developer CLI
@@ -32,6 +33,7 @@ Usage:
   ./cli dev
   ./cli install
   ./cli build
+  ./cli package
 `
 
 func main() {
@@ -57,6 +59,8 @@ func run(args []string) error {
 		return runInstall()
 	case commandBuild:
 		return runBuild()
+	case commandPackage:
+		return runPackage()
 	default:
 		return fmt.Errorf("unsupported command")
 	}
@@ -88,6 +92,11 @@ func parseCommand(args []string) (command, error) {
 			return commandBuild, fmt.Errorf("build does not accept additional arguments")
 		}
 		return commandBuild, nil
+	case "package", "build-package":
+		if len(args) > 1 {
+			return commandPackage, fmt.Errorf("%s does not accept additional arguments", args[0])
+		}
+		return commandPackage, nil
 	default:
 		return commandHelp, fmt.Errorf("unknown command %q\n\n%s", args[0], usageText)
 	}
@@ -191,6 +200,10 @@ func runBuild() error {
 	}
 
 	return runCommand("backend", ".", "go", "build", "-o", "./cmd/bin/diffx-server", "./cmd/server")
+}
+
+func runPackage() error {
+	return runCommand("package", filepath.Clean(".."), "npm", "run", "build:package")
 }
 
 type managedProcess struct {

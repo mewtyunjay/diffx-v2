@@ -41,6 +41,7 @@ function formatStatus(status: ChangedFileStatus) {
 
 function App() {
   const [headCommit, setHeadCommit] = useState("")
+  const [scopePath, setScopePath] = useState(".")
   const [files, setFiles] = useState<ChangedFileItem[]>([])
   const [filesError, setFilesError] = useState<string | null>(null)
   const [isFilesLoading, setIsFilesLoading] = useState(true)
@@ -149,6 +150,7 @@ function App() {
           : null
 
         setHeadCommit(result.headCommit)
+        setScopePath(result.scopePath)
         setFiles(result.files)
         setFilesError(null)
         setSelectedFilePath(nextSelectedPath)
@@ -169,6 +171,7 @@ function App() {
         }
 
         setHeadCommit("")
+        setScopePath(".")
         setFiles([])
         setDisplayedDiff(null)
         setDiffError(null)
@@ -255,7 +258,7 @@ function App() {
             variant="inset"
           />
           <SidebarInset>
-            <SiteHeader />
+            <SiteHeader scopePath={scopePath} />
             <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
               <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-sm">
                 <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
