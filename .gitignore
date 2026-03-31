@@ -2,3 +2,6 @@
 internal/dev
 internal/cmd/bin/
 internal/server
+
+*.md
+cli

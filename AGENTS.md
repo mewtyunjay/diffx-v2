@@ -12,6 +12,9 @@ This repository has two active areas:
 ## Build, Test, and Development Commands
 Run commands from the relevant package directory.
 
+- `./cli install`: install backend and frontend dependencies from the repo root.
+- `./cli dev`: start the Vite frontend and hot-reloading Go backend together from the repo root.
+- `./cli build`: build the frontend bundle and backend binary from the repo root.
 - `cd frontend && npm install`: install frontend dependencies.
 - `cd frontend && npm run dev`: start the Vite dev server.
 - `cd frontend && npm run build`: run TypeScript build checks and produce a production bundle in `frontend/dist/`.

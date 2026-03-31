@@ -1,6 +1,8 @@
-import { FileDiff } from "@pierre/diffs/react"
-import { useMemo } from "react"
+import { FileDiff, type AnnotationSide, type DiffLineAnnotation } from "@pierre/diffs/react"
+import { Plus } from "lucide-react"
+import { useMemo, useState } from "react"
 
+import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
 
 const DIFF_EXPANSION_LINE_COUNT = 20
@@ -8,13 +10,40 @@ const DIFF_EXPANSION_LINE_COUNT = 20
 const FAST_INLINE_DIFF_MAX_LINE_LENGTH = 300
 const LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH = 120
 
+type HoveredDiffLine = {
+  lineNumber: number
+  side: AnnotationSide
+}
+
+type DraftTarget = HoveredDiffLine
+
+function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
+  if (a == null || b == null) {
+    return false
+  }
+
+  return a.lineNumber === b.lineNumber && a.side === b.side
+}
+
 type DiffPaneProps = {
   diff: PreparedFileDiffResult | null
   hasSelectedFile: boolean
   viewMode: "split" | "unified"
 }
 
-export function DiffPane({ diff, hasSelectedFile, viewMode }: DiffPaneProps) {
+type RenderablePreparedDiff = PreparedFileDiffResult & {
+  parsedDiff: NonNullable<PreparedFileDiffResult["parsedDiff"]>
+}
+
+type RenderedDiffPaneProps = {
+  diff: RenderablePreparedDiff
+  viewMode: "split" | "unified"
+}
+
+function RenderedDiffPane({ diff, viewMode }: RenderedDiffPaneProps) {
+  const [openDraft, setOpenDraft] = useState<DraftTarget | null>(null)
+  const [draftText, setDraftText] = useState("")
+
   const options = useMemo(
     () => ({
       diffStyle: viewMode,
@@ -23,14 +52,84 @@ export function DiffPane({ diff, hasSelectedFile, viewMode }: DiffPaneProps) {
       overflow: "scroll" as const,
       hunkSeparators: "line-info" as const,
       expandUnchanged: false,
+      enableHoverUtility: true,
       expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
-      maxLineDiffLength: diff?.isLargeDiff
+      maxLineDiffLength: diff.isLargeDiff
         ? LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH
         : FAST_INLINE_DIFF_MAX_LINE_LENGTH,
     }),
-    [diff?.isLargeDiff, viewMode]
+    [diff.isLargeDiff, viewMode]
   )
 
+  const lineAnnotations = useMemo<DiffLineAnnotation[]>(
+    () =>
+      openDraft == null
+        ? []
+        : [
+            {
+              side: openDraft.side,
+              lineNumber: openDraft.lineNumber,
+            },
+          ],
+    [openDraft]
+  )
+
+  return (
+    <FileDiff
+      fileDiff={diff.parsedDiff}
+      options={options}
+      lineAnnotations={lineAnnotations}
+      renderAnnotation={() => (
+        <DiffCommentDraft
+          focusKey={openDraft == null ? "closed" : `${openDraft.side}:${openDraft.lineNumber}`}
+          value={draftText}
+          onChange={setDraftText}
+          onEscape={() => {
+            setOpenDraft(null)
+            setDraftText("")
+          }}
+        />
+      )}
+      renderHoverUtility={(getHoveredLine) => {
+        return (
+          <button
+            type="button"
+            aria-label="Add inline comment"
+            className="pointer-events-auto z-10 mr-[-0.35rem] translate-x-1.5 rounded-md text-foreground"
+            style={{
+              width: "1.5rem",
+              height: "1.5rem",
+              marginTop: "calc((1lh - 1.5rem) / 2)",
+              border: "1px solid var(--border)",
+              background: "var(--popover)",
+              boxShadow: "0 6px 14px rgba(0, 0, 0, 0.28)",
+              opacity: 1,
+            }}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+
+              const hoveredLine = getHoveredLine() as HoveredDiffLine | undefined
+              if (!hoveredLine) {
+                return
+              }
+
+              setDraftText("")
+              setOpenDraft((currentDraft) =>
+                isSameDraftTarget(currentDraft, hoveredLine) ? null : hoveredLine
+              )
+            }}
+          >
+            <Plus className="size-3.5" />
+          </button>
+        )
+      }}
+      className="block h-full min-h-full min-w-0 font-mono text-sm"
+    />
+  )
+}
+
+export function DiffPane({ diff, hasSelectedFile, viewMode }: DiffPaneProps) {
   if (!diff) {
     if (hasSelectedFile) {
       return <div className="h-full min-h-0" />
@@ -75,11 +174,13 @@ export function DiffPane({ diff, hasSelectedFile, viewMode }: DiffPaneProps) {
     )
   }
 
+  const renderableDiff = diff as RenderablePreparedDiff
+
   return (
-    <FileDiff
-      fileDiff={diff.parsedDiff}
-      options={options}
-      className="block h-full min-h-full min-w-0 font-mono text-sm"
+    <RenderedDiffPane
+      key={`${viewMode}:${renderableDiff.path}:${renderableDiff.before.cacheKey}:${renderableDiff.after.cacheKey}`}
+      diff={renderableDiff}
+      viewMode={viewMode}
     />
   )
 }
