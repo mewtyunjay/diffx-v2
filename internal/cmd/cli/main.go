@@ -17,6 +17,8 @@ import (
 	"diffx/devrunner"
 )
 
+const repoRootEnvVar = "DIFFX_REPO_ROOT"
+
 type command int
 
 const (
@@ -44,6 +46,11 @@ func main() {
 }
 
 func run(args []string) error {
+	layout, err := resolveRepoLayout()
+	if err != nil {
+		return err
+	}
+
 	cmd, err := parseCommand(args)
 	if err != nil {
 		return err
@@ -54,16 +61,58 @@ func run(args []string) error {
 		fmt.Fprint(os.Stdout, usageText)
 		return nil
 	case commandDev:
-		return runDev()
+		return runDev(layout)
 	case commandInstall:
-		return runInstall()
+		return runInstall(layout)
 	case commandBuild:
-		return runBuild()
+		return runBuild(layout)
 	case commandPackage:
-		return runPackage()
+		return runPackage(layout)
 	default:
 		return fmt.Errorf("unsupported command")
 	}
+}
+
+type repoLayout struct {
+	repoRoot    string
+	internalDir string
+	frontendDir string
+}
+
+func resolveRepoLayout() (repoLayout, error) {
+	repoRoot := strings.TrimSpace(os.Getenv(repoRootEnvVar))
+	if repoRoot != "" {
+		return newRepoLayout(repoRoot)
+	}
+
+	executablePath, err := os.Executable()
+	if err != nil {
+		return repoLayout{}, fmt.Errorf("resolve executable path: %w", err)
+	}
+
+	return newRepoLayout(filepath.Join(filepath.Dir(executablePath), "../../.."))
+}
+
+func newRepoLayout(repoRoot string) (repoLayout, error) {
+	absoluteRepoRoot, err := filepath.Abs(repoRoot)
+	if err != nil {
+		return repoLayout{}, fmt.Errorf("resolve repo root: %w", err)
+	}
+
+	internalDir := filepath.Join(absoluteRepoRoot, "internal")
+	frontendDir := filepath.Join(absoluteRepoRoot, "frontend")
+	if _, err := os.Stat(filepath.Join(internalDir, "go.mod")); err != nil {
+		return repoLayout{}, fmt.Errorf("invalid repo root %q: missing internal/go.mod", absoluteRepoRoot)
+	}
+	if _, err := os.Stat(filepath.Join(frontendDir, "package.json")); err != nil {
+		return repoLayout{}, fmt.Errorf("invalid repo root %q: missing frontend/package.json", absoluteRepoRoot)
+	}
+
+	return repoLayout{
+		repoRoot:    absoluteRepoRoot,
+		internalDir: internalDir,
+		frontendDir: frontendDir,
+	}, nil
 }
 
 func parseCommand(args []string) (command, error) {
@@ -102,7 +151,7 @@ func parseCommand(args []string) (command, error) {
 	}
 }
 
-func runDev() error {
+func runDev(layout repoLayout) error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -112,7 +161,7 @@ func runDev() error {
 
 	frontend, err := startManagedProcess(
 		"frontend",
-		filepath.Clean("../frontend"),
+		layout.frontendDir,
 		frontendPrefix,
 		frontendPrefix,
 		"npm",
@@ -127,8 +176,10 @@ func runDev() error {
 	backendErrCh := make(chan error, 1)
 	go func() {
 		backendErrCh <- devrunner.Run(ctx, devrunner.Options{
-			Stdout: backendPrefix,
-			Stderr: backendPrefix,
+			Stdout:     backendPrefix,
+			Stderr:     backendPrefix,
+			WorkingDir: layout.internalDir,
+			ServerCWD:  layout.repoRoot,
 		})
 	}()
 
@@ -183,27 +234,36 @@ shutdown:
 	return runErr
 }
 
-func runInstall() error {
-	if err := runCommand("backend", ".", "go", "mod", "download"); err != nil {
+func runInstall(layout repoLayout) error {
+	if err := runCommand("backend", layout.internalDir, "go", "mod", "download"); err != nil {
 		return err
 	}
-	return runCommand("frontend", filepath.Clean("../frontend"), "npm", "install")
+	return runCommand("frontend", layout.frontendDir, "npm", "install")
 }
 
-func runBuild() error {
-	if err := runCommand("frontend", filepath.Clean("../frontend"), "npm", "run", "build"); err != nil {
+func runBuild(layout repoLayout) error {
+	if err := runCommand("frontend", layout.frontendDir, "npm", "run", "build"); err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll("./cmd/bin", 0o755); err != nil {
+	buildOutputDir := filepath.Join(layout.internalDir, "cmd", "bin")
+	if err := os.MkdirAll(buildOutputDir, 0o755); err != nil {
 		return fmt.Errorf("create build output directory: %w", err)
 	}
 
-	return runCommand("backend", ".", "go", "build", "-o", "./cmd/bin/diffx-server", "./cmd/server")
+	return runCommand(
+		"backend",
+		layout.internalDir,
+		"go",
+		"build",
+		"-o",
+		filepath.Join(buildOutputDir, "diffx-server"),
+		"./cmd/server",
+	)
 }
 
-func runPackage() error {
-	return runCommand("package", filepath.Clean(".."), "npm", "run", "build:package")
+func runPackage(layout repoLayout) error {
+	return runCommand("package", layout.repoRoot, "npm", "run", "build:package")
 }
 
 type managedProcess struct {

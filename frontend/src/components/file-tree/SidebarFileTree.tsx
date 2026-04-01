@@ -1,42 +1,50 @@
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react"
 
-import { cn } from "@/lib/utils"
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
 
-import {
-  type ExperimentalTreeNode,
-  flattenVisibleTree,
-} from "@/app/experimental/sidebar/sidebarTreeData"
+import { flattenVisibleTree, type SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
 
-type ExperimentalSidebarTreeProps = {
-  root: ExperimentalTreeNode
+type SidebarFileTreeProps<T> = {
+  root: SidebarTreeFolderNode<T>
   expandedPaths: string[]
-  selectedPath: string
-  indent: number
-  density: "compact" | "comfortable"
+  selectedPath: string | null
+  showRoot?: boolean
+  indent?: number
+  density?: "compact" | "comfortable"
+  getFileIndicatorClassName?: (data: T) => string | null
   onToggleFolder: (path: string) => void
-  onSelectFile: (path: string) => void
+  onSelectFile: (path: string, data: T | undefined) => void
 }
 
-export function ExperimentalSidebarTree({
+export function SidebarFileTree<T>({
   root,
   expandedPaths,
   selectedPath,
-  indent,
-  density,
+  showRoot = true,
+  indent = 12,
+  density = "comfortable",
+  getFileIndicatorClassName,
   onToggleFolder,
   onSelectFile,
-}: ExperimentalSidebarTreeProps) {
-  const rows = flattenVisibleTree(root, new Set(expandedPaths))
+}: SidebarFileTreeProps<T>) {
+  const expandedPathSet = new Set(expandedPaths)
+  const rows = showRoot
+    ? flattenVisibleTree(root, expandedPathSet)
+    : root.children.flatMap((child) => flattenVisibleTree(child, expandedPathSet, 0))
 
   return (
     <SidebarMenu>
       {rows.map((row) => {
         const isFile = row.kind === "file"
+        const indicatorClassName =
+          isFile && row.data && getFileIndicatorClassName
+            ? getFileIndicatorClassName(row.data)
+            : null
 
         return (
           <SidebarMenuItem key={row.path}>
@@ -44,7 +52,7 @@ export function ExperimentalSidebarTree({
               type="button"
               size={density === "compact" ? "sm" : "default"}
               isActive={isFile && row.path === selectedPath}
-              onClick={() => (isFile ? onSelectFile(row.path) : onToggleFolder(row.path))}
+              onClick={() => (isFile ? onSelectFile(row.path, row.data) : onToggleFolder(row.path))}
               className={cn(
                 "justify-start gap-2 rounded-lg font-normal transition-colors",
                 row.depth === 0 && "font-semibold",
@@ -63,13 +71,19 @@ export function ExperimentalSidebarTree({
                 <ChevronRight className="size-3.5 text-sidebar-foreground/45" />
               )}
               {isFile ? (
-                <FileText className="size-4 text-sidebar-foreground/55" />
+                <FileText className="size-4 shrink-0 text-sidebar-foreground/55" />
               ) : row.isExpanded ? (
-                <FolderOpen className="size-4 text-sidebar-primary" />
+                <FolderOpen className="size-4 shrink-0 text-sidebar-primary" />
               ) : (
-                <Folder className="size-4 text-sidebar-primary" />
+                <Folder className="size-4 shrink-0 text-sidebar-primary" />
               )}
-              <span className="truncate">{row.name}</span>
+              {indicatorClassName ? (
+                <span
+                  aria-hidden="true"
+                  className={cn("size-2 shrink-0 rounded-full", indicatorClassName)}
+                />
+              ) : null}
+              <span className="min-w-0 truncate">{row.name}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         )

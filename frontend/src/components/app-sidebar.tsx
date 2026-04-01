@@ -1,30 +1,23 @@
 import * as React from "react"
+import { FolderTree } from "lucide-react"
 
 import type { ChangedFileItem, ChangedFileStatus } from "@/app/changed-files/api"
+import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
+import {
+  buildSidebarTree,
+  collectFolderPaths,
+  getAncestorFolderPaths,
+} from "@/components/file-tree/tree-model"
 import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { CommandIcon } from "lucide-react"
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
   selectedFilePath: string | null
   onSelectFile: (path: string) => void
-}
-
-type ChangedFileListRow = ChangedFileItem & {
-  displaySuffix: string
-  fileName: string
-}
-
-type ChangedFileSections = {
-  tracked: ChangedFileListRow[]
-  untracked: ChangedFileListRow[]
 }
 
 const statusClassNames: Record<ChangedFileStatus, string> = {
@@ -34,197 +27,104 @@ const statusClassNames: Record<ChangedFileStatus, string> = {
   renamed: "bg-sky-400",
 }
 
-type FilePathParts = {
-  dirSegments: string[]
-  fileName: string
-}
-
-function getFilePathParts(path: string): FilePathParts {
-  const segments = path.split("/")
-  const fileName = segments.at(-1) ?? path
-
-  return {
-    dirSegments: segments.slice(0, -1),
-    fileName,
-  }
-}
-
-function buildDuplicatePrefixes(files: ChangedFileItem[]) {
-  const filesByName = new Map<
-    string,
-    Array<ChangedFileItem & FilePathParts>
-  >()
-
-  files.forEach((file) => {
-    const parts = getFilePathParts(file.path)
-
-    if (!filesByName.has(parts.fileName)) {
-      filesByName.set(parts.fileName, [])
-    }
-
-    filesByName.get(parts.fileName)?.push({
-      ...file,
-      ...parts,
-    })
-  })
-
-  const duplicatePrefixes = new Map<string, string>()
-
-  filesByName.forEach((entries) => {
-    if (entries.length === 1) {
-      duplicatePrefixes.set(entries[0].id, "")
-      return
-    }
-
-    const depths = entries.map((entry) =>
-      entry.dirSegments.length > 0 ? 1 : 0
-    )
-
-    let hasCollision = true
-
-    while (hasCollision) {
-      const suffixes = entries.map((entry, index) => {
-        const depth = depths[index]
-        return depth === 0 ? "" : entry.dirSegments.slice(-depth).join("/")
-      })
-
-      const counts = new Map<string, number>()
-      suffixes.forEach((suffix) => {
-        counts.set(suffix, (counts.get(suffix) ?? 0) + 1)
-      })
-
-      hasCollision = false
-
-      entries.forEach((entry, index) => {
-        const suffix = suffixes[index]
-        if (
-          (counts.get(suffix) ?? 0) > 1 &&
-          depths[index] < entry.dirSegments.length
-        ) {
-          depths[index] += 1
-          hasCollision = true
-        }
-      })
-    }
-
-    entries.forEach((entry, index) => {
-      const depth = depths[index]
-      const suffix =
-        depth === 0 ? "" : entry.dirSegments.slice(-depth).join("/")
-
-      duplicatePrefixes.set(entry.id, suffix === "" ? "" : `${suffix}/`)
-    })
-  })
-
-  return duplicatePrefixes
-}
-
-function buildChangedFileListRows(files: ChangedFileItem[]) {
-  const duplicatePrefixes = buildDuplicatePrefixes(files)
-
-  return files.map((file) => {
-    const { fileName } = getFilePathParts(file.path)
-
-    return {
-      ...file,
-      fileName,
-      displaySuffix: duplicatePrefixes.get(file.id) ?? "",
-    }
-  }) satisfies ChangedFileListRow[]
-}
-
-function splitChangedFileSections(rows: ChangedFileListRow[]) {
-  return rows.reduce<ChangedFileSections>(
-    (sections, row) => {
-      sections[row.isTracked ? "tracked" : "untracked"].push(row)
-      return sections
-    },
-    {
-      tracked: [],
-      untracked: [],
-    }
-  )
-}
-
 export function AppSidebar({
   files,
   selectedFilePath,
   onSelectFile,
   ...props
 }: AppSidebarProps) {
-  const rows = React.useMemo(() => buildChangedFileListRows(files), [files])
-  const sections = React.useMemo(() => splitChangedFileSections(rows), [rows])
+  const tree = React.useMemo(
+    () =>
+      buildSidebarTree(
+        files.map((file) => ({
+          path: file.path,
+          data: file,
+        })),
+        {
+          rootName: "diffx-v2",
+        }
+      ),
+    [files]
+  )
+  const folderPaths = React.useMemo(() => collectFolderPaths(tree), [tree])
+  const selectedAncestorPaths = React.useMemo(
+    () => (selectedFilePath ? getAncestorFolderPaths(selectedFilePath) : [tree.path]),
+    [selectedFilePath, tree.path]
+  )
+  const [expandedPaths, setExpandedPaths] = React.useState<string[]>(folderPaths)
+  const hasInitializedExpandedState = React.useRef(false)
+
+  React.useEffect(() => {
+    const folderPathSet = new Set(folderPaths)
+
+    setExpandedPaths((currentPaths) => {
+      const shouldInitializeAll =
+        !hasInitializedExpandedState.current && (files.length > 0 || folderPaths.length > 1)
+      const nextPaths = shouldInitializeAll
+        ? [...folderPaths]
+        : currentPaths.filter((path) => folderPathSet.has(path))
+
+      if (shouldInitializeAll) {
+        hasInitializedExpandedState.current = true
+      }
+
+      for (const path of selectedAncestorPaths) {
+        if (folderPathSet.has(path) && !nextPaths.includes(path)) {
+          nextPaths.push(path)
+        }
+      }
+
+      return [...nextPaths]
+    })
+  }, [files.length, folderPaths, selectedAncestorPaths])
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              asChild
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
-            >
-              <a href="#">
-                <CommandIcon className="size-5!" />
-                <span className="text-base font-semibold">diffx</span>
-              </a>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-        <div className="px-2 pt-2">
-          <p className="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-[0.18em]">
-            Changed files
-          </p>
-          <p className="mt-1 text-sm text-sidebar-foreground/70">
-            {files.length} changed {files.length === 1 ? "file" : "files"}
-          </p>
+      <SidebarHeader className="gap-3 border-b border-sidebar-border/70 p-3">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl border border-sidebar-border/70 bg-sidebar-accent/60 p-2 text-sidebar-primary">
+            <FolderTree className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/65">
+              Changed files
+            </p>
+            <p className="mt-1 text-sm font-semibold text-sidebar-foreground">diffx-v2</p>
+            <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+              {files.length} changed {files.length === 1 ? "file" : "files"} nested from repo
+              root.
+            </p>
+          </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        {(
-          [
-            ["tracked", "Tracked"],
-            ["untracked", "Untracked"],
-          ] as const
-        ).map(([sectionName, label]) => (
-          <div key={sectionName} className="px-2 pb-3">
-            <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/55">
-              {label}
-            </p>
-            <SidebarMenu>
-              {sections[sectionName].map((file) => (
-                <SidebarMenuItem key={file.id}>
-                  <SidebarMenuButton
-                    isActive={file.path === selectedFilePath}
-                    onClick={() => onSelectFile(file.path)}
-                    className="gap-2 rounded-lg"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`size-2 shrink-0 rounded-full ${statusClassNames[file.status]}`}
-                    />
-                    <span
-                      className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden"
-                      title={file.path}
-                    >
-                      <span className="shrink-0 font-medium text-sidebar-foreground">
-                        {file.fileName}
-                      </span>
-                      {file.displaySuffix ? (
-                        <span
-                          dir="rtl"
-                          className="min-w-0 shrink truncate text-xs text-sidebar-foreground/55"
-                        >
-                          ...{file.displaySuffix}
-                        </span>
-                      ) : null}
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </div>
-        ))}
+
+      <SidebarContent className="pb-4">
+        <div className="p-2">
+          <SidebarFileTree
+            root={tree}
+            expandedPaths={expandedPaths}
+            selectedPath={selectedFilePath}
+            showRoot={false}
+            indent={12}
+            density="comfortable"
+            getFileIndicatorClassName={(file) => statusClassNames[file.status]}
+            onToggleFolder={(path) =>
+              setExpandedPaths((currentPaths) =>
+                currentPaths.includes(path)
+                  ? currentPaths.filter((currentPath) => currentPath !== path)
+                  : [...currentPaths, path]
+              )
+            }
+            onSelectFile={(path, file) => {
+              if (file) {
+                onSelectFile(file.path)
+                return
+              }
+
+              onSelectFile(path)
+            }}
+          />
+        </div>
       </SidebarContent>
     </Sidebar>
   )

@@ -1,33 +1,18 @@
-export type ExperimentalTreeNode =
-  | {
-      kind: "folder"
-      name: string
-      path: string
-      children: ExperimentalTreeNode[]
-    }
-  | {
-      kind: "file"
-      name: string
-      path: string
-    }
+import type {
+  SidebarTreeFolderNode,
+  SidebarTreeNode,
+} from "@/components/file-tree/tree-model"
 
-export type ExperimentalTreeRow = {
-  kind: ExperimentalTreeNode["kind"]
-  name: string
-  path: string
-  depth: number
-  isExpanded: boolean
-}
-
-function file(path: string): ExperimentalTreeNode {
+function file(path: string): SidebarTreeNode<never> {
   return {
     kind: "file",
     name: path.split("/").at(-1) ?? path,
     path,
+    data: undefined as never,
   }
 }
 
-function folder(path: string, children: ExperimentalTreeNode[]): ExperimentalTreeNode {
+function folder(path: string, children: SidebarTreeNode<never>[]): SidebarTreeFolderNode<never> {
   return {
     kind: "folder",
     name: path === "." ? "diffx-v2" : path.split("/").at(-1) ?? path,
@@ -58,7 +43,7 @@ export const DEFAULT_EXPANDED_PATHS = [
   "internal/schedule/pg",
 ] as const
 
-export const experimentalSidebarTree = folder(".", [
+export const experimentalSidebarTree: SidebarTreeFolderNode<never> = folder(".", [
   folder("frontend", [
     folder("frontend/src", [
       folder("frontend/src/features", [
@@ -101,42 +86,3 @@ export const experimentalSidebarTree = folder(".", [
     ]),
   ]),
 ])
-
-export function flattenVisibleTree(
-  node: ExperimentalTreeNode,
-  expandedPaths: Set<string>,
-  depth = 0
-): ExperimentalTreeRow[] {
-  if (node.kind === "file") {
-    return [
-      {
-        kind: node.kind,
-        name: node.name,
-        path: node.path,
-        depth,
-        isExpanded: false,
-      },
-    ]
-  }
-
-  const isExpanded = expandedPaths.has(node.path)
-  const rows: ExperimentalTreeRow[] = [
-    {
-      kind: node.kind,
-      name: node.name,
-      path: node.path,
-      depth,
-      isExpanded,
-    },
-  ]
-
-  if (!isExpanded) {
-    return rows
-  }
-
-  for (const child of node.children) {
-    rows.push(...flattenVisibleTree(child, expandedPaths, depth + 1))
-  }
-
-  return rows
-}

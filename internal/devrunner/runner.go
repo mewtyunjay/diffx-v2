@@ -28,6 +28,8 @@ type Options struct {
 	BuildOutput   string
 	DebounceDelay time.Duration
 	WatchRoots    []string
+	WorkingDir    string
+	ServerCWD     string
 	Stdout        io.Writer
 	Stderr        io.Writer
 }
@@ -41,12 +43,14 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	defer watcher.Close()
 
-	if err := addWatchDirs(watcher, config.WatchRoots, config.BuildOutput); err != nil {
+	if err := addWatchDirs(watcher, config.WorkingDir, config.WatchRoots, config.BuildOutput); err != nil {
 		return fmt.Errorf("configure watcher: %w", err)
 	}
 
 	runner := &backendRunner{
 		buildOutput: config.BuildOutput,
+		workingDir:  config.WorkingDir,
+		serverCWD:   config.ServerCWD,
 		stdout:      config.Stdout,
 		stderr:      config.Stderr,
 	}
@@ -112,16 +116,13 @@ type runtimeOptions struct {
 	BuildOutput   string
 	DebounceDelay time.Duration
 	WatchRoots    []string
+	WorkingDir    string
+	ServerCWD     string
 	Stdout        io.Writer
 	Stderr        io.Writer
 }
 
 func optionsWithDefaults(opts Options) runtimeOptions {
-	buildOutput := strings.TrimSpace(opts.BuildOutput)
-	if buildOutput == "" {
-		buildOutput = "./cmd/bin/diffx-server"
-	}
-
 	debounceDelay := opts.DebounceDelay
 	if debounceDelay <= 0 {
 		debounceDelay = defaultDebounceDelay
@@ -130,6 +131,24 @@ func optionsWithDefaults(opts Options) runtimeOptions {
 	watchRoots := opts.WatchRoots
 	if len(watchRoots) == 0 {
 		watchRoots = append([]string(nil), defaultWatchRoots...)
+	}
+
+	workingDir := strings.TrimSpace(opts.WorkingDir)
+	if workingDir == "" {
+		workingDir = "."
+	}
+
+	serverCWD := strings.TrimSpace(opts.ServerCWD)
+	if serverCWD == "" {
+		serverCWD = filepath.Clean("..")
+	}
+
+	buildOutput := strings.TrimSpace(opts.BuildOutput)
+	if buildOutput == "" {
+		buildOutput = "./cmd/bin/diffx-server"
+	}
+	if !filepath.IsAbs(buildOutput) {
+		buildOutput = filepath.Join(workingDir, buildOutput)
 	}
 
 	stdout := opts.Stdout
@@ -146,6 +165,8 @@ func optionsWithDefaults(opts Options) runtimeOptions {
 		BuildOutput:   buildOutput,
 		DebounceDelay: debounceDelay,
 		WatchRoots:    watchRoots,
+		WorkingDir:    workingDir,
+		ServerCWD:     serverCWD,
 		Stdout:        stdout,
 		Stderr:        stderr,
 	}
@@ -155,13 +176,20 @@ type backendRunner struct {
 	mu          sync.Mutex
 	cmd         *exec.Cmd
 	buildOutput string
+	workingDir  string
+	serverCWD   string
 	stdout      io.Writer
 	stderr      io.Writer
 }
 
-func addWatchDirs(watcher *fsnotify.Watcher, roots []string, buildOutput string) error {
+func addWatchDirs(watcher *fsnotify.Watcher, workingDir string, roots []string, buildOutput string) error {
 	for _, root := range roots {
-		if err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		absoluteRoot := root
+		if !filepath.IsAbs(absoluteRoot) {
+			absoluteRoot = filepath.Join(workingDir, absoluteRoot)
+		}
+
+		if err := filepath.WalkDir(absoluteRoot, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
@@ -245,6 +273,7 @@ func (r *backendRunner) start() error {
 
 	fmt.Fprintln(r.stdout, "Building backend...")
 	buildCmd := exec.Command("go", "build", "-o", r.buildOutput, "./cmd/server")
+	buildCmd.Dir = r.workingDir
 	var buildOutputBuffer bytes.Buffer
 	buildCmd.Stdout = &buildOutputBuffer
 	buildCmd.Stderr = &buildOutputBuffer
@@ -256,7 +285,8 @@ func (r *backendRunner) start() error {
 		return errors.New(message)
 	}
 
-	cmd := exec.Command(r.buildOutput)
+	cmd := exec.Command(r.buildOutput, "--cwd", r.serverCWD)
+	cmd.Dir = r.workingDir
 	cmd.Stdout = r.stdout
 	cmd.Stderr = r.stderr
 	if err := cmd.Start(); err != nil {

@@ -11,7 +11,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { ExperimentalSidebarTree } from "@/app/experimental/sidebar/ExperimentalSidebarTree"
+import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
 import { experimentalSidebarTree } from "@/app/experimental/sidebar/sidebarTreeData"
 
 type SidebarSandboxPreviewProps = {
@@ -104,14 +104,14 @@ export function SidebarSandboxPreview({
                 <SidebarGroup className="p-2">
                   <SidebarGroupLabel>Repo tree</SidebarGroupLabel>
                   <SidebarGroupContent>
-                    <ExperimentalSidebarTree
+                    <SidebarFileTree
                       root={experimentalSidebarTree}
                       expandedPaths={expandedPaths}
                       selectedPath={selectedPath}
                       indent={indent}
                       density={density}
                       onToggleFolder={onToggleFolder}
-                      onSelectFile={onSelectFile}
+                      onSelectFile={(path) => onSelectFile(path)}
                     />
                   </SidebarGroupContent>
                 </SidebarGroup>

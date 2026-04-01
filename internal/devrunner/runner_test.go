@@ -1,6 +1,7 @@
 package devrunner
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ func TestOptionsWithDefaults(t *testing.T) {
 
 	config := optionsWithDefaults(Options{})
 
-	if config.BuildOutput != "./cmd/bin/diffx-server" {
+	if config.BuildOutput != filepath.Join(".", "./cmd/bin/diffx-server") {
 		t.Fatalf("expected default build output, got %q", config.BuildOutput)
 	}
 	if config.DebounceDelay != defaultDebounceDelay {
@@ -30,9 +31,11 @@ func TestOptionsWithDefaultsPreservesExplicitValues(t *testing.T) {
 		BuildOutput:   "./tmp/server",
 		DebounceDelay: time.Second,
 		WatchRoots:    []string{"./custom"},
+		WorkingDir:    "/repo/internal",
+		ServerCWD:     "/repo",
 	})
 
-	if config.BuildOutput != "./tmp/server" {
+	if config.BuildOutput != filepath.Join("/repo/internal", "./tmp/server") {
 		t.Fatalf("expected custom build output, got %q", config.BuildOutput)
 	}
 	if config.DebounceDelay != time.Second {
@@ -40,6 +43,12 @@ func TestOptionsWithDefaultsPreservesExplicitValues(t *testing.T) {
 	}
 	if len(config.WatchRoots) != 1 || config.WatchRoots[0] != "./custom" {
 		t.Fatalf("expected custom watch roots, got %#v", config.WatchRoots)
+	}
+	if config.WorkingDir != "/repo/internal" {
+		t.Fatalf("expected custom working dir, got %q", config.WorkingDir)
+	}
+	if config.ServerCWD != "/repo" {
+		t.Fatalf("expected custom server cwd, got %q", config.ServerCWD)
 	}
 }
 
