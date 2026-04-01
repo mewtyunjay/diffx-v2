@@ -4,6 +4,3 @@ dev
 server
 runtime/
 *.tgz
-
-*.md
-cli
