@@ -2,7 +2,9 @@ import { FileDiff, type AnnotationSide, type DiffLineAnnotation } from "@pierre/
 import { Plus } from "lucide-react"
 import { useMemo, useState } from "react"
 
+import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
+import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
 
 const DIFF_EXPANSION_LINE_COUNT = 20
@@ -17,6 +19,15 @@ type HoveredDiffLine = {
 
 type DraftTarget = HoveredDiffLine
 
+type RenderedAnnotationMetadata =
+  | {
+      kind: "draft"
+    }
+  | {
+      kind: "saved"
+      comment: string
+    }
+
 function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
   if (a == null || b == null) {
     return false
@@ -29,6 +40,10 @@ type DiffPaneProps = {
   diff: PreparedFileDiffResult | null
   hasSelectedFile: boolean
   viewMode: "split" | "unified"
+  savedAnnotations: SavedDiffAnnotation[]
+  clearDraftToken: number
+  onSaveAnnotation: (target: DraftTarget, comment: string) => void
+  onDeleteAnnotation: (target: DraftTarget) => void
 }
 
 type RenderablePreparedDiff = PreparedFileDiffResult & {
@@ -38,9 +53,22 @@ type RenderablePreparedDiff = PreparedFileDiffResult & {
 type RenderedDiffPaneProps = {
   diff: RenderablePreparedDiff
   viewMode: "split" | "unified"
+  savedAnnotations: SavedDiffAnnotation[]
+  onSaveAnnotation: (target: DraftTarget, comment: string) => void
+  onDeleteAnnotation: (target: DraftTarget) => void
 }
 
-function RenderedDiffPane({ diff, viewMode }: RenderedDiffPaneProps) {
+function createAnnotationLookupKey(target: DraftTarget) {
+  return `${target.side}:${target.lineNumber}`
+}
+
+function RenderedDiffPane({
+  diff,
+  viewMode,
+  savedAnnotations,
+  onSaveAnnotation,
+  onDeleteAnnotation,
+}: RenderedDiffPaneProps) {
   const [openDraft, setOpenDraft] = useState<DraftTarget | null>(null)
   const [draftText, setDraftText] = useState("")
 
@@ -61,35 +89,93 @@ function RenderedDiffPane({ diff, viewMode }: RenderedDiffPaneProps) {
     [diff.isLargeDiff, viewMode]
   )
 
-  const lineAnnotations = useMemo<DiffLineAnnotation[]>(
-    () =>
-      openDraft == null
-        ? []
-        : [
-            {
-              side: openDraft.side,
-              lineNumber: openDraft.lineNumber,
-            },
-          ],
-    [openDraft]
+  const savedAnnotationMap = useMemo(() => {
+    return new Map(savedAnnotations.map((annotation) => [createAnnotationLookupKey(annotation), annotation]))
+  }, [savedAnnotations])
+
+  const lineAnnotations = useMemo<DiffLineAnnotation<RenderedAnnotationMetadata>[]>(
+    () => {
+      const draftKey = openDraft ? createAnnotationLookupKey(openDraft) : null
+      const annotations: DiffLineAnnotation<RenderedAnnotationMetadata>[] = savedAnnotations
+        .filter((annotation) => createAnnotationLookupKey(annotation) !== draftKey)
+        .map((annotation) => ({
+          side: annotation.side,
+          lineNumber: annotation.lineNumber,
+          metadata: {
+            kind: "saved",
+            comment: annotation.comment,
+          },
+        }))
+
+      if (openDraft) {
+        annotations.push({
+          side: openDraft.side,
+          lineNumber: openDraft.lineNumber,
+          metadata: {
+            kind: "draft",
+          },
+        })
+      }
+
+      return annotations
+    },
+    [openDraft, savedAnnotations]
   )
 
+  const canSaveDraft = useMemo(() => {
+    const trimmed = draftText.trim()
+    return trimmed.length > 0 || (openDraft != null && savedAnnotationMap.has(createAnnotationLookupKey(openDraft)))
+  }, [draftText, openDraft, savedAnnotationMap])
+
+  const handleCloseDraft = () => {
+    setOpenDraft(null)
+    setDraftText("")
+  }
+
+  const handleSaveDraft = () => {
+    if (!openDraft) {
+      return
+    }
+
+    const trimmed = draftText.trim()
+    if (trimmed.length === 0) {
+      if (savedAnnotationMap.has(createAnnotationLookupKey(openDraft))) {
+        onDeleteAnnotation(openDraft)
+      }
+      handleCloseDraft()
+      return
+    }
+
+    onSaveAnnotation(openDraft, trimmed)
+    handleCloseDraft()
+  }
+
   return (
-    <FileDiff
+    <FileDiff<RenderedAnnotationMetadata>
       fileDiff={diff.parsedDiff}
       options={options}
       lineAnnotations={lineAnnotations}
-      renderAnnotation={() => (
-        <DiffCommentDraft
-          focusKey={openDraft == null ? "closed" : `${openDraft.side}:${openDraft.lineNumber}`}
-          value={draftText}
-          onChange={setDraftText}
-          onEscape={() => {
-            setOpenDraft(null)
-            setDraftText("")
-          }}
-        />
-      )}
+      renderAnnotation={(annotation) => {
+        if (annotation.metadata?.kind === "saved") {
+          return <DiffSavedComment comment={annotation.metadata.comment} />
+        }
+
+        const draftKey = openDraft == null ? "closed" : `${openDraft.side}:${openDraft.lineNumber}`
+        const isEditingExisting =
+          openDraft != null && savedAnnotationMap.has(createAnnotationLookupKey(openDraft))
+
+        return (
+          <DiffCommentDraft
+            focusKey={draftKey}
+            value={draftText}
+            canSave={canSaveDraft}
+            isEditingExisting={isEditingExisting}
+            onChange={setDraftText}
+            onSave={handleSaveDraft}
+            onEscape={handleCloseDraft}
+          />
+        )
+      }}
       renderHoverUtility={(getHoveredLine) => {
         return (
           <button
@@ -114,10 +200,16 @@ function RenderedDiffPane({ diff, viewMode }: RenderedDiffPaneProps) {
                 return
               }
 
-              setDraftText("")
-              setOpenDraft((currentDraft) =>
-                isSameDraftTarget(currentDraft, hoveredLine) ? null : hoveredLine
-              )
+              setOpenDraft((currentDraft) => {
+                if (isSameDraftTarget(currentDraft, hoveredLine)) {
+                  setDraftText("")
+                  return null
+                }
+
+                const existingAnnotation = savedAnnotationMap.get(createAnnotationLookupKey(hoveredLine))
+                setDraftText(existingAnnotation?.comment ?? "")
+                return hoveredLine
+              })
             }}
           >
             <Plus className="size-3.5" />
@@ -129,7 +221,15 @@ function RenderedDiffPane({ diff, viewMode }: RenderedDiffPaneProps) {
   )
 }
 
-export function DiffPane({ diff, hasSelectedFile, viewMode }: DiffPaneProps) {
+export function DiffPane({
+  diff,
+  hasSelectedFile,
+  viewMode,
+  savedAnnotations,
+  clearDraftToken,
+  onSaveAnnotation,
+  onDeleteAnnotation,
+}: DiffPaneProps) {
   if (!diff) {
     if (hasSelectedFile) {
       return <div className="h-full min-h-0" />
@@ -178,9 +278,12 @@ export function DiffPane({ diff, hasSelectedFile, viewMode }: DiffPaneProps) {
 
   return (
     <RenderedDiffPane
-      key={`${viewMode}:${renderableDiff.path}:${renderableDiff.before.cacheKey}:${renderableDiff.after.cacheKey}`}
+      key={`${viewMode}:${clearDraftToken}:${renderableDiff.path}:${renderableDiff.before.cacheKey}:${renderableDiff.after.cacheKey}`}
       diff={renderableDiff}
       viewMode={viewMode}
+      savedAnnotations={savedAnnotations}
+      onSaveAnnotation={onSaveAnnotation}
+      onDeleteAnnotation={onDeleteAnnotation}
     />
   )
 }
