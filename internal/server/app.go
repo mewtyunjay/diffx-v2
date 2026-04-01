@@ -59,6 +59,10 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/branches", a.handleBranches)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
+	mux.HandleFunc("/api/git/stage", a.handleStageFile)
+	mux.HandleFunc("/api/git/unstage", a.handleUnstageFile)
+	mux.HandleFunc("/api/git/commit", a.handleCommit)
+	mux.HandleFunc("/api/git/push", a.handlePush)
 	mux.Handle("/", a.staticHandler())
 	return mux
 }

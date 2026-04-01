@@ -1,30 +1,58 @@
 import * as React from "react"
-import { FolderTree } from "lucide-react"
+import { FolderTree, LoaderCircle, Minus, Plus } from "lucide-react"
 
-import type { BranchOption, ChangedFileItem, ChangedFileStatus } from "@/app/changed-files/api"
+import type {
+  BranchOption,
+  ChangedFileItem,
+  ChangedFileStatus,
+  ComparisonMode,
+} from "@/app/changed-files/api"
 import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
 import {
   buildSidebarTree,
   collectFolderPaths,
   getAncestorFolderPaths,
 } from "@/components/file-tree/tree-model"
+import { Button } from "@/components/ui/button"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
+
+type SidebarNotice = {
+  tone: "success" | "error"
+  message: string
+}
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
   workspaceName: string
   scopePath: string
   branches: BranchOption[]
+  comparisonMode: ComparisonMode
   selectedBaseRef: string
   onSelectBaseRef: (path: string) => void
   isBranchesLoading: boolean
   branchesError: string | null
   selectedFilePath: string | null
   onSelectFile: (path: string) => void
+  hiddenStagedFileCount: number
+  stagePendingPaths: string[]
+  onToggleStage: (file: ChangedFileItem) => void
+  isCommitComposerOpen: boolean
+  commitMessage: string
+  commitError: string | null
+  isCommitPending: boolean
+  onOpenCommitComposer: () => void
+  onCloseCommitComposer: () => void
+  onCommitMessageChange: (value: string) => void
+  onCommit: () => void
+  isPushPending: boolean
+  onPush: () => void
+  notice: SidebarNotice | null
 }
 
 const statusClassNames: Record<ChangedFileStatus, string> = {
@@ -39,12 +67,27 @@ export function AppSidebar({
   workspaceName,
   scopePath,
   branches,
+  comparisonMode,
   selectedBaseRef,
   onSelectBaseRef,
   isBranchesLoading,
   branchesError,
   selectedFilePath,
   onSelectFile,
+  hiddenStagedFileCount,
+  stagePendingPaths,
+  onToggleStage,
+  isCommitComposerOpen,
+  commitMessage,
+  commitError,
+  isCommitPending,
+  onOpenCommitComposer,
+  onCloseCommitComposer,
+  onCommitMessageChange,
+  onCommit,
+  isPushPending,
+  onPush,
+  notice,
   ...props
 }: AppSidebarProps) {
   const selectedFile = React.useMemo(
@@ -79,6 +122,17 @@ export function AppSidebar({
     () => branches.filter((branch) => branch.kind === "remote"),
     [branches]
   )
+  const stagePendingPathSet = React.useMemo(() => new Set(stagePendingPaths), [stagePendingPaths])
+
+  const stagedVisibleCount = React.useMemo(
+    () => files.filter((file) => file.hasStagedChanges).length,
+    [files]
+  )
+  const totalStagedCount = stagedVisibleCount + hiddenStagedFileCount
+  const canUseGitActions = comparisonMode === "head"
+  const canCommit = canUseGitActions && stagedVisibleCount > 0 && hiddenStagedFileCount === 0
+  const commitButtonLabel =
+    stagedVisibleCount === 1 ? "Commit 1 staged file" : `Commit ${stagedVisibleCount} staged files`
 
   React.useEffect(() => {
     const folderPathSet = new Set(folderPaths)
@@ -162,34 +216,181 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="pb-4">
-        <div className="p-2">
-          <SidebarFileTree
-            root={tree}
-            expandedPaths={expandedPaths}
-            selectedPath={selectedFile?.displayPath ?? null}
-            showRoot={false}
-            indent={12}
-            density="comfortable"
-            getFileIndicatorClassName={(file) => statusClassNames[file.status]}
-            onToggleFolder={(path) =>
-              setExpandedPaths((currentPaths) =>
-                currentPaths.includes(path)
-                  ? currentPaths.filter((currentPath) => currentPath !== path)
-                  : [...currentPaths, path]
-              )
-            }
-            onSelectFile={(path, file) => {
-              if (file) {
-                onSelectFile(file.path)
-                return
-              }
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <SidebarContent className="pb-32">
+          <div className="p-2">
+            <SidebarFileTree
+              root={tree}
+              expandedPaths={expandedPaths}
+              selectedPath={selectedFile?.displayPath ?? null}
+              showRoot={false}
+              indent={12}
+              density="comfortable"
+              getFileIndicatorClassName={(file) => statusClassNames[file.status]}
+              renderFileAction={(file) => {
+                const isPending = stagePendingPathSet.has(file.path)
+                const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
+                const isDisabled = !canUseGitActions || !hasAction || isPending
+                const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
 
-              onSelectFile(path)
-            }}
-          />
-        </div>
-      </SidebarContent>
+                return (
+                  <button
+                    type="button"
+                    aria-label={`${actionLabel}: ${file.displayPath}`}
+                    title={
+                      !canUseGitActions
+                        ? "Switch comparison back to HEAD to stage files"
+                        : actionLabel
+                    }
+                    className={cn(
+                      "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
+                      isDisabled
+                        ? "cursor-not-allowed opacity-45"
+                        : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
+                    disabled={isDisabled}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (!isDisabled) {
+                        onToggleStage(file)
+                      }
+                    }}
+                  >
+                    {isPending ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : file.hasStagedChanges ? (
+                      <Minus className="size-3.5" />
+                    ) : (
+                      <Plus className="size-3.5" />
+                    )}
+                  </button>
+                )
+              }}
+              onToggleFolder={(path) =>
+                setExpandedPaths((currentPaths) =>
+                  currentPaths.includes(path)
+                    ? currentPaths.filter((currentPath) => currentPath !== path)
+                    : [...currentPaths, path]
+                )
+              }
+              onSelectFile={(path, file) => {
+                if (file) {
+                  onSelectFile(file.path)
+                  return
+                }
+
+                onSelectFile(path)
+              }}
+            />
+          </div>
+        </SidebarContent>
+
+        <SidebarFooter className="border-t border-sidebar-border/70 bg-sidebar/95 p-3 backdrop-blur">
+          <div className="space-y-3">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/65">
+                Git actions
+              </p>
+              <p className="mt-1 text-sm font-medium text-sidebar-foreground">
+                {totalStagedCount === 0
+                  ? "No staged changes"
+                  : `${totalStagedCount} staged ${totalStagedCount === 1 ? "file" : "files"}`}
+              </p>
+              {comparisonMode !== "head" ? (
+                <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+                  Switch back to HEAD to stage files, create commits, or push the current branch.
+                </p>
+              ) : hiddenStagedFileCount > 0 ? (
+                <p className="mt-1 text-xs leading-5 text-amber-200">
+                  {hiddenStagedFileCount} staged {hiddenStagedFileCount === 1 ? "file is" : "files are"} outside
+                  this scoped view. Open the repo root to commit them safely.
+                </p>
+              ) : (
+                <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+                  Use + or − beside each file to control the real git index.
+                </p>
+              )}
+            </div>
+
+            {notice ? (
+              <p
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-xs leading-5",
+                  notice.tone === "success"
+                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
+                    : "border-rose-400/30 bg-rose-500/10 text-rose-100"
+                )}
+              >
+                {notice.message}
+              </p>
+            ) : null}
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="flex-1"
+                disabled={!canCommit || isCommitPending || isPushPending}
+                onClick={onOpenCommitComposer}
+              >
+                {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
+                {commitButtonLabel}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                disabled={!canUseGitActions || isCommitPending || isPushPending}
+                onClick={onPush}
+              >
+                {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
+                Push
+              </Button>
+            </div>
+          </div>
+        </SidebarFooter>
+
+        {isCommitComposerOpen ? (
+          <div className="absolute inset-x-3 bottom-3 z-20 overflow-hidden rounded-2xl border border-sidebar-border/80 bg-sidebar shadow-2xl">
+            <div className="border-b border-sidebar-border/70 px-4 py-3">
+              <p className="text-sm font-semibold text-sidebar-foreground">Create commit</p>
+              <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+                Only the staged files in this workspace scope will be committed.
+              </p>
+            </div>
+            <div className="px-4 py-4">
+              <textarea
+                value={commitMessage}
+                onChange={(event) => onCommitMessageChange(event.target.value)}
+                placeholder="Write a clear commit message..."
+                className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
+              />
+              {commitError ? (
+                <p className="mt-2 text-xs leading-5 text-rose-300">{commitError}</p>
+              ) : (
+                <p className="mt-2 text-xs leading-5 text-sidebar-foreground/55">
+                  Multi-line messages are supported. The push action stays separate.
+                </p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-sidebar-border/70 px-4 py-3">
+              <Button type="button" size="sm" variant="ghost" onClick={onCloseCommitComposer}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isCommitPending || !commitMessage.trim() || !canCommit}
+                onClick={onCommit}
+              >
+                {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
+                Commit
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </Sidebar>
   )
 }

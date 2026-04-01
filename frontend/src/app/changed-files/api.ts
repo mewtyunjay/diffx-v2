@@ -33,10 +33,20 @@ export type ChangedFilesResult = {
   baseCommit: string
   currentRef: string
   currentCommit: string
+  upstreamRef?: string
   workspaceName: string
   scopePath: string
+  hiddenStagedFileCount: number
   files: ChangedFileItem[]
   initialDiff?: FileDiffResult
+}
+
+export type CommitResult = {
+  commit: string
+}
+
+export type PushResult = {
+  remoteRef: string
 }
 
 export type FileVersionResult = {
@@ -64,6 +74,25 @@ export type FileDiffResult = {
 async function readError(response: Response) {
   const text = await response.text()
   return text || `Request failed with status ${response.status}`
+}
+
+async function postJSON<TResponse>(url: string, body?: unknown, signal?: AbortSignal) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  if (response.status === 204) {
+    return undefined as TResponse
+  }
+
+  return (await response.json()) as TResponse
 }
 
 export async function fetchChangedFiles(baseRef?: string, signal?: AbortSignal) {
@@ -118,4 +147,26 @@ export async function fetchFileDiff(
   }
 
   return (await response.json()) as FileDiffResult
+}
+
+export async function stageFile(
+  file: Pick<ChangedFileItem, "path" | "previousPath">,
+  signal?: AbortSignal
+) {
+  return postJSON<void>("/api/git/stage", file, signal)
+}
+
+export async function unstageFile(
+  file: Pick<ChangedFileItem, "path" | "previousPath">,
+  signal?: AbortSignal
+) {
+  return postJSON<void>("/api/git/unstage", file, signal)
+}
+
+export async function commitStaged(message: string, signal?: AbortSignal) {
+  return postJSON<CommitResult>("/api/git/commit", { message }, signal)
+}
+
+export async function pushCurrentBranch(signal?: AbortSignal) {
+  return postJSON<PushResult>("/api/git/push", undefined, signal)
 }

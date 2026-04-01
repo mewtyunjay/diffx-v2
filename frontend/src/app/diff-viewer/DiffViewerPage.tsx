@@ -12,11 +12,16 @@ import {
   upsertSavedAnnotation,
 } from "@/app/diff-viewer/annotations"
 import {
+  commitStaged,
   fetchBranches,
   fetchChangedFiles,
   fetchFileDiff,
+  pushCurrentBranch,
+  stageFile,
+  unstageFile,
   type BranchOption,
   type ChangedFileItem,
+  type ChangedFilesResult,
   type ChangedFileStatus,
   type ComparisonMode,
   type FileDiffResult,
@@ -54,6 +59,7 @@ function formatStatus(status: ChangedFileStatus) {
 }
 
 type InlineAnnotationTarget = Pick<SavedDiffAnnotation, "side" | "lineNumber">
+type SidebarNotice = { tone: "success" | "error"; message: string }
 
 export function DiffViewerPage() {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
@@ -62,6 +68,7 @@ export function DiffViewerPage() {
   const [currentRef, setCurrentRef] = useState("")
   const [workspaceName, setWorkspaceName] = useState("workspace")
   const [scopePath, setScopePath] = useState(".")
+  const [hiddenStagedFileCount, setHiddenStagedFileCount] = useState(0)
   const [branches, setBranches] = useState<BranchOption[]>([])
   const [branchesError, setBranchesError] = useState<string | null>(null)
   const [isBranchesLoading, setIsBranchesLoading] = useState(true)
@@ -78,6 +85,13 @@ export function DiffViewerPage() {
   )
   const [copyState, setCopyState] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [clearDraftToken, setClearDraftToken] = useState(0)
+  const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
+  const [notice, setNotice] = useState<SidebarNotice | null>(null)
+  const [isCommitComposerOpen, setIsCommitComposerOpen] = useState(false)
+  const [commitMessage, setCommitMessage] = useState("")
+  const [commitError, setCommitError] = useState<string | null>(null)
+  const [isCommitPending, setIsCommitPending] = useState(false)
+  const [isPushPending, setIsPushPending] = useState(false)
   const selectedFilePathRef = useRef<string | null>(null)
   const diffCacheRef = useRef(new Map<string, PreparedFileDiffResult>())
   const diffPrepareRequestCacheRef = useRef(new Map<string, Promise<PreparedFileDiffResult>>())
@@ -174,15 +188,67 @@ export function DiffViewerPage() {
     [prepareLoadedDiff, readCachedDiff]
   )
 
+  const refreshBranches = useCallback(
+    async (signal?: AbortSignal) => {
+      const result = await fetchBranches(signal)
+      setBranches(result.branches)
+      setCurrentRef(result.currentRef)
+      setBranchesError(null)
+    },
+    []
+  )
+
+  const applyChangedFilesResult = useCallback(
+    (result: ChangedFilesResult) => {
+      const initialDiff = result.initialDiff ?? null
+      const nextSelectedPath =
+        selectedFilePathRef.current && result.files.some((file) => file.path === selectedFilePathRef.current)
+          ? selectedFilePathRef.current
+          : result.files[0]?.path ?? null
+      const nextSelectedFile =
+        result.files.find((file) => file.path === nextSelectedPath) ?? result.files[0] ?? null
+      const initialDiffFile = initialDiff
+        ? result.files.find((file) => file.path === initialDiff.path) ?? null
+        : null
+
+      setComparisonMode(result.mode)
+      setBaseCommit(result.baseCommit)
+      setCurrentRef(result.currentRef)
+      setWorkspaceName(result.workspaceName)
+      setScopePath(result.scopePath)
+      setHiddenStagedFileCount(result.hiddenStagedFileCount)
+      setFiles(result.files)
+      setSavedAnnotations((currentAnnotations) =>
+        pruneSavedAnnotationsForFiles(currentAnnotations, result.files)
+      )
+      setFilesError(null)
+      setSelectedFilePath(nextSelectedPath)
+
+      if (initialDiff && initialDiffFile) {
+        void prepareLoadedDiff(result.baseCommit, initialDiffFile, initialDiff).catch(() => undefined)
+      }
+
+      if (!nextSelectedFile) {
+        setDisplayedDiff(null)
+        setDiffError(null)
+        setIsDiffLoading(false)
+      }
+    },
+    [prepareLoadedDiff]
+  )
+
+  const refreshChangedFiles = useCallback(
+    async (signal?: AbortSignal) => {
+      const result = await fetchChangedFiles(selectedBaseRef, signal)
+      applyChangedFilesResult(result)
+    },
+    [applyChangedFilesResult, selectedBaseRef]
+  )
+
   useEffect(() => {
     const controller = new AbortController()
 
-    fetchBranches(controller.signal)
-      .then((result) => {
-        setBranches(result.branches)
-        setCurrentRef(result.currentRef)
-        setBranchesError(null)
-      })
+    refreshBranches(controller.signal)
       .catch((error: Error) => {
         if (controller.signal.aborted) {
           return
@@ -198,47 +264,12 @@ export function DiffViewerPage() {
       })
 
     return () => controller.abort()
-  }, [])
+  }, [refreshBranches])
 
   useEffect(() => {
     const controller = new AbortController()
 
-    fetchChangedFiles(selectedBaseRef, controller.signal)
-      .then((result) => {
-        const initialDiff = result.initialDiff ?? null
-        const nextSelectedPath =
-          selectedFilePathRef.current &&
-          result.files.some((file) => file.path === selectedFilePathRef.current)
-            ? selectedFilePathRef.current
-            : result.files[0]?.path ?? null
-        const nextSelectedFile =
-          result.files.find((file) => file.path === nextSelectedPath) ?? result.files[0] ?? null
-        const initialDiffFile = initialDiff
-          ? result.files.find((file) => file.path === initialDiff.path) ?? null
-          : null
-
-        setComparisonMode(result.mode)
-        setBaseCommit(result.baseCommit)
-        setCurrentRef(result.currentRef)
-        setWorkspaceName(result.workspaceName)
-        setScopePath(result.scopePath)
-        setFiles(result.files)
-        setSavedAnnotations((currentAnnotations) =>
-          pruneSavedAnnotationsForFiles(currentAnnotations, result.files)
-        )
-        setFilesError(null)
-        setSelectedFilePath(nextSelectedPath)
-
-        if (initialDiff && initialDiffFile) {
-          void prepareLoadedDiff(result.baseCommit, initialDiffFile, initialDiff).catch(() => undefined)
-        }
-
-        if (!nextSelectedFile) {
-          setDisplayedDiff(null)
-          setDiffError(null)
-          setIsDiffLoading(false)
-        }
-      })
+    refreshChangedFiles(controller.signal)
       .catch((error: Error) => {
         if (controller.signal.aborted) {
           return
@@ -246,8 +277,10 @@ export function DiffViewerPage() {
 
         setComparisonMode("head")
         setBaseCommit("")
+        setCurrentRef("")
         setWorkspaceName("workspace")
         setScopePath(".")
+        setHiddenStagedFileCount(0)
         setFiles([])
         setDisplayedDiff(null)
         setDiffError(null)
@@ -260,7 +293,7 @@ export function DiffViewerPage() {
       })
 
     return () => controller.abort()
-  }, [prepareLoadedDiff, selectedBaseRef])
+  }, [refreshChangedFiles])
 
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
@@ -278,6 +311,9 @@ export function DiffViewerPage() {
   }, [])
 
   const handleSelectBaseRef = useCallback((nextBaseRef: string) => {
+    setNotice(null)
+    setCommitError(null)
+    setIsCommitComposerOpen(false)
     setSelectedBaseRef(nextBaseRef)
     setIsFilesLoading(true)
   }, [])
@@ -405,6 +441,94 @@ export function DiffViewerPage() {
     }
   }, [resetCopyState, savedAnnotations])
 
+  const handleToggleStage = useCallback(
+    async (file: ChangedFileItem) => {
+      setNotice(null)
+      setCommitError(null)
+      setStagePendingPaths((current) => [...current, file.path])
+
+      try {
+        if (file.hasStagedChanges) {
+          await unstageFile(file)
+          setNotice({
+            tone: "success",
+            message: `Unstaged ${file.displayPath}.`,
+          })
+        } else {
+          await stageFile(file)
+          setNotice({
+            tone: "success",
+            message: `Staged ${file.displayPath}.`,
+          })
+        }
+
+        await refreshChangedFiles()
+      } catch (error) {
+        setNotice({
+          tone: "error",
+          message: error instanceof Error ? error.message : "Unable to update staged file state.",
+        })
+      } finally {
+        setStagePendingPaths((current) => current.filter((path) => path !== file.path))
+      }
+    },
+    [refreshChangedFiles]
+  )
+
+  const handleOpenCommitComposer = useCallback(() => {
+    setNotice(null)
+    setCommitError(null)
+    setIsCommitComposerOpen(true)
+  }, [])
+
+  const handleCloseCommitComposer = useCallback(() => {
+    setCommitError(null)
+    setIsCommitComposerOpen(false)
+  }, [])
+
+  const handleCommit = useCallback(async () => {
+    setNotice(null)
+    setCommitError(null)
+    setIsCommitPending(true)
+
+    try {
+      const result = await commitStaged(commitMessage)
+      setCommitMessage("")
+      setIsCommitComposerOpen(false)
+      setNotice({
+        tone: "success",
+        message: `Created commit ${result.commit.slice(0, 7)} on ${currentRef || "the current branch"}.`,
+      })
+      await Promise.all([refreshChangedFiles(), refreshBranches()])
+    } catch (error) {
+      setCommitError(error instanceof Error ? error.message : "Commit failed.")
+    } finally {
+      setIsCommitPending(false)
+    }
+  }, [commitMessage, currentRef, refreshBranches, refreshChangedFiles])
+
+  const handlePush = useCallback(async () => {
+    setNotice(null)
+    setCommitError(null)
+    setIsPushPending(true)
+
+    try {
+      const result = await pushCurrentBranch()
+      setNotice({
+        tone: "success",
+        message: `Pushed ${result.remoteRef}.`,
+      })
+      await Promise.all([refreshChangedFiles(), refreshBranches()])
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Push failed.",
+      })
+    } finally {
+      setIsPushPending(false)
+    }
+  }, [refreshBranches, refreshChangedFiles])
+
   const fileSummary =
     comparisonMode === "head"
       ? `${formatStatus(selectedFile?.status ?? "modified")} · ${
@@ -431,12 +555,27 @@ export function DiffViewerPage() {
         workspaceName={workspaceName}
         scopePath={scopePath}
         branches={branches}
+        comparisonMode={comparisonMode}
         selectedBaseRef={selectedBaseRef}
         onSelectBaseRef={handleSelectBaseRef}
         isBranchesLoading={isBranchesLoading}
         branchesError={branchesError}
         selectedFilePath={selectedFilePath}
         onSelectFile={setSelectedFilePath}
+        hiddenStagedFileCount={hiddenStagedFileCount}
+        stagePendingPaths={stagePendingPaths}
+        onToggleStage={handleToggleStage}
+        isCommitComposerOpen={isCommitComposerOpen}
+        commitMessage={commitMessage}
+        commitError={commitError}
+        isCommitPending={isCommitPending}
+        onOpenCommitComposer={handleOpenCommitComposer}
+        onCloseCommitComposer={handleCloseCommitComposer}
+        onCommitMessageChange={setCommitMessage}
+        onCommit={handleCommit}
+        isPushPending={isPushPending}
+        onPush={handlePush}
+        notice={notice}
         variant="inset"
       />
       <SidebarInset>

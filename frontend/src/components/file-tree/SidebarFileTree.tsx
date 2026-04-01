@@ -1,7 +1,9 @@
+import type { ReactNode } from "react"
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react"
 
 import {
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
@@ -17,6 +19,7 @@ type SidebarFileTreeProps<T> = {
   indent?: number
   density?: "compact" | "comfortable"
   getFileIndicatorClassName?: (data: T) => string | null
+  renderFileAction?: (data: T) => ReactNode
   onToggleFolder: (path: string) => void
   onSelectFile: (path: string, data: T | undefined) => void
 }
@@ -29,6 +32,7 @@ export function SidebarFileTree<T>({
   indent = 12,
   density = "comfortable",
   getFileIndicatorClassName,
+  renderFileAction,
   onToggleFolder,
   onSelectFile,
 }: SidebarFileTreeProps<T>) {
@@ -45,6 +49,7 @@ export function SidebarFileTree<T>({
           isFile && row.data && getFileIndicatorClassName
             ? getFileIndicatorClassName(row.data)
             : null
+        const fileAction = isFile && row.data && renderFileAction ? renderFileAction(row.data) : null
 
         return (
           <SidebarMenuItem key={row.path}>
@@ -85,6 +90,7 @@ export function SidebarFileTree<T>({
               ) : null}
               <span className="min-w-0 truncate">{row.name}</span>
             </SidebarMenuButton>
+            {fileAction ? <SidebarMenuAction asChild>{fileAction}</SidebarMenuAction> : null}
           </SidebarMenuItem>
         )
       })}

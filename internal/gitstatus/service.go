@@ -43,15 +43,17 @@ type ChangedFileItem struct {
 }
 
 type ChangedFilesResult struct {
-	Mode          ComparisonMode    `json:"mode"`
-	BaseRef       string            `json:"baseRef"`
-	BaseCommit    string            `json:"baseCommit"`
-	CurrentRef    string            `json:"currentRef"`
-	CurrentCommit string            `json:"currentCommit"`
-	WorkspaceName string            `json:"workspaceName"`
-	ScopePath     string            `json:"scopePath"`
-	Files         []ChangedFileItem `json:"files"`
-	InitialDiff   *FileDiffResult   `json:"initialDiff,omitempty"`
+	Mode                  ComparisonMode    `json:"mode"`
+	BaseRef               string            `json:"baseRef"`
+	BaseCommit            string            `json:"baseCommit"`
+	CurrentRef            string            `json:"currentRef"`
+	CurrentCommit         string            `json:"currentCommit"`
+	UpstreamRef           string            `json:"upstreamRef,omitempty"`
+	WorkspaceName         string            `json:"workspaceName"`
+	ScopePath             string            `json:"scopePath"`
+	HiddenStagedFileCount int               `json:"hiddenStagedFileCount"`
+	Files                 []ChangedFileItem `json:"files"`
+	InitialDiff           *FileDiffResult   `json:"initialDiff,omitempty"`
 }
 
 type FileVersion struct {
@@ -197,23 +199,22 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		return ChangedFilesResult{}, err
 	}
 
+	statusFiles, err := s.listStatusFiles(ctx)
+	if err != nil {
+		return ChangedFilesResult{}, err
+	}
+
+	upstreamRef, err := s.CurrentUpstreamRef(ctx)
+	if err != nil {
+		return ChangedFilesResult{}, err
+	}
+
 	var files []ChangedFileItem
 	switch comparison.Mode {
 	case ComparisonModeBranch:
-		files, err = s.listFilesAgainstBase(ctx, comparison.BaseRef)
+		files, err = s.listFilesAgainstBase(ctx, comparison.BaseRef, statusFiles)
 	default:
-		output, outputErr := s.runGitOutput(
-			ctx,
-			"status",
-			"--porcelain=v1",
-			"-z",
-			"--untracked-files=all",
-		)
-		if outputErr != nil {
-			return ChangedFilesResult{}, fmt.Errorf("git status: %w", outputErr)
-		}
-
-		files, err = parsePorcelainStatus(output, s.repoRoot)
+		files = statusFiles
 	}
 	if err != nil {
 		return ChangedFilesResult{}, err
@@ -227,15 +228,24 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		}
 	}
 
+	hiddenStagedFileCount := 0
+	for _, file := range statusFiles {
+		if file.HasStagedChanges && !s.AllowsDiff(file.Path, file.PreviousPath) {
+			hiddenStagedFileCount++
+		}
+	}
+
 	return ChangedFilesResult{
-		Mode:          comparison.Mode,
-		BaseRef:       comparison.BaseRef,
-		BaseCommit:    comparison.BaseCommit,
-		CurrentRef:    comparison.CurrentRef,
-		CurrentCommit: comparison.CurrentCommit,
-		WorkspaceName: workspaceNameForScope(s.repoRoot, s.scopePath),
-		ScopePath:     s.scopePath,
-		Files:         filteredFiles,
+		Mode:                  comparison.Mode,
+		BaseRef:               comparison.BaseRef,
+		BaseCommit:            comparison.BaseCommit,
+		CurrentRef:            comparison.CurrentRef,
+		CurrentCommit:         comparison.CurrentCommit,
+		UpstreamRef:           upstreamRef,
+		WorkspaceName:         workspaceNameForScope(s.repoRoot, s.scopePath),
+		ScopePath:             s.scopePath,
+		HiddenStagedFileCount: hiddenStagedFileCount,
+		Files:                 filteredFiles,
 	}, nil
 }
 

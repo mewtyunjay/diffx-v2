@@ -103,6 +103,26 @@ func (s *Service) CurrentRef(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("resolve current ref: %w", err)
 }
 
+func (s *Service) listStatusFiles(ctx context.Context) ([]ChangedFileItem, error) {
+	output, err := s.runGitOutput(
+		ctx,
+		"status",
+		"--porcelain=v1",
+		"-z",
+		"--untracked-files=all",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("git status: %w", err)
+	}
+
+	files, err := parsePorcelainStatus(output, s.repoRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	return files, nil
+}
+
 func (s *Service) resolveComparison(ctx context.Context, baseRef string) (comparisonInfo, error) {
 	currentCommit, err := s.HeadCommit(ctx)
 	if err != nil {
@@ -196,6 +216,7 @@ func (s *Service) listRefs(
 func (s *Service) listFilesAgainstBase(
 	ctx context.Context,
 	baseRef string,
+	statusFiles []ChangedFileItem,
 ) ([]ChangedFileItem, error) {
 	diffOutput, err := s.runGitOutput(
 		ctx,
@@ -211,22 +232,6 @@ func (s *Service) listFilesAgainstBase(
 	}
 
 	files, err := parseNameStatusDiff(diffOutput, s.repoRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	statusOutput, err := s.runGitOutput(
-		ctx,
-		"status",
-		"--porcelain=v1",
-		"-z",
-		"--untracked-files=all",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("git status: %w", err)
-	}
-
-	statusFiles, err := parsePorcelainStatus(statusOutput, s.repoRoot)
 	if err != nil {
 		return nil, err
 	}
