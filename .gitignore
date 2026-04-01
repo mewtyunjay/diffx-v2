@@ -1,6 +1,2 @@
 .agents
-cmd/bin/
-dev
-server
-runtime/
 *.tgz
