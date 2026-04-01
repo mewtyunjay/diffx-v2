@@ -2,9 +2,11 @@ package gitstatus
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -97,6 +99,48 @@ func TestMatchesScope(t *testing.T) {
 	}
 }
 
+func TestWorkspaceNameForScope(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := filepath.Join(string(filepath.Separator), "tmp", "diffx-v2")
+
+	if got := workspaceNameForScope(repoRoot, "."); got != "diffx-v2" {
+		t.Fatalf("expected repo root name diffx-v2, got %q", got)
+	}
+
+	if got := workspaceNameForScope(repoRoot, "frontend/src"); got != "src" {
+		t.Fatalf("expected nested workspace name src, got %q", got)
+	}
+}
+
+func TestDisplayPathForScope(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		path         string
+		previousPath string
+		scopePath    string
+		want         string
+	}{
+		{name: "repo root path stays unchanged", path: "frontend/src/App.tsx", scopePath: ".", want: "frontend/src/App.tsx"},
+		{name: "nested scope trims prefix", path: "frontend/src/App.tsx", scopePath: "frontend/src", want: "App.tsx"},
+		{name: "nested scope keeps subfolders", path: "frontend/src/app/api.ts", scopePath: "frontend/src", want: "app/api.ts"},
+		{name: "rename out of scope uses previous path", path: "docs/App.tsx", previousPath: "frontend/src/App.tsx", scopePath: "frontend/src", want: "App.tsx"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := displayPathForScope(tt.path, tt.previousPath, tt.scopePath); got != tt.want {
+				t.Fatalf("displayPathForScope(%q, %q, %q) = %q, want %q", tt.path, tt.previousPath, tt.scopePath, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAllowsDiffUsesPreviousPath(t *testing.T) {
 	t.Parallel()
 
@@ -144,6 +188,150 @@ func TestResolveWorkspaceTargetRejectsNonGitDirectories(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), ErrNotGitRepo.Error()) {
 		t.Fatalf("expected not-git error, got %v", err)
+	}
+}
+
+func TestListBranchesDedupesMatchingRemote(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	runGit(t, repoRoot, "update-ref", "refs/remotes/origin/main", "main")
+	runGit(t, repoRoot, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+
+	service := NewService(repoRoot, ".")
+	result, err := service.ListBranches(context.Background())
+	if err != nil {
+		t.Fatalf("ListBranches returned error: %v", err)
+	}
+
+	if result.CurrentRef != "feature" {
+		t.Fatalf("expected current ref feature, got %q", result.CurrentRef)
+	}
+
+	if len(result.Branches) != 2 {
+		t.Fatalf("expected 2 branches, got %#v", result.Branches)
+	}
+
+	names := []string{result.Branches[0].Name, result.Branches[1].Name}
+	if !slices.Equal(names, []string{"feature", "main"}) {
+		t.Fatalf("unexpected branch order: %#v", names)
+	}
+
+	for _, branch := range result.Branches {
+		if branch.Name == "origin/main" || branch.Name == "origin/HEAD" {
+			t.Fatalf("expected remote duplicates to be filtered, got %#v", result.Branches)
+		}
+	}
+}
+
+func TestListChangedFilesAgainstBaseIncludesBranchAndUntrackedChanges(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	service := NewService(repoRoot, ".")
+
+	result, err := service.ListChangedFiles(context.Background(), "main")
+	if err != nil {
+		t.Fatalf("ListChangedFiles returned error: %v", err)
+	}
+
+	if result.Mode != ComparisonModeBranch {
+		t.Fatalf("expected branch mode, got %q", result.Mode)
+	}
+	if result.BaseRef != "main" {
+		t.Fatalf("expected base ref main, got %q", result.BaseRef)
+	}
+	if result.CurrentRef != "feature" {
+		t.Fatalf("expected current ref feature, got %q", result.CurrentRef)
+	}
+	if len(result.Files) != 5 {
+		t.Fatalf("expected 5 files, got %#v", result.Files)
+	}
+
+	filesByPath := make(map[string]ChangedFileItem, len(result.Files))
+	for _, file := range result.Files {
+		filesByPath[file.Path] = file
+	}
+
+	if file := filesByPath["alpha.txt"]; file.Status != StatusModified || !file.HasUnstagedChanges {
+		t.Fatalf("expected alpha.txt to be modified with unstaged changes, got %#v", file)
+	}
+	if file := filesByPath["tracked.txt"]; file.Status != StatusAdded || !file.IsTracked {
+		t.Fatalf("expected tracked.txt to be a tracked add, got %#v", file)
+	}
+	if file := filesByPath["scratch.txt"]; file.Status != StatusAdded || file.IsTracked || !file.HasUnstagedChanges {
+		t.Fatalf("expected scratch.txt to be an untracked add, got %#v", file)
+	}
+	if file := filesByPath["keep.txt"]; file.Status != StatusDeleted {
+		t.Fatalf("expected keep.txt to be deleted, got %#v", file)
+	}
+	if file := filesByPath["new.txt"]; file.Status != StatusRenamed || file.PreviousPath != "old.txt" {
+		t.Fatalf("expected new.txt to be a rename from old.txt, got %#v", file)
+	}
+}
+
+func TestReadFileDiffUsesSelectedBaseRef(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	service := NewService(repoRoot, ".")
+
+	diff, err := service.ReadFileDiff(context.Background(), "alpha.txt", StatusModified, "", "main")
+	if err != nil {
+		t.Fatalf("ReadFileDiff returned error: %v", err)
+	}
+
+	if diff.Mode != ComparisonModeBranch {
+		t.Fatalf("expected branch mode, got %q", diff.Mode)
+	}
+	if diff.BaseRef != "main" {
+		t.Fatalf("expected base ref main, got %q", diff.BaseRef)
+	}
+	if !strings.Contains(diff.Before.Contents, "alpha base") {
+		t.Fatalf("expected before contents from main, got %q", diff.Before.Contents)
+	}
+	if !strings.Contains(diff.After.Contents, "alpha worktree") {
+		t.Fatalf("expected after contents from worktree, got %q", diff.After.Contents)
+	}
+}
+
+func createComparisonRepo(t *testing.T) string {
+	t.Helper()
+
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init")
+	runGit(t, repoRoot, "checkout", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "diffx@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Diffx Tests")
+
+	writeFile(t, filepath.Join(repoRoot, "alpha.txt"), "alpha base\n")
+	writeFile(t, filepath.Join(repoRoot, "old.txt"), "rename me\n")
+	writeFile(t, filepath.Join(repoRoot, "keep.txt"), "delete me\n")
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "base commit")
+
+	runGit(t, repoRoot, "checkout", "-b", "feature")
+
+	writeFile(t, filepath.Join(repoRoot, "alpha.txt"), "alpha branch\n")
+	runGit(t, repoRoot, "mv", "old.txt", "new.txt")
+	if err := os.Remove(filepath.Join(repoRoot, "keep.txt")); err != nil {
+		t.Fatalf("remove keep.txt: %v", err)
+	}
+	writeFile(t, filepath.Join(repoRoot, "tracked.txt"), "tracked branch file\n")
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "feature commit")
+
+	writeFile(t, filepath.Join(repoRoot, "alpha.txt"), "alpha worktree\n")
+	writeFile(t, filepath.Join(repoRoot, "scratch.txt"), "untracked file\n")
+
+	return repoRoot
+}
+
+func writeFile(t *testing.T, path string, contents string) {
+	t.Helper()
+
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
 

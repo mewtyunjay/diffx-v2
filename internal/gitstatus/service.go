@@ -32,6 +32,7 @@ var emptyContentHash = hashContents(nil)
 type ChangedFileItem struct {
 	ID                 string            `json:"id"`
 	Path               string            `json:"path"`
+	DisplayPath        string            `json:"displayPath"`
 	PreviousPath       string            `json:"previousPath,omitempty"`
 	Status             ChangedFileStatus `json:"status"`
 	IsTracked          bool              `json:"isTracked"`
@@ -42,10 +43,15 @@ type ChangedFileItem struct {
 }
 
 type ChangedFilesResult struct {
-	HeadCommit  string            `json:"headCommit"`
-	ScopePath   string            `json:"scopePath"`
-	Files       []ChangedFileItem `json:"files"`
-	InitialDiff *FileDiffResult   `json:"initialDiff,omitempty"`
+	Mode          ComparisonMode    `json:"mode"`
+	BaseRef       string            `json:"baseRef"`
+	BaseCommit    string            `json:"baseCommit"`
+	CurrentRef    string            `json:"currentRef"`
+	CurrentCommit string            `json:"currentCommit"`
+	WorkspaceName string            `json:"workspaceName"`
+	ScopePath     string            `json:"scopePath"`
+	Files         []ChangedFileItem `json:"files"`
+	InitialDiff   *FileDiffResult   `json:"initialDiff,omitempty"`
 }
 
 type FileVersion struct {
@@ -55,15 +61,19 @@ type FileVersion struct {
 }
 
 type FileDiffResult struct {
-	HeadCommit   string            `json:"headCommit"`
-	Path         string            `json:"path"`
-	PreviousPath string            `json:"previousPath,omitempty"`
-	Status       ChangedFileStatus `json:"status"`
-	Language     string            `json:"language,omitempty"`
-	Before       FileVersion       `json:"before"`
-	After        FileVersion       `json:"after"`
-	Binary       bool              `json:"binary,omitempty"`
-	TooLarge     bool              `json:"tooLarge,omitempty"`
+	Mode          ComparisonMode    `json:"mode"`
+	BaseRef       string            `json:"baseRef"`
+	BaseCommit    string            `json:"baseCommit"`
+	CurrentRef    string            `json:"currentRef"`
+	CurrentCommit string            `json:"currentCommit"`
+	Path          string            `json:"path"`
+	PreviousPath  string            `json:"previousPath,omitempty"`
+	Status        ChangedFileStatus `json:"status"`
+	Language      string            `json:"language,omitempty"`
+	Before        FileVersion       `json:"before"`
+	After         FileVersion       `json:"after"`
+	Binary        bool              `json:"binary,omitempty"`
+	TooLarge      bool              `json:"tooLarge,omitempty"`
 }
 
 type Service struct {
@@ -181,28 +191,30 @@ func (s *Service) AllowsDiff(path, previousPath string) bool {
 	return matchesScope(path, s.scopePath) || matchesScope(previousPath, s.scopePath)
 }
 
-func (s *Service) ListChangedFiles(ctx context.Context) (ChangedFilesResult, error) {
-	headCommit, err := s.HeadCommit(ctx)
+func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (ChangedFilesResult, error) {
+	comparison, err := s.resolveComparison(ctx, baseRef)
 	if err != nil {
 		return ChangedFilesResult{}, err
 	}
 
-	cmd := exec.CommandContext(
-		ctx,
-		"git",
-		"-C",
-		s.repoRoot,
-		"status",
-		"--porcelain=v1",
-		"-z",
-		"--untracked-files=all",
-	)
-	output, err := cmd.Output()
-	if err != nil {
-		return ChangedFilesResult{}, fmt.Errorf("git status: %w", err)
-	}
+	var files []ChangedFileItem
+	switch comparison.Mode {
+	case ComparisonModeBranch:
+		files, err = s.listFilesAgainstBase(ctx, comparison.BaseRef)
+	default:
+		output, outputErr := s.runGitOutput(
+			ctx,
+			"status",
+			"--porcelain=v1",
+			"-z",
+			"--untracked-files=all",
+		)
+		if outputErr != nil {
+			return ChangedFilesResult{}, fmt.Errorf("git status: %w", outputErr)
+		}
 
-	files, err := parsePorcelainStatus(output, s.repoRoot)
+		files, err = parsePorcelainStatus(output, s.repoRoot)
+	}
 	if err != nil {
 		return ChangedFilesResult{}, err
 	}
@@ -210,14 +222,20 @@ func (s *Service) ListChangedFiles(ctx context.Context) (ChangedFilesResult, err
 	filteredFiles := make([]ChangedFileItem, 0, len(files))
 	for _, file := range files {
 		if s.AllowsDiff(file.Path, file.PreviousPath) {
+			file.DisplayPath = displayPathForScope(file.Path, file.PreviousPath, s.scopePath)
 			filteredFiles = append(filteredFiles, file)
 		}
 	}
 
 	return ChangedFilesResult{
-		HeadCommit: headCommit,
-		ScopePath:  s.scopePath,
-		Files:      filteredFiles,
+		Mode:          comparison.Mode,
+		BaseRef:       comparison.BaseRef,
+		BaseCommit:    comparison.BaseCommit,
+		CurrentRef:    comparison.CurrentRef,
+		CurrentCommit: comparison.CurrentCommit,
+		WorkspaceName: workspaceNameForScope(s.repoRoot, s.scopePath),
+		ScopePath:     s.scopePath,
+		Files:         filteredFiles,
 	}, nil
 }
 
@@ -321,6 +339,35 @@ func matchesScope(path, scopePath string) bool {
 	return normalizedPath == normalizedScope || strings.HasPrefix(normalizedPath, normalizedScope+"/")
 }
 
+func workspaceNameForScope(repoRoot, scopePath string) string {
+	normalizedScope := normalizeScopePath(scopePath)
+	if normalizedScope == "." {
+		return filepath.Base(repoRoot)
+	}
+
+	return filepath.Base(normalizedScope)
+}
+
+func displayPathForScope(path, previousPath, scopePath string) string {
+	normalizedScope := normalizeScopePath(scopePath)
+	normalizedPath := filepath.ToSlash(filepath.Clean(path))
+	if normalizedScope == "." {
+		return normalizedPath
+	}
+
+	displayTarget := normalizedPath
+	if !matchesScope(normalizedPath, normalizedScope) && matchesScope(previousPath, normalizedScope) {
+		displayTarget = filepath.ToSlash(filepath.Clean(previousPath))
+	}
+
+	relativePath, err := filepath.Rel(normalizedScope, displayTarget)
+	if err != nil {
+		return displayTarget
+	}
+
+	return filepath.ToSlash(relativePath)
+}
+
 func (status ChangedFileStatus) IsValid() bool {
 	switch status {
 	case StatusAdded, StatusModified, StatusDeleted, StatusRenamed:
@@ -384,7 +431,7 @@ func (s *Service) ReadFileDiff(
 	path string,
 	status ChangedFileStatus,
 	previousPath string,
-	headCommit string,
+	baseRef string,
 ) (FileDiffResult, error) {
 	if path == "" {
 		return FileDiffResult{}, fmt.Errorf("path is required")
@@ -393,7 +440,7 @@ func (s *Service) ReadFileDiff(
 		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
 	}
 
-	headCommit, err := s.resolveHeadCommit(ctx, headCommit)
+	comparison, err := s.resolveComparison(ctx, baseRef)
 	if err != nil {
 		return FileDiffResult{}, err
 	}
@@ -404,13 +451,17 @@ func (s *Service) ReadFileDiff(
 	}
 
 	result := FileDiffResult{
-		HeadCommit:   headCommit,
-		Path:         path,
-		PreviousPath: previousPath,
-		Status:       status,
-		Language:     detectLanguage(path),
-		Before:       emptyFileVersion(beforeName),
-		After:        emptyFileVersion(path),
+		Mode:          comparison.Mode,
+		BaseRef:       comparison.BaseRef,
+		BaseCommit:    comparison.BaseCommit,
+		CurrentRef:    comparison.CurrentRef,
+		CurrentCommit: comparison.CurrentCommit,
+		Path:          path,
+		PreviousPath:  previousPath,
+		Status:        status,
+		Language:      detectLanguage(path),
+		Before:        emptyFileVersion(beforeName),
+		After:         emptyFileVersion(path),
 	}
 
 	var beforeResult cachedFileVersion
@@ -424,7 +475,7 @@ func (s *Service) ReadFileDiff(
 		}
 		result.After = afterResult.version
 	case StatusDeleted:
-		beforeResult, err = s.readGitVersion(ctx, headCommit, path)
+		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, path)
 		if err != nil {
 			return FileDiffResult{}, err
 		}
@@ -436,7 +487,7 @@ func (s *Service) ReadFileDiff(
 			result.PreviousPath = beforePath
 		}
 
-		beforeResult, err = s.readGitVersion(ctx, headCommit, beforePath)
+		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, beforePath)
 		if err != nil {
 			return FileDiffResult{}, err
 		}
@@ -448,7 +499,7 @@ func (s *Service) ReadFileDiff(
 		result.Before = beforeResult.version
 		result.After = afterResult.version
 	default:
-		beforeResult, err = s.readGitVersion(ctx, headCommit, path)
+		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, path)
 		if err != nil {
 			return FileDiffResult{}, err
 		}
@@ -465,14 +516,6 @@ func (s *Service) ReadFileDiff(
 	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
 
 	return result, nil
-}
-
-func (s *Service) resolveHeadCommit(ctx context.Context, headCommit string) (string, error) {
-	if headCommit != "" {
-		return headCommit, nil
-	}
-
-	return s.HeadCommit(ctx)
 }
 
 func (s *Service) readWorkingTreeVersion(relPath string) (cachedFileVersion, error) {

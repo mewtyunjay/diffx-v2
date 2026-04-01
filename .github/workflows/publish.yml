@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: internal/go.mod
+          go-version-file: go.mod
 
       - name: Install frontend dependencies
         run: npm install
@@ -34,8 +34,7 @@ jobs:
         working-directory: frontend
 
       - name: Run backend tests
-        run: go test ./...
-        working-directory: internal
+        run: go test ./cmd/... ./internal/...
 
       - name: Run CLI tests
         run: npm run test:cli

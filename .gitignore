@@ -1,7 +1,7 @@
 .agents
-internal/dev
-internal/cmd/bin/
-internal/server
+cmd/bin/
+dev
+server
 runtime/
 *.tgz
 

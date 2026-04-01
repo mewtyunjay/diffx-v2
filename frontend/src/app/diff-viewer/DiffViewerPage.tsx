@@ -12,10 +12,13 @@ import {
   upsertSavedAnnotation,
 } from "@/app/diff-viewer/annotations"
 import {
+  fetchBranches,
   fetchChangedFiles,
   fetchFileDiff,
+  type BranchOption,
   type ChangedFileItem,
   type ChangedFileStatus,
+  type ComparisonMode,
   type FileDiffResult,
 } from "@/app/changed-files/api"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -33,8 +36,8 @@ import {
 import { prepareFileDiffAsync } from "@/components/diff/prepareDiffAsync"
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react"
 
-function createDiffCacheKey(headCommit: string, file: Pick<ChangedFileItem, "path" | "contentKey">) {
-  return `${headCommit}:${file.path}:${file.contentKey}`
+function createDiffCacheKey(baseCommit: string, file: Pick<ChangedFileItem, "path" | "contentKey">) {
+  return `${baseCommit}:${file.path}:${file.contentKey}`
 }
 
 function formatStatus(status: ChangedFileStatus) {
@@ -53,8 +56,15 @@ function formatStatus(status: ChangedFileStatus) {
 type InlineAnnotationTarget = Pick<SavedDiffAnnotation, "side" | "lineNumber">
 
 export function DiffViewerPage() {
-  const [headCommit, setHeadCommit] = useState("")
+  const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
+  const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
+  const [baseCommit, setBaseCommit] = useState("")
+  const [currentRef, setCurrentRef] = useState("")
+  const [workspaceName, setWorkspaceName] = useState("workspace")
   const [scopePath, setScopePath] = useState(".")
+  const [branches, setBranches] = useState<BranchOption[]>([])
+  const [branchesError, setBranchesError] = useState<string | null>(null)
+  const [isBranchesLoading, setIsBranchesLoading] = useState(true)
   const [files, setFiles] = useState<ChangedFileItem[]>([])
   const [filesError, setFilesError] = useState<string | null>(null)
   const [isFilesLoading, setIsFilesLoading] = useState(true)
@@ -135,11 +145,12 @@ export function DiffViewerPage() {
 
   const loadDiff = useCallback(
     (
-      nextHeadCommit: string,
+      nextBaseRef: string,
+      nextBaseCommit: string,
       file: Pick<ChangedFileItem, "path" | "previousPath" | "status" | "contentKey">,
       signal?: AbortSignal
     ) => {
-      const cacheKey = createDiffCacheKey(nextHeadCommit, file)
+      const cacheKey = createDiffCacheKey(nextBaseCommit, file)
       const cachedDiff = readCachedDiff(cacheKey)
       if (cachedDiff) {
         return Promise.resolve(cachedDiff)
@@ -150,8 +161,8 @@ export function DiffViewerPage() {
         return inFlightRequest
       }
 
-      const request = fetchFileDiff(file, nextHeadCommit, signal)
-        .then((result) => prepareLoadedDiff(nextHeadCommit, file, result))
+      const request = fetchFileDiff(file, nextBaseRef, signal)
+        .then((result) => prepareLoadedDiff(nextBaseCommit, file, result))
         .finally(() => {
           diffRequestCacheRef.current.delete(cacheKey)
         })
@@ -166,7 +177,33 @@ export function DiffViewerPage() {
   useEffect(() => {
     const controller = new AbortController()
 
-    fetchChangedFiles(controller.signal)
+    fetchBranches(controller.signal)
+      .then((result) => {
+        setBranches(result.branches)
+        setCurrentRef(result.currentRef)
+        setBranchesError(null)
+      })
+      .catch((error: Error) => {
+        if (controller.signal.aborted) {
+          return
+        }
+
+        setBranches([])
+        setBranchesError(error.message)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsBranchesLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    fetchChangedFiles(selectedBaseRef, controller.signal)
       .then((result) => {
         const initialDiff = result.initialDiff ?? null
         const nextSelectedPath =
@@ -180,7 +217,10 @@ export function DiffViewerPage() {
           ? result.files.find((file) => file.path === initialDiff.path) ?? null
           : null
 
-        setHeadCommit(result.headCommit)
+        setComparisonMode(result.mode)
+        setBaseCommit(result.baseCommit)
+        setCurrentRef(result.currentRef)
+        setWorkspaceName(result.workspaceName)
         setScopePath(result.scopePath)
         setFiles(result.files)
         setSavedAnnotations((currentAnnotations) =>
@@ -190,7 +230,7 @@ export function DiffViewerPage() {
         setSelectedFilePath(nextSelectedPath)
 
         if (initialDiff && initialDiffFile) {
-          void prepareLoadedDiff(result.headCommit, initialDiffFile, initialDiff).catch(() => undefined)
+          void prepareLoadedDiff(result.baseCommit, initialDiffFile, initialDiff).catch(() => undefined)
         }
 
         if (!nextSelectedFile) {
@@ -204,7 +244,9 @@ export function DiffViewerPage() {
           return
         }
 
-        setHeadCommit("")
+        setComparisonMode("head")
+        setBaseCommit("")
+        setWorkspaceName("workspace")
         setScopePath(".")
         setFiles([])
         setDisplayedDiff(null)
@@ -218,7 +260,7 @@ export function DiffViewerPage() {
       })
 
     return () => controller.abort()
-  }, [prepareLoadedDiff])
+  }, [prepareLoadedDiff, selectedBaseRef])
 
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
@@ -235,15 +277,20 @@ export function DiffViewerPage() {
     }, 2000)
   }, [])
 
+  const handleSelectBaseRef = useCallback((nextBaseRef: string) => {
+    setSelectedBaseRef(nextBaseRef)
+    setIsFilesLoading(true)
+  }, [])
+
   useEffect(() => {
-    if (!selectedFile || !headCommit) {
+    if (!selectedFile || !baseCommit) {
       diffAbortRef.current?.abort()
       return
     }
 
     diffAbortRef.current?.abort()
 
-    const cacheKey = createDiffCacheKey(headCommit, selectedFile)
+    const cacheKey = createDiffCacheKey(baseCommit, selectedFile)
     const cachedDiff = readCachedDiff(cacheKey)
     const controller = new AbortController()
     diffAbortRef.current = controller
@@ -261,7 +308,7 @@ export function DiffViewerPage() {
     const inFlightPreparedDiff = diffPrepareRequestCacheRef.current.get(cacheKey)
     const request = cachedDiff
       ? Promise.resolve(cachedDiff)
-      : inFlightPreparedDiff ?? loadDiff(headCommit, selectedFile, controller.signal)
+      : inFlightPreparedDiff ?? loadDiff(selectedBaseRef, baseCommit, selectedFile, controller.signal)
 
     request
       .then((result) => {
@@ -286,7 +333,7 @@ export function DiffViewerPage() {
       })
 
     return () => controller.abort()
-  }, [headCommit, loadDiff, readCachedDiff, selectedFile])
+  }, [baseCommit, loadDiff, readCachedDiff, selectedBaseRef, selectedFile])
 
   const visibleSavedAnnotations = displayedDiff
     ? getSavedAnnotationsForDiff(savedAnnotations, displayedDiff)
@@ -305,7 +352,8 @@ export function DiffViewerPage() {
         status: displayedDiff.status,
         comment,
         contentKey: selectedFile.contentKey,
-        headCommit: displayedDiff.headCommit,
+        baseRef: displayedDiff.baseRef,
+        baseCommit: displayedDiff.baseCommit,
         beforeCacheKey: displayedDiff.before.cacheKey,
         afterCacheKey: displayedDiff.after.cacheKey,
         patchMetadata: findPatchMetadataForAnnotation(displayedDiff, target),
@@ -357,6 +405,17 @@ export function DiffViewerPage() {
     }
   }, [resetCopyState, savedAnnotations])
 
+  const fileSummary =
+    comparisonMode === "head"
+      ? `${formatStatus(selectedFile?.status ?? "modified")} · ${
+          selectedFile?.isTracked ? "tracked" : "untracked"
+        } · ${selectedFile?.hasStagedChanges ? "staged" : "not staged"} · ${
+          selectedFile?.hasUnstagedChanges ? "has unstaged changes" : "no unstaged changes"
+        }`
+      : selectedFile?.isTracked
+        ? `${formatStatus(selectedFile?.status ?? "modified")} relative to ${selectedBaseRef} · current branch ${currentRef}`
+        : `untracked in working tree · not present on ${selectedBaseRef}`
+
   return (
     <SidebarProvider
       className="bg-sidebar"
@@ -369,6 +428,13 @@ export function DiffViewerPage() {
     >
       <AppSidebar
         files={files}
+        workspaceName={workspaceName}
+        scopePath={scopePath}
+        branches={branches}
+        selectedBaseRef={selectedBaseRef}
+        onSelectBaseRef={handleSelectBaseRef}
+        isBranchesLoading={isBranchesLoading}
+        branchesError={branchesError}
         selectedFilePath={selectedFilePath}
         onSelectFile={setSelectedFilePath}
         variant="inset"
@@ -393,12 +459,7 @@ export function DiffViewerPage() {
                 {selectedFile ? (
                   <>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {formatStatus(selectedFile.status)} ·{" "}
-                      {selectedFile.isTracked ? "tracked" : "untracked"} ·{" "}
-                      {selectedFile.hasStagedChanges ? "staged" : "not staged"} ·{" "}
-                      {selectedFile.hasUnstagedChanges
-                        ? "has unstaged changes"
-                        : "no unstaged changes"}
+                      {fileSummary}
                     </p>
                     {selectedFile.previousPath ? (
                       <p className="mt-1 text-sm text-muted-foreground">

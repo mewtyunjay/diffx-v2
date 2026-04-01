@@ -4,7 +4,7 @@ import type { ChangedFileItem, ChangedFileStatus } from "@/app/changed-files/api
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
 
 const STORAGE_KEY = "diffx:diff-viewer:saved-annotations"
-const STORAGE_VERSION = 1
+const STORAGE_VERSION = 2
 
 type SavedAnnotationsPayload = {
   version: number
@@ -21,7 +21,8 @@ export type SavedAnnotationTarget = {
 
 export type SavedDiffAnnotation = SavedAnnotationTarget & {
   contentKey: string
-  headCommit: string
+  baseRef: string
+  baseCommit: string
   beforeCacheKey: string
   afterCacheKey: string
   patchMetadata?: SavedDiffPatchMetadata
@@ -47,7 +48,8 @@ export type SavedDiffPatchMetadata = {
 
 export type SaveDiffAnnotationInput = SavedAnnotationTarget & {
   contentKey: string
-  headCommit: string
+  baseRef: string
+  baseCommit: string
   beforeCacheKey: string
   afterCacheKey: string
   patchMetadata?: SavedDiffPatchMetadata
@@ -215,7 +217,7 @@ export function pruneSavedAnnotationsForDiff(
   annotations: SavedDiffAnnotation[],
   diff: Pick<
     PreparedFileDiffResult,
-    "path" | "previousPath" | "status" | "headCommit" | "before" | "after"
+    "path" | "previousPath" | "status" | "baseCommit" | "before" | "after"
   >
 ) {
   return annotations.filter((annotation) => {
@@ -229,7 +231,7 @@ export function pruneSavedAnnotationsForDiff(
     }
 
     return (
-      annotation.headCommit === diff.headCommit &&
+      annotation.baseCommit === diff.baseCommit &&
       annotation.beforeCacheKey === diff.before.cacheKey &&
       annotation.afterCacheKey === diff.after.cacheKey
     )
@@ -240,7 +242,7 @@ export function getSavedAnnotationsForDiff(
   annotations: SavedDiffAnnotation[],
   diff: Pick<
     PreparedFileDiffResult,
-    "path" | "previousPath" | "status" | "headCommit" | "before" | "after"
+    "path" | "previousPath" | "status" | "baseCommit" | "before" | "after"
   >
 ) {
   return annotations.filter(
@@ -248,7 +250,7 @@ export function getSavedAnnotationsForDiff(
       annotation.path === diff.path &&
       (annotation.previousPath ?? "") === (diff.previousPath ?? "") &&
       annotation.status === diff.status &&
-      annotation.headCommit === diff.headCommit &&
+      annotation.baseCommit === diff.baseCommit &&
       annotation.beforeCacheKey === diff.before.cacheKey &&
       annotation.afterCacheKey === diff.after.cacheKey
   )
@@ -314,7 +316,7 @@ export function formatSavedAnnotationsForCopy(annotations: SavedDiffAnnotation[]
         return [
           `- ${annotation.side} line ${annotation.lineNumber}`,
           ...formattedAnnotationLines,
-          `  file metadata: head=${annotation.headCommit} status=${annotation.status} before=${annotation.beforeCacheKey} after=${annotation.afterCacheKey}`,
+          `  file metadata: base=${annotation.baseRef}@${annotation.baseCommit} status=${annotation.status} before=${annotation.beforeCacheKey} after=${annotation.afterCacheKey}`,
           ...patchMetadataLines,
         ].join("\n")
       })

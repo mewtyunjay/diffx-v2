@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { parseArgs, resolveBinaryPath } from "../bin/diffx.js"
+import { parseArgs, resolveBinaryPath, resolveTargetCwd } from "../bin/diffx.js"
 
 test("parseArgs accepts a path, port, and no-open flag", () => {
   const result = parseArgs(["frontend", "--port", "4123", "--no-open"])
@@ -12,6 +12,12 @@ test("parseArgs accepts a path, port, and no-open flag", () => {
     shouldOpen: false,
     targetPath: "frontend",
   })
+})
+
+test("resolveTargetCwd treats no path the same as dot", () => {
+  const cwd = "/tmp/diffx-example"
+
+  assert.equal(resolveTargetCwd(null, cwd), resolveTargetCwd(".", cwd))
 })
 
 test("parseArgs rejects unknown flags", () => {

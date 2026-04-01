@@ -21,7 +21,7 @@ const defaultDebounceDelay = 500 * time.Millisecond
 
 var defaultWatchRoots = []string{
 	"./cmd",
-	"./gitstatus",
+	"./internal",
 }
 
 type Options struct {
@@ -140,7 +140,7 @@ func optionsWithDefaults(opts Options) runtimeOptions {
 
 	serverCWD := strings.TrimSpace(opts.ServerCWD)
 	if serverCWD == "" {
-		serverCWD = filepath.Clean("..")
+		serverCWD = "."
 	}
 
 	buildOutput := strings.TrimSpace(opts.BuildOutput)

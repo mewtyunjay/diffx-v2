@@ -13,8 +13,9 @@ This repo can now be published as an npm CLI named `diffx`.
 
 ## Development
 
-- One-command startup: `./cli dev`
+- Build the developer CLI at repo root: `go build -o cli ./cmd/cli`
 - Install dependencies: `./cli install`
+- Start the full dev environment: `./cli dev`
 - Build frontend + backend: `./cli build`
 - Build npm package assets: `./cli package`
 - Test npm CLI helpers: `npm run test:cli`
@@ -22,5 +23,5 @@ This repo can now be published as an npm CLI named `diffx`.
 ## Fallback Commands
 
 - Frontend only: `cd frontend && npm run dev`
-- Backend only: `cd internal && go run ./cmd/server`
-- Backend with hot reload only: `cd internal && go run ./cmd/dev`
+- Backend only: `go run ./cmd/server`
+- Backend with hot reload only: `go run ./cmd/dev`

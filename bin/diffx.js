@@ -100,6 +100,10 @@ export function resolveBinaryPath(platform = process.platform, arch = process.ar
   return join(packageRoot, "runtime", "bin", target, binaryName)
 }
 
+export function resolveTargetCwd(targetPath, currentWorkingDirectory = process.cwd()) {
+  return resolve(currentWorkingDirectory, targetPath ?? ".")
+}
+
 async function ensureReadable(path) {
   await access(path, constants.R_OK)
 }
@@ -192,7 +196,7 @@ async function main() {
   const webRoot = join(packageRoot, "runtime", "web")
   await Promise.all([ensureExecutable(binaryPath), ensureReadable(webRoot)])
 
-  const cwd = resolve(parsed.targetPath ?? process.cwd())
+  const cwd = resolveTargetCwd(parsed.targetPath)
   const port = await resolvePort(parsed.port)
   const baseUrl = `http://127.0.0.1:${port}`
   const child = spawn(

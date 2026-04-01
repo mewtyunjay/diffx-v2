@@ -210,22 +210,20 @@ const folderMatrix = [
     ],
   },
   {
-    dir: "internal",
+    dir: ".",
     files: [
       "go.mod",
       "go.sum",
-      "main.go",
-      "router.go",
-      "server.go",
+      "cli",
+      "package.json",
     ],
   },
   {
-    dir: "internal/cmd/server",
+    dir: "cmd/server",
     files: [
-      "git_changes.go",
+      "http.go",
+      "http_test.go",
       "main.go",
-      "routes.go",
-      "watcher.go",
     ],
   },
   {

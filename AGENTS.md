@@ -7,11 +7,13 @@ This repository has two active areas:
 - `frontend/src/components/`: shared UI and layout components. Low-level primitives live in `frontend/src/components/ui/`.
 - `frontend/src/app/`: app-specific data and feature folders, such as `frontend/src/app/dashboard/`.
 - `frontend/src/hooks/` and `frontend/src/lib/`: reusable hooks and helpers.
-- `internal/`: Go backend module. The HTTP server entrypoint is `internal/cmd/server/main.go`.
+- `cmd/`: Go entrypoints. The HTTP server entrypoint is `cmd/server/main.go`.
+- `internal/`: Go backend packages and services.
 
 ## Build, Test, and Development Commands
 Run commands from the relevant package directory.
 
+- `go build -o cli ./cmd/cli`: build the developer CLI binary at the repo root.
 - `./cli install`: install backend and frontend dependencies from the repo root.
 - `./cli dev`: start the Vite frontend and hot-reloading Go backend together from the repo root.
 - `./cli build`: build the frontend bundle and backend binary from the repo root.
@@ -20,8 +22,8 @@ Run commands from the relevant package directory.
 - `cd frontend && npm run build`: run TypeScript build checks and produce a production bundle in `frontend/dist/`.
 - `cd frontend && npm run lint`: run ESLint on all `ts` and `tsx` files.
 - `cd frontend && npm run preview`: serve the built frontend locally.
-- `cd internal && go run ./cmd/server`: start the Go API on `:8080`.
-- `cd internal && go test ./...`: run backend tests when test files are added.
+- `go run ./cmd/server`: start the Go API on `:8080`.
+- `go test ./cmd/... ./internal/...`: run backend tests when test files are added.
 
 ## Coding Style & Naming Conventions
 Frontend code uses TypeScript, JSX, and the flat ESLint config in `frontend/eslint.config.js`. Follow the existing style: 2-space indentation, no semicolons, PascalCase for React components (`SiteHeader.tsx`), and camelCase for hooks and helpers (`use-mobile.ts`, `utils.ts`). Keep feature code near its UI entrypoint and prefer `@/` imports inside the frontend.
@@ -58,7 +60,7 @@ Go code should stay `gofmt`-formatted, use standard mixedCaps names, and keep ha
 - Add regression tests for bug fixes when feasible.
 - Use table-driven tests for Go parsing, mapping, and status logic.
 - Add frontend tests for non-trivial pure logic and custom hooks.
-- `cd frontend && npm run lint`, `cd frontend && npm run build`, and `cd internal && go test ./...` are the minimum verification steps for relevant changes.
+- `cd frontend && npm run lint`, `cd frontend && npm run build`, and `go test ./cmd/... ./internal/...` are the minimum verification steps for relevant changes.
 
 ## Testing Guidelines
 There is no committed test suite yet. For frontend changes, treat `npm run lint` and `npm run build` as the minimum verification gate. Add tests alongside new behavior when introducing non-trivial logic. Use `*.test.ts` or `*.test.tsx` naming in the frontend, and Go `_test.go` files in the same package as the code under test.

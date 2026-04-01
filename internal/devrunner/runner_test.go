@@ -22,6 +22,12 @@ func TestOptionsWithDefaults(t *testing.T) {
 	if len(config.WatchRoots) != len(defaultWatchRoots) {
 		t.Fatalf("expected %d watch roots, got %d", len(defaultWatchRoots), len(config.WatchRoots))
 	}
+	if config.WatchRoots[0] != "./cmd" || config.WatchRoots[1] != "./internal" {
+		t.Fatalf("expected root watch roots, got %#v", config.WatchRoots)
+	}
+	if config.ServerCWD != "." {
+		t.Fatalf("expected default server cwd ., got %q", config.ServerCWD)
+	}
 }
 
 func TestOptionsWithDefaultsPreservesExplicitValues(t *testing.T) {

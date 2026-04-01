@@ -1,8 +1,23 @@
 export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed"
+export type ComparisonMode = "head" | "branch"
+export type BranchKind = "local" | "remote"
+
+export type BranchOption = {
+  name: string
+  kind: BranchKind
+  commit: string
+  isCurrent?: boolean
+}
+
+export type BranchesResult = {
+  currentRef: string
+  branches: BranchOption[]
+}
 
 export type ChangedFileItem = {
   id: string
   path: string
+  displayPath: string
   previousPath?: string
   status: ChangedFileStatus
   isTracked: boolean
@@ -13,7 +28,12 @@ export type ChangedFileItem = {
 }
 
 export type ChangedFilesResult = {
-  headCommit: string
+  mode: ComparisonMode
+  baseRef: string
+  baseCommit: string
+  currentRef: string
+  currentCommit: string
+  workspaceName: string
   scopePath: string
   files: ChangedFileItem[]
   initialDiff?: FileDiffResult
@@ -26,7 +46,11 @@ export type FileVersionResult = {
 }
 
 export type FileDiffResult = {
-  headCommit: string
+  mode: ComparisonMode
+  baseRef: string
+  baseCommit: string
+  currentRef: string
+  currentCommit: string
   path: string
   previousPath?: string
   status: ChangedFileStatus
@@ -42,8 +66,16 @@ async function readError(response: Response) {
   return text || `Request failed with status ${response.status}`
 }
 
-export async function fetchChangedFiles(signal?: AbortSignal) {
-  const response = await fetch("/api/files", { signal })
+export async function fetchChangedFiles(baseRef?: string, signal?: AbortSignal) {
+  const params = new URLSearchParams()
+  if (baseRef && baseRef !== "HEAD") {
+    params.set("baseRef", baseRef)
+  }
+
+  const response = await fetch(
+    params.size > 0 ? `/api/files?${params.toString()}` : "/api/files",
+    { signal }
+  )
   if (!response.ok) {
     throw new Error(await readError(response))
   }
@@ -51,9 +83,18 @@ export async function fetchChangedFiles(signal?: AbortSignal) {
   return (await response.json()) as ChangedFilesResult
 }
 
+export async function fetchBranches(signal?: AbortSignal) {
+  const response = await fetch("/api/branches", { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as BranchesResult
+}
+
 export async function fetchFileDiff(
   file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
-  headCommit?: string,
+  baseRef?: string,
   signal?: AbortSignal
 ) {
   const params = new URLSearchParams({
@@ -65,8 +106,8 @@ export async function fetchFileDiff(
     params.set("previousPath", file.previousPath)
   }
 
-  if (headCommit) {
-    params.set("headCommit", headCommit)
+  if (baseRef) {
+    params.set("baseRef", baseRef)
   }
 
   const response = await fetch(`/api/file-diff?${params.toString()}`, {

@@ -6,7 +6,6 @@ import { spawn } from "node:child_process"
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(scriptDir, "..")
 const frontendDir = join(repoRoot, "frontend")
-const internalDir = join(repoRoot, "internal")
 const runtimeDir = join(repoRoot, "runtime")
 const runtimeBinDir = join(runtimeDir, "bin")
 const runtimeWebDir = join(runtimeDir, "web")
@@ -51,7 +50,7 @@ for (const target of targets) {
 
   const output = join(targetDir, `diffx-server${target.extension ?? ""}`)
   await run("go", ["build", "-o", output, "./cmd/server"], {
-    cwd: internalDir,
+    cwd: repoRoot,
     env: {
       ...process.env,
       CGO_ENABLED: "0",
