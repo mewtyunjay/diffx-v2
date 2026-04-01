@@ -18,9 +18,9 @@ Run commands from the relevant package directory.
 - `cd frontend && npm run dev`: start the Vite dev server.
 - `go run ./cmd/diffx`: start the Go API and embedded app server on `:8080`.
 - `go run ./cmd/diffx ./frontend`: scope the app to a nested folder inside the current git repository.
-- `cd frontend && npm run build`: run TypeScript build checks and produce the production bundle in `frontend/dist/`.
+- `go generate ./frontend`: run the frontend package's `//go:generate` steps (`npm install`, then `npm run build`) and produce the production bundle in `frontend/dist/`.
 - `go run ./cmd/diffx` will automatically build `frontend/dist/` locally if the embedded bundle is just the placeholder and `frontend/node_modules` already exists.
-- `go build ./cmd/diffx`: build the single Go binary after `frontend/dist/` exists.
+- `go build ./cmd/diffx`: build the single Go binary after `go generate ./frontend`.
 - `cd frontend && npm run lint`: run ESLint on all `ts` and `tsx` files.
 - `go test ./cmd/... ./internal/...`: run backend tests.
 
@@ -58,7 +58,7 @@ Go code should stay `gofmt`-formatted, use standard mixedCaps names, and keep ha
 - Add regression tests for bug fixes when feasible.
 - Use table-driven tests for Go parsing, mapping, and status logic.
 - Add frontend tests for non-trivial pure logic and custom hooks.
-- `cd frontend && npm run lint`, `cd frontend && npm run build`, and `go test ./cmd/... ./internal/...` are the minimum verification steps for relevant changes.
+- `cd frontend && npm run lint`, `go generate ./frontend`, and `go test ./cmd/... ./internal/...` are the minimum verification steps for relevant changes.
 
 ## Commit & Pull Request Guidelines
 History currently uses short, imperative subjects (`first commit`). Keep commits focused and use concise messages such as `embed frontend assets` or `simplify diff server`.

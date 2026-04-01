@@ -30,11 +30,20 @@ If `frontend/dist/` has not been built into the current binary yet, `go run ./cm
 Build the embedded frontend bundle first, then build the Go binary:
 
 ```sh
-cd frontend && npm run build
+go generate ./frontend
 go build ./cmd/diffx
 ```
 
+`go generate ./frontend` is now the one-shot frontend prep step. It runs `npm install` and then `npm run build` from the `frontend/` package directory before you build the Go binary.
+
 The binary serves the embedded UI and API on `http://127.0.0.1:8080` by default.
+
+You can override the bind address and port:
+
+```sh
+go run ./cmd/diffx -a 0.0.0.0 -p 9000
+go run ./cmd/diffx --address 0.0.0.0 --port 9000
+```
 
 ## Verification
 
@@ -42,6 +51,6 @@ For relevant changes, run:
 
 ```sh
 cd frontend && npm run lint
-cd frontend && npm run build
+go generate ./frontend
 go test ./cmd/... ./internal/...
 ```
