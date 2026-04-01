@@ -39,6 +39,31 @@ func TestHandleStageFileStagesChanges(t *testing.T) {
 	}
 }
 
+func TestHandleStageFileRejectsUnknownFields(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/git/stage",
+		bytes.NewBufferString(`{"path":"notes.txt","displayPath":"notes.txt"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "invalid JSON body") {
+		t.Fatalf("expected invalid JSON body error, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleCommitReturnsConflictForScopedHiddenStagedFiles(t *testing.T) {
 	t.Parallel()
 

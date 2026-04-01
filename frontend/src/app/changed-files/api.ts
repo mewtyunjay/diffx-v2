@@ -95,6 +95,12 @@ async function postJSON<TResponse>(url: string, body?: unknown, signal?: AbortSi
   return (await response.json()) as TResponse
 }
 
+function toStageFileRequest(file: Pick<ChangedFileItem, "path" | "previousPath">) {
+  return file.previousPath
+    ? { path: file.path, previousPath: file.previousPath }
+    : { path: file.path }
+}
+
 export async function fetchChangedFiles(baseRef?: string, signal?: AbortSignal) {
   const params = new URLSearchParams()
   if (baseRef && baseRef !== "HEAD") {
@@ -153,14 +159,14 @@ export async function stageFile(
   file: Pick<ChangedFileItem, "path" | "previousPath">,
   signal?: AbortSignal
 ) {
-  return postJSON<void>("/api/git/stage", file, signal)
+  return postJSON<void>("/api/git/stage", toStageFileRequest(file), signal)
 }
 
 export async function unstageFile(
   file: Pick<ChangedFileItem, "path" | "previousPath">,
   signal?: AbortSignal
 ) {
-  return postJSON<void>("/api/git/unstage", file, signal)
+  return postJSON<void>("/api/git/unstage", toStageFileRequest(file), signal)
 }
 
 export async function commitStaged(message: string, signal?: AbortSignal) {
