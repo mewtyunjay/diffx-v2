@@ -18,18 +18,36 @@ func TestParseConfig(t *testing.T) {
 		{
 			name: "defaults",
 			want: config{
-				host:       "127.0.0.1",
+				address:    "127.0.0.1",
 				port:       8080,
 				targetPath: ".",
 			},
 		},
 		{
-			name: "custom host port and path",
-			args: []string{"-host", "0.0.0.0", "-port", "9090", "frontend"},
+			name: "custom address port and path",
+			args: []string{"-address", "0.0.0.0", "-port", "9090", "frontend"},
 			want: config{
-				host:       "0.0.0.0",
+				address:    "0.0.0.0",
 				port:       9090,
 				targetPath: "frontend",
+			},
+		},
+		{
+			name: "short address and port flags",
+			args: []string{"-a", "0.0.0.0", "-p", "9090"},
+			want: config{
+				address:    "0.0.0.0",
+				port:       9090,
+				targetPath: ".",
+			},
+		},
+		{
+			name: "host alias still works",
+			args: []string{"-host", "0.0.0.0"},
+			want: config{
+				address:    "0.0.0.0",
+				port:       8080,
+				targetPath: ".",
 			},
 		},
 		{
@@ -64,6 +82,34 @@ func TestParseConfig(t *testing.T) {
 				t.Fatalf("parseConfig returned %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeFlagAliases(t *testing.T) {
+	t.Parallel()
+
+	got := normalizeFlagAliases([]string{
+		"-host",
+		"0.0.0.0",
+		"--host=localhost",
+		"-host=127.0.0.1",
+		"--port",
+		"9090",
+	})
+
+	want := []string{
+		"-address",
+		"0.0.0.0",
+		"--address=localhost",
+		"-address=127.0.0.1",
+		"--port",
+		"9090",
+	}
+
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("normalizeFlagAliases()[%d] = %q, want %q", index, got[index], want[index])
+		}
 	}
 }
 

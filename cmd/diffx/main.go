@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 const shutdownTimeout = 5 * time.Second
 
 type config struct {
-	host       string
+	address    string
 	port       int
 	targetPath string
 }
@@ -52,7 +53,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.host, strconv.Itoa(cfg.port)))
+	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.address, strconv.Itoa(cfg.port)))
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
@@ -103,21 +104,23 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
 	cfg := config{
-		host:       "127.0.0.1",
+		address:    "127.0.0.1",
 		port:       8080,
 		targetPath: ".",
 	}
 
 	flagSet := flag.NewFlagSet("diffx", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
-	flagSet.StringVar(&cfg.host, "host", cfg.host, "HTTP host to bind")
+	flagSet.StringVar(&cfg.address, "a", cfg.address, "HTTP address to bind")
+	flagSet.StringVar(&cfg.address, "address", cfg.address, "HTTP address to bind")
+	flagSet.IntVar(&cfg.port, "p", cfg.port, "HTTP port to bind")
 	flagSet.IntVar(&cfg.port, "port", cfg.port, "HTTP port to bind")
 	flagSet.Usage = func() {
-		fmt.Fprintln(flagSet.Output(), "Usage: diffx [path] [-host 127.0.0.1] [-port 8080]")
+		fmt.Fprintln(flagSet.Output(), "Usage: diffx [path] [-a 127.0.0.1] [-p 8080]")
 		flagSet.PrintDefaults()
 	}
 
-	if err := flagSet.Parse(args); err != nil {
+	if err := flagSet.Parse(normalizeFlagAliases(args)); err != nil {
 		return config{}, err
 	}
 
@@ -134,6 +137,26 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	}
 
 	return cfg, nil
+}
+
+func normalizeFlagAliases(args []string) []string {
+	normalized := make([]string, len(args))
+	for index, arg := range args {
+		switch {
+		case arg == "-host":
+			normalized[index] = "-address"
+		case arg == "--host":
+			normalized[index] = "--address"
+		case strings.HasPrefix(arg, "-host="):
+			normalized[index] = "-address=" + strings.TrimPrefix(arg, "-host=")
+		case strings.HasPrefix(arg, "--host="):
+			normalized[index] = "--address=" + strings.TrimPrefix(arg, "--host=")
+		default:
+			normalized[index] = arg
+		}
+	}
+
+	return normalized
 }
 
 func serverURL(addr net.Addr) string {
