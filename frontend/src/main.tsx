@@ -1,7 +1,3 @@
-if (import.meta.env.DEV) {
-  import("react-grab");
-}
-
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'

@@ -1,27 +1,47 @@
 # diffx-v2
 
-## Installable CLI
-
-This repo can now be published as an npm CLI named `diffx`.
-
-- Install globally: `npm install -g diffx`
-- Run in the current directory: `diffx`
-- Run against another folder: `diffx path/to/folder`
-- Prevent auto-open: `diffx --no-open`
-
-`diffx` expects the target directory to be inside a git repository. When the target is a nested folder, the UI is scoped to that subtree while git operations still resolve against the repo root.
+`diffx` is a Go application that serves a local git diff review UI from a single binary. The React frontend is built with Vite and embedded into the Go server at build time.
 
 ## Development
 
-- Build the developer CLI at repo root: `go build -o cli ./cmd/cli`
-- Install dependencies: `./cli install`
-- Start the full dev environment: `./cli dev`
-- Build frontend + backend: `./cli build`
-- Build npm package assets: `./cli package`
-- Test npm CLI helpers: `npm run test:cli`
+Install frontend dependencies once:
 
-## Fallback Commands
+```sh
+cd frontend && npm install
+```
 
-- Frontend only: `cd frontend && npm run dev`
-- Backend only: `go run ./cmd/server`
-- Backend with hot reload only: `go run ./cmd/dev`
+Run the frontend dev server against the Go API:
+
+```sh
+cd frontend && npm run dev
+go run ./cmd/diffx
+```
+
+You can also scope the app to a nested folder inside a git repo:
+
+```sh
+go run ./cmd/diffx ./frontend
+```
+
+If `frontend/dist/` has not been built into the current binary yet, `go run ./cmd/diffx` will build the local frontend bundle automatically when `frontend/node_modules` is present.
+
+## Production Build
+
+Build the embedded frontend bundle first, then build the Go binary:
+
+```sh
+cd frontend && npm run build
+go build ./cmd/diffx
+```
+
+The binary serves the embedded UI and API on `http://127.0.0.1:8080` by default.
+
+## Verification
+
+For relevant changes, run:
+
+```sh
+cd frontend && npm run lint
+cd frontend && npm run build
+go test ./cmd/... ./internal/...
+```

@@ -1,0 +1,1 @@
+This file keeps frontend/dist present so Go tests can compile before a production frontend build exists.
