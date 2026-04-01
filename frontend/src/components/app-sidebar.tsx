@@ -1,6 +1,7 @@
 import * as React from "react"
 import { FolderTree, LoaderCircle, Minus, Plus } from "lucide-react"
 
+import { BranchPicker } from "@/app/diff-viewer/BranchPicker"
 import type {
   BranchOption,
   ChangedFileItem,
@@ -114,14 +115,6 @@ export function AppSidebar({
   )
   const [expandedPaths, setExpandedPaths] = React.useState<string[]>(folderPaths)
   const hasInitializedExpandedState = React.useRef(false)
-  const localBranches = React.useMemo(
-    () => branches.filter((branch) => branch.kind === "local"),
-    [branches]
-  )
-  const remoteBranches = React.useMemo(
-    () => branches.filter((branch) => branch.kind === "remote"),
-    [branches]
-  )
   const stagePendingPathSet = React.useMemo(() => new Set(stagePendingPaths), [stagePendingPaths])
 
   const stagedVisibleCount = React.useMemo(
@@ -178,35 +171,13 @@ export function AppSidebar({
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/65">
                 Compare with
               </p>
-              <div className="mt-2 rounded-xl border border-sidebar-border/70 bg-sidebar-accent/40 px-3 py-2">
-                <select
-                  value={selectedBaseRef}
-                  onChange={(event) => onSelectBaseRef(event.target.value)}
+              <div className="mt-2">
+                <BranchPicker
+                  branches={branches}
+                  selectedBaseRef={selectedBaseRef}
+                  onSelectBaseRef={onSelectBaseRef}
                   disabled={isBranchesLoading || branchesError != null}
-                  aria-label="Select diff base branch"
-                  className="w-full truncate bg-transparent text-sm font-medium text-sidebar-foreground outline-none disabled:cursor-not-allowed disabled:text-sidebar-foreground/50"
-                >
-                  <option value="HEAD">HEAD</option>
-                  {localBranches.length > 0 ? (
-                    <optgroup label="Local branches">
-                      {localBranches.map((branch) => (
-                        <option key={branch.name} value={branch.name}>
-                          {branch.name}
-                          {branch.isCurrent ? " (current)" : ""}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : null}
-                  {remoteBranches.length > 0 ? (
-                    <optgroup label="Remote branches">
-                      {remoteBranches.map((branch) => (
-                        <option key={branch.name} value={branch.name}>
-                          {branch.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ) : null}
-                </select>
+                />
               </div>
               {branchesError ? (
                 <p className="mt-2 text-xs leading-5 text-rose-300">{branchesError}</p>
