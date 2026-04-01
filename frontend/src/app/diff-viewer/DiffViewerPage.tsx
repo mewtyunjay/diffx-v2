@@ -1,5 +1,6 @@
 import {
   createSavedAnnotation,
+  findPatchMetadataForAnnotation,
   formatSavedAnnotationsForCopy,
   getSavedAnnotationsForDiff,
   loadSavedAnnotations,
@@ -307,6 +308,7 @@ export function DiffViewerPage() {
         headCommit: displayedDiff.headCommit,
         beforeCacheKey: displayedDiff.before.cacheKey,
         afterCacheKey: displayedDiff.after.cacheKey,
+        patchMetadata: findPatchMetadataForAnnotation(displayedDiff, target),
       })
 
       if (!nextAnnotation) {

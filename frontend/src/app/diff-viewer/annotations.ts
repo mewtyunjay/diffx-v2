@@ -24,8 +24,25 @@ export type SavedDiffAnnotation = SavedAnnotationTarget & {
   headCommit: string
   beforeCacheKey: string
   afterCacheKey: string
+  patchMetadata?: SavedDiffPatchMetadata
   comment: string
   updatedAt: string
+}
+
+export type SavedDiffPatchMetadata = {
+  hunkIndex: number
+  hunkContext?: string
+  hunkSpecs?: string
+  additionStart: number
+  additionCount: number
+  additionLines: number
+  deletionStart: number
+  deletionCount: number
+  deletionLines: number
+  splitLineStart: number
+  splitLineCount: number
+  unifiedLineStart: number
+  unifiedLineCount: number
 }
 
 export type SaveDiffAnnotationInput = SavedAnnotationTarget & {
@@ -33,6 +50,7 @@ export type SaveDiffAnnotationInput = SavedAnnotationTarget & {
   headCommit: string
   beforeCacheKey: string
   afterCacheKey: string
+  patchMetadata?: SavedDiffPatchMetadata
   comment: string
 }
 
@@ -121,6 +139,51 @@ export function createSavedAnnotation(input: SaveDiffAnnotationInput): SavedDiff
     ...input,
     comment,
     updatedAt: new Date().toISOString(),
+  }
+}
+
+function isLineWithinRange(lineNumber: number, start: number, lineCount: number) {
+  if (start <= 0 || lineCount <= 0) {
+    return false
+  }
+
+  return lineNumber >= start && lineNumber < start + lineCount
+}
+
+export function findPatchMetadataForAnnotation(
+  diff: Pick<PreparedFileDiffResult, "parsedDiff">,
+  target: Pick<SavedAnnotationTarget, "lineNumber" | "side">
+): SavedDiffPatchMetadata | undefined {
+  const hunks = diff.parsedDiff?.hunks
+  if (!hunks) {
+    return undefined
+  }
+
+  const hunkIndex = hunks.findIndex((hunk) =>
+    target.side === "additions"
+      ? isLineWithinRange(target.lineNumber, hunk.additionStart, hunk.additionLines)
+      : isLineWithinRange(target.lineNumber, hunk.deletionStart, hunk.deletionLines)
+  )
+
+  if (hunkIndex < 0) {
+    return undefined
+  }
+
+  const hunk = hunks[hunkIndex]
+  return {
+    hunkIndex,
+    hunkContext: hunk.hunkContext,
+    hunkSpecs: hunk.hunkSpecs,
+    additionStart: hunk.additionStart,
+    additionCount: hunk.additionCount,
+    additionLines: hunk.additionLines,
+    deletionStart: hunk.deletionStart,
+    deletionCount: hunk.deletionCount,
+    deletionLines: hunk.deletionLines,
+    splitLineStart: hunk.splitLineStart,
+    splitLineCount: hunk.splitLineCount,
+    unifiedLineStart: hunk.unifiedLineStart,
+    unifiedLineCount: hunk.unifiedLineCount,
   }
 }
 
@@ -227,9 +290,33 @@ export function formatSavedAnnotationsForCopy(annotations: SavedDiffAnnotation[]
       }
 
       const lines = group.map((annotation) => {
-        const [firstLine, ...restLines] = annotation.comment.split(/\r?\n/)
-        const indentedRest = restLines.map((line) => `  ${line}`)
-        return [`- ${annotation.side} line ${annotation.lineNumber}: ${firstLine}`, ...indentedRest].join("\n")
+        const annotationLines = annotation.comment.split(/\r?\n/)
+        const formattedAnnotationLines = annotationLines.map((line, index) =>
+          index === 0 ? `  annotation: ${line}` : `    ${line}`
+        )
+        const patchMetadataLines = annotation.patchMetadata
+          ? [
+              `  patch metadata:`,
+              `    hunk index: ${annotation.patchMetadata.hunkIndex}`,
+              annotation.patchMetadata.hunkSpecs
+                ? `    hunk specs: ${annotation.patchMetadata.hunkSpecs}`
+                : null,
+              annotation.patchMetadata.hunkContext
+                ? `    hunk context: ${annotation.patchMetadata.hunkContext}`
+                : null,
+              `    additions: start=${annotation.patchMetadata.additionStart} count=${annotation.patchMetadata.additionCount} lines=${annotation.patchMetadata.additionLines}`,
+              `    deletions: start=${annotation.patchMetadata.deletionStart} count=${annotation.patchMetadata.deletionCount} lines=${annotation.patchMetadata.deletionLines}`,
+              `    split lines: start=${annotation.patchMetadata.splitLineStart} count=${annotation.patchMetadata.splitLineCount}`,
+              `    unified lines: start=${annotation.patchMetadata.unifiedLineStart} count=${annotation.patchMetadata.unifiedLineCount}`,
+            ].filter((line): line is string => line != null)
+          : [`  patch metadata: none`]
+
+        return [
+          `- ${annotation.side} line ${annotation.lineNumber}`,
+          ...formattedAnnotationLines,
+          `  file metadata: head=${annotation.headCommit} status=${annotation.status} before=${annotation.beforeCacheKey} after=${annotation.afterCacheKey}`,
+          ...patchMetadataLines,
+        ].join("\n")
       })
 
       return [headerParts.join(" "), ...lines].join("\n")
