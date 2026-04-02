@@ -1,0 +1,17 @@
+.diff-pane-theme {
+  --diffs-font-family: var(--font-mono);
+  --diffs-font-size: 14px;
+  --diffs-line-height: 1.5;
+  --diffs-font-features: normal;
+  --diffs-header-font-family: var(--font-sans);
+}
+
+.diff-pane-hover-utility {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: calc((1lh - 1.5rem) / 2);
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.28);
+  opacity: 1;
+}

@@ -1,11 +1,12 @@
 import { FileDiff, type AnnotationSide, type DiffLineAnnotation } from "@pierre/diffs/react"
 import { Plus } from "lucide-react"
-import { useMemo, useState, type CSSProperties } from "react"
+import { useMemo, useState } from "react"
 
 import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
+import "@/components/diff/diff-pane-theme.css"
 
 const DIFF_EXPANSION_LINE_COUNT = 20
 const FAST_INLINE_DIFF_MAX_LINE_LENGTH = 300
@@ -81,19 +82,6 @@ function DiffPaneRendererContent({
     [diff.isLargeDiff, viewMode]
   )
 
-  const diffStyles = useMemo(
-    () =>
-      ({
-        "--diffs-font-family":
-          '"JetBrains Mono", "SFMono-Regular", "SF Mono", "Cascadia Code", "Roboto Mono", monospace',
-        "--diffs-font-size": "14px",
-        "--diffs-line-height": "1.5",
-        "--diffs-font-features": "normal",
-        "--diffs-header-font-family": '"Instrument Sans", "Segoe UI", system-ui, sans-serif',
-      }) as CSSProperties,
-    []
-  )
-
   const savedAnnotationMap = useMemo(
     () =>
       new Map(savedAnnotations.map((annotation) => [createAnnotationLookupKey(annotation), annotation])),
@@ -161,7 +149,6 @@ function DiffPaneRendererContent({
     <FileDiff<RenderedAnnotationMetadata>
       fileDiff={diff.parsedDiff}
       options={options}
-      style={diffStyles}
       lineAnnotations={lineAnnotations}
       renderAnnotation={(annotation) => {
         if (annotation.metadata?.kind === "saved") {
@@ -188,16 +175,7 @@ function DiffPaneRendererContent({
         <button
           type="button"
           aria-label="Add inline comment"
-          className="pointer-events-auto z-10 inline-flex items-center justify-center -translate-x-1.5 rounded-md text-foreground"
-          style={{
-            width: "1.5rem",
-            height: "1.5rem",
-            marginTop: "calc((1lh - 1.5rem) / 2)",
-            border: "1px solid var(--border)",
-            background: "var(--popover)",
-            boxShadow: "0 6px 14px rgba(0, 0, 0, 0.28)",
-            opacity: 1,
-          }}
+          className="diff-pane-hover-utility pointer-events-auto z-10 inline-flex items-center justify-center -translate-x-1.5 rounded-md text-foreground"
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -222,7 +200,7 @@ function DiffPaneRendererContent({
           <Plus className="size-3.5" />
         </button>
       )}
-      className="block h-full min-h-full min-w-0 font-mono"
+      className="diff-pane-theme block h-full min-h-full min-w-0"
     />
   )
 }
