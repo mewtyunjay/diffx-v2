@@ -1,10 +1,10 @@
 /// <reference lib="webworker" />
 
 import {
-  prepareFileDiff,
   type PrepareDiffWorkerRequest,
   type PrepareDiffWorkerResponse,
 } from "./prepareDiff"
+import { prepareFileDiff } from "./prepareDiff.parser"
 
 self.onmessage = (event: MessageEvent<PrepareDiffWorkerRequest>) => {
   const { id, diff } = event.data

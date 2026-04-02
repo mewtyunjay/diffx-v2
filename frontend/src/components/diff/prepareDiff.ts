@@ -1,13 +1,7 @@
-import {
-  parseDiffFromFile,
-  type FileContents,
-  type FileDiffMetadata,
-  type SupportedLanguages,
-} from "@pierre/diffs"
+import type { FileDiffMetadata } from "@pierre/diffs"
 
 import type { FileDiffResult } from "@/app/changed-files/api"
 
-export const DIFF_CONTEXT_LINES = 3
 export const LARGE_DIFF_CHAR_THRESHOLD = 60_000
 
 export type PreparedFileDiffResult = FileDiffResult & {
@@ -31,52 +25,23 @@ export type PrepareDiffWorkerResponse =
       error: string
     }
 
-function toSupportedLanguage(language?: string) {
-  return (language ?? "text") as SupportedLanguages
+export function isPureRenameDiff(diff: FileDiffResult) {
+  return diff.status === "renamed" && diff.before.cacheKey === diff.after.cacheKey
 }
 
-function createFileVersion(
-  name: string,
-  contents: string,
-  cacheKey: string,
-  language: SupportedLanguages
-): FileContents {
-  return {
-    name,
-    contents,
-    cacheKey,
-    lang: language,
-  }
+export function isLargeDiff(diff: FileDiffResult) {
+  return Math.max(diff.before.contents.length, diff.after.contents.length) > LARGE_DIFF_CHAR_THRESHOLD
 }
 
-export function prepareFileDiff(diff: FileDiffResult): PreparedFileDiffResult {
-  const language = toSupportedLanguage(diff.language)
-  const isPureRename =
-    diff.status === "renamed" && diff.before.cacheKey === diff.after.cacheKey
-  const isLargeDiff =
-    Math.max(diff.before.contents.length, diff.after.contents.length) > LARGE_DIFF_CHAR_THRESHOLD
-
-  let parsedDiff: FileDiffMetadata | null = null
-
-  if (!diff.binary && !diff.tooLarge && !isPureRename) {
-    try {
-      parsedDiff = parseDiffFromFile(
-        createFileVersion(diff.before.name, diff.before.contents, diff.before.cacheKey, language),
-        createFileVersion(diff.after.name, diff.after.contents, diff.after.cacheKey, language),
-        {
-          context: DIFF_CONTEXT_LINES,
-        }
-      )
-    } catch {
-      parsedDiff = null
-    }
-  }
-
+export function finalizePreparedFileDiff(
+  diff: FileDiffResult,
+  parsedDiff: FileDiffMetadata | null
+): PreparedFileDiffResult {
   return {
     ...diff,
     parsedDiff,
-    isLargeDiff,
-    isPureRename,
+    isLargeDiff: isLargeDiff(diff),
+    isPureRename: isPureRenameDiff(diff),
   }
 }
 

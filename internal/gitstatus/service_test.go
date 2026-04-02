@@ -295,6 +295,31 @@ func TestReadFileDiffUsesSelectedBaseRef(t *testing.T) {
 	}
 }
 
+func TestListChangedFilesIncludesInitialDiffForFirstVisibleFile(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	service := NewService(repoRoot, ".")
+
+	result, err := service.ListChangedFiles(context.Background(), "HEAD")
+	if err != nil {
+		t.Fatalf("ListChangedFiles returned error: %v", err)
+	}
+
+	if len(result.Files) == 0 {
+		t.Fatal("expected changed files")
+	}
+	if result.InitialDiff == nil {
+		t.Fatal("expected initial diff to be populated")
+	}
+	if result.InitialDiff.Path != result.Files[0].Path {
+		t.Fatalf("expected initial diff for %q, got %q", result.Files[0].Path, result.InitialDiff.Path)
+	}
+	if result.InitialDiff.Status != result.Files[0].Status {
+		t.Fatalf("expected initial diff status %q, got %q", result.Files[0].Status, result.InitialDiff.Status)
+	}
+}
+
 func createComparisonRepo(t *testing.T) string {
 	t.Helper()
 

@@ -2,7 +2,6 @@ import type { FileDiffResult } from "@/app/changed-files/api"
 
 import PrepareDiffWorker from "./prepareDiff.worker.ts?worker"
 import {
-  prepareFileDiff,
   type PreparedFileDiffResult,
   type PrepareDiffWorkerResponse,
 } from "./prepareDiff"
@@ -66,10 +65,15 @@ function getWorker() {
   return workerInstance
 }
 
+async function prepareFileDiffFallback(diff: FileDiffResult) {
+  const { prepareFileDiff } = await import("./prepareDiff.parser")
+  return prepareFileDiff(diff)
+}
+
 export async function prepareFileDiffAsync(diff: FileDiffResult) {
   const worker = getWorker()
   if (!worker) {
-    return prepareFileDiff(diff)
+    return prepareFileDiffFallback(diff)
   }
 
   try {
@@ -91,6 +95,6 @@ export async function prepareFileDiffAsync(diff: FileDiffResult) {
     })
   } catch {
     disposeWorker()
-    return prepareFileDiff(diff)
+    return prepareFileDiffFallback(diff)
   }
 }

@@ -1,9 +1,14 @@
 import * as React from "react"
-import { RiArrowRightSLine, RiCheckLine, RiGitBranchLine } from "@remixicon/react"
+import {
+  RiArrowDownSLine,
+  RiCheckLine,
+  RiGitBranchLine,
+} from "@remixicon/react"
 
 import type { BranchOption } from "@/app/changed-files/api"
 import {
   Command,
+  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -12,13 +17,10 @@ import {
 } from "@/components/ui/command"
 import { Button } from "@/components/ui/button"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
 type BranchPickerProps = {
@@ -31,6 +33,24 @@ type BranchPickerProps = {
 type BranchGroup = {
   heading: string
   items: BranchOption[]
+}
+
+function getTriggerDetail(selectedBaseRef: string, branches: BranchOption[]) {
+  if (selectedBaseRef === "HEAD") {
+    return "Working tree baseline"
+  }
+
+  const selectedBranch = branches.find((branch) => branch.name === selectedBaseRef)
+
+  if (!selectedBranch) {
+    return "Base branch"
+  }
+
+  if (selectedBranch.isCurrent) {
+    return "Current branch"
+  }
+
+  return selectedBranch.kind === "remote" ? "Remote branch" : "Local branch"
 }
 
 function normalizeQuery(value: string) {
@@ -54,6 +74,7 @@ export function BranchPicker({
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const normalizedQuery = normalizeQuery(query)
+  const triggerDetail = getTriggerDetail(selectedBaseRef, branches)
 
   const branchGroups = React.useMemo<BranchGroup[]>(() => {
     const localBranches = filterBranches(
@@ -86,40 +107,41 @@ export function BranchPicker({
   )
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <Button
           type="button"
           variant="ghost"
-          className="h-auto w-full justify-between rounded-lg border border-sidebar-border/70 bg-sidebar-accent/40 px-3 py-2 text-left text-sidebar-foreground hover:bg-sidebar-accent/60"
+          className="h-auto w-full justify-between rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-2.5 text-left text-sidebar-foreground hover:bg-sidebar-accent/55"
           disabled={disabled}
           aria-label="Select diff base branch"
         >
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-medium">{selectedBaseRef}</span>
-            <span className="mt-0.5 block text-xs text-sidebar-foreground/60">
-              Search branches
+          <span className="min-w-0 pr-3">
+            <span className="block truncate text-sm font-semibold tracking-[-0.01em]">
+              {selectedBaseRef}
+            </span>
+            <span className="mt-0.5 block truncate text-xs text-sidebar-foreground/60">
+              {triggerDetail}
             </span>
           </span>
-          <RiArrowRightSLine
+          <RiArrowDownSLine
             data-icon="inline-end"
-            className="shrink-0 text-sidebar-foreground/60"
+            className={cn(
+              "mt-0.5 shrink-0 text-sidebar-foreground/55 transition-transform duration-200 ease-in-out motion-reduce:transition-none",
+              open && "rotate-180"
+            )}
           />
         </Button>
-      </SheetTrigger>
-      <SheetContent
-        side="left"
-        className="w-[28rem] max-w-[28rem] gap-0 border-r border-border/60 p-0"
+      </PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={10}
+        className="min-w-[var(--radix-popover-trigger-width)] w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
       >
-        <SheetHeader className="pr-12">
-          <SheetTitle>Choose base branch</SheetTitle>
-          <SheetDescription>
-            Search for the branch or ref to compare the working tree against.
-          </SheetDescription>
-        </SheetHeader>
         <Command
           shouldFilter={false}
-          className="min-h-0 flex-1"
+          className="min-h-0 max-h-[min(30rem,calc(100vh-8rem))]"
         >
           <CommandInput
             value={query}
@@ -127,12 +149,13 @@ export function BranchPicker({
             placeholder="Search branches..."
             autoFocus
           />
-          <CommandList>
+          <CommandList className="px-2 py-2">
+            <CommandEmpty>No matching branches.</CommandEmpty>
             <CommandGroup heading="Quick options">
               <CommandItem
                 value="HEAD"
                 onSelect={() => handleSelect("HEAD")}
-                className="justify-between"
+                className="justify-between px-3 py-2.5"
               >
                 <BranchOptionRow
                   label="HEAD"
@@ -150,7 +173,7 @@ export function BranchPicker({
                       key={branch.name}
                       value={branch.name}
                       onSelect={() => handleSelect(branch.name)}
-                      className="justify-between"
+                      className="justify-between px-3 py-2.5"
                     >
                       <BranchOptionRow
                         label={branch.name}
@@ -165,8 +188,8 @@ export function BranchPicker({
             ))}
           </CommandList>
         </Command>
-      </SheetContent>
-    </Sheet>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -179,16 +202,21 @@ type BranchOptionRowProps = {
 function BranchOptionRow({ label, detail, selected }: BranchOptionRowProps) {
   return (
     <>
-      <div className="flex min-w-0 items-start gap-3">
-        <div className="rounded-md border border-border/60 bg-muted/40 p-1.5 text-muted-foreground">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <div className="rounded-md border border-border/60 bg-muted/35 p-1.5 text-muted-foreground">
           <RiGitBranchLine />
         </div>
-        <div className="min-w-0">
-          <p className="truncate font-medium text-foreground">{label}</p>
-          <p className="truncate text-xs text-muted-foreground">{detail}</p>
+        <div className="min-w-0 pt-0.5">
+          <p className="truncate text-sm font-medium text-foreground">{label}</p>
+          <p className="truncate text-xs text-muted-foreground/90">{detail}</p>
         </div>
       </div>
-      <RiCheckLine className={cn("shrink-0 opacity-0", selected && "opacity-100 text-foreground")} />
+      <RiCheckLine
+        className={cn(
+          "mt-0.5 shrink-0 text-foreground/80 opacity-0 transition-opacity duration-150 motion-reduce:transition-none",
+          selected && "opacity-100"
+        )}
+      />
     </>
   )
 }

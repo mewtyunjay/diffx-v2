@@ -235,6 +235,22 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		}
 	}
 
+	var initialDiff *FileDiffResult
+	if len(filteredFiles) > 0 {
+		diff, err := s.readFileDiffWithComparison(
+			ctx,
+			comparison,
+			filteredFiles[0].Path,
+			filteredFiles[0].Status,
+			filteredFiles[0].PreviousPath,
+		)
+		if err != nil {
+			return ChangedFilesResult{}, err
+		}
+
+		initialDiff = &diff
+	}
+
 	return ChangedFilesResult{
 		Mode:                  comparison.Mode,
 		BaseRef:               comparison.BaseRef,
@@ -246,6 +262,7 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		ScopePath:             s.scopePath,
 		HiddenStagedFileCount: hiddenStagedFileCount,
 		Files:                 filteredFiles,
+		InitialDiff:           initialDiff,
 	}, nil
 }
 
@@ -455,6 +472,23 @@ func (s *Service) ReadFileDiff(
 		return FileDiffResult{}, err
 	}
 
+	return s.readFileDiffWithComparison(ctx, comparison, path, status, previousPath)
+}
+
+func (s *Service) readFileDiffWithComparison(
+	ctx context.Context,
+	comparison comparisonInfo,
+	path string,
+	status ChangedFileStatus,
+	previousPath string,
+) (FileDiffResult, error) {
+	if path == "" {
+		return FileDiffResult{}, fmt.Errorf("path is required")
+	}
+	if !status.IsValid() {
+		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
+	}
+
 	beforeName := path
 	if previousPath != "" {
 		beforeName = previousPath
@@ -476,6 +510,7 @@ func (s *Service) ReadFileDiff(
 
 	var beforeResult cachedFileVersion
 	var afterResult cachedFileVersion
+	var err error
 
 	switch status {
 	case StatusAdded:
