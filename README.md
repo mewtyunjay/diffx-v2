@@ -1,55 +1,76 @@
 # diffx-v2
 
-`diffx` is a Go application that serves a local git diff review UI from a single binary. The React frontend is built with Vite and embedded into the Go server at build time.
+`diffx` is a local git diff review app for working with changes in a git repository. It gives you a browser UI for reviewing files, switching comparison branches, staging and unstaging changes, and creating commits.
 
-## Development
+## Quick Start
 
-Install frontend dependencies once:
+Install frontend dependencies first:
 
 ```sh
 cd frontend && npm install
 ```
 
-Run the Go app in source-checkout dev mode:
+`go run ./cmd/diffx` does not run `npm install` for you in dev mode.
+
+Start the app from the repository root:
 
 ```sh
 go run ./cmd/diffx
 ```
 
-From the repo checkout, `go run ./cmd/diffx` now starts or reuses the Vite dev server and proxies frontend traffic through Go, so UI edits use HMR by default.
+Open `http://127.0.0.1:8080`.
 
-Force the current static-bundle behavior with:
+By default, running from a source checkout also starts or reuses the frontend dev server so UI changes reload automatically while you work.
+
+## Common Commands
+
+Run the app:
+
+```sh
+go run ./cmd/diffx
+```
+
+
+Force the built frontend instead of dev mode:
 
 ```sh
 go run ./cmd/diffx --static
 ```
 
-You can also scope the app to a nested folder inside a git repo:
+Change the address or port:
 
 ```sh
-go run ./cmd/diffx ./frontend
+go run ./cmd/diffx -a 0.0.0.0 -p 9000
+go run ./cmd/diffx --address 0.0.0.0 --port 9000
 ```
 
-If static mode is active and `frontend/dist/` has not been built into the current binary yet, `go run ./cmd/diffx --static` will build the local frontend bundle automatically when `frontend/node_modules` is present.
-
-## Production Build
-
-Build the embedded frontend bundle first, then build the Go binary:
+## Build
 
 ```sh
 go generate ./frontend
 go build ./cmd/diffx
 ```
 
-`go generate ./frontend` is now the one-shot frontend prep step. It runs `npm install` and then `npm run build` from the `frontend/` package directory before you build the Go binary.
+`go generate ./frontend` installs frontend dependencies and builds the frontend bundle before you build the Go binary.
 
-The binary serves the embedded UI and API on `http://127.0.0.1:8080` by default.
+## Development
 
-You can override the bind address and port:
+Run the frontend dev server directly if needed:
 
 ```sh
-go run ./cmd/diffx -a 0.0.0.0 -p 9000
-go run ./cmd/diffx --address 0.0.0.0 --port 9000
+cd frontend && npm run dev
+```
+
+Run frontend linting:
+
+```sh
+cd frontend && npm run lint
+```
+
+Run backend tests:
+
+```sh
+go test ./cmd/... ./internal/...
 ```
 
 ## Verification
