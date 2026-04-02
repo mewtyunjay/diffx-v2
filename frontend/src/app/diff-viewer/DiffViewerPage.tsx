@@ -30,6 +30,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/sonner"
 import {
   SidebarInset,
   SidebarProvider,
@@ -59,7 +60,36 @@ function formatStatus(status: ChangedFileStatus) {
 }
 
 type InlineAnnotationTarget = Pick<SavedDiffAnnotation, "side" | "lineNumber">
-type SidebarNotice = { tone: "success" | "error"; message: string }
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
+
+function getToastErrorDescription(error: unknown, fallback: string) {
+  const message = getErrorMessage(error, fallback)
+
+  if (message.includes("path is ignored by git") || message.includes("paths are ignored")) {
+    return "Git is ignoring this path."
+  }
+  if (message.includes("pathspec") && message.includes("did not match any files")) {
+    return "Git could not find that path."
+  }
+  if (message.includes("no staged changes")) {
+    return "No staged files are ready to commit."
+  }
+
+  const [firstLine] = message
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (!firstLine) {
+    return fallback
+  }
+
+  const normalized = firstLine.replace(/^git\s+[^:]+:\s*/, "")
+  return normalized.length > 88 ? `${normalized.slice(0, 85)}...` : normalized
+}
 
 export function DiffViewerPage() {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
@@ -86,11 +116,10 @@ export function DiffViewerPage() {
   const [copyState, setCopyState] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [clearDraftToken, setClearDraftToken] = useState(0)
   const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
-  const [notice, setNotice] = useState<SidebarNotice | null>(null)
   const [commitMessage, setCommitMessage] = useState("")
-  const [commitError, setCommitError] = useState<string | null>(null)
   const [isCommitPending, setIsCommitPending] = useState(false)
   const [isPushPending, setIsPushPending] = useState(false)
+  const [showPushAction, setShowPushAction] = useState(false)
   const selectedFilePathRef = useRef<string | null>(null)
   const diffCacheRef = useRef(new Map<string, PreparedFileDiffResult>())
   const diffPrepareRequestCacheRef = useRef(new Map<string, Promise<PreparedFileDiffResult>>())
@@ -310,8 +339,6 @@ export function DiffViewerPage() {
   }, [])
 
   const handleSelectBaseRef = useCallback((nextBaseRef: string) => {
-    setNotice(null)
-    setCommitError(null)
     setSelectedBaseRef(nextBaseRef)
     setIsFilesLoading(true)
   }, [])
@@ -441,30 +468,19 @@ export function DiffViewerPage() {
 
   const handleToggleStage = useCallback(
     async (file: ChangedFileItem) => {
-      setNotice(null)
-      setCommitError(null)
       setStagePendingPaths((current) => [...current, file.path])
 
       try {
         if (file.hasStagedChanges) {
           await unstageFile(file)
-          setNotice({
-            tone: "success",
-            message: `Unstaged ${file.displayPath}.`,
-          })
         } else {
           await stageFile(file)
-          setNotice({
-            tone: "success",
-            message: `Staged ${file.displayPath}.`,
-          })
         }
 
         await refreshChangedFiles()
       } catch (error) {
-        setNotice({
-          tone: "error",
-          message: error instanceof Error ? error.message : "Unable to update staged file state.",
+        toast.error("Couldn’t stage file.", {
+          description: getToastErrorDescription(error, `Unable to update ${file.displayPath}.`),
         })
       } finally {
         setStagePendingPaths((current) => current.filter((path) => path !== file.path))
@@ -474,41 +490,48 @@ export function DiffViewerPage() {
   )
 
   const handleCommit = useCallback(async () => {
-    setNotice(null)
-    setCommitError(null)
     setIsCommitPending(true)
+    const commitToastId = toast.warning("Creating commit...", {
+      duration: Infinity,
+      dismissible: false,
+    })
 
     try {
       const result = await commitStaged(commitMessage)
       setCommitMessage("")
-      setNotice({
-        tone: "success",
-        message: `Created commit ${result.commit.slice(0, 7)} on ${currentRef || "the current branch"}.`,
+      setShowPushAction(true)
+      toast.success(`Created commit ${result.commit.slice(0, 7)}.`, {
+        id: commitToastId,
       })
       await Promise.all([refreshChangedFiles(), refreshBranches()])
     } catch (error) {
-      setCommitError(error instanceof Error ? error.message : "Commit failed.")
+      toast.error("Commit failed.", {
+        id: commitToastId,
+        description: getToastErrorDescription(error, "Unable to create the commit."),
+      })
     } finally {
       setIsCommitPending(false)
     }
-  }, [commitMessage, currentRef, refreshBranches, refreshChangedFiles])
+  }, [commitMessage, refreshBranches, refreshChangedFiles])
 
   const handlePush = useCallback(async () => {
-    setNotice(null)
-    setCommitError(null)
     setIsPushPending(true)
+    const pushToastId = toast.warning("Pushing branch...", {
+      duration: Infinity,
+      dismissible: false,
+    })
 
     try {
       const result = await pushCurrentBranch()
-      setNotice({
-        tone: "success",
-        message: `Pushed ${result.remoteRef}.`,
+      setShowPushAction(false)
+      toast.success(`Pushed ${result.remoteRef}.`, {
+        id: pushToastId,
       })
       await Promise.all([refreshChangedFiles(), refreshBranches()])
     } catch (error) {
-      setNotice({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Push failed.",
+      toast.error("Push failed.", {
+        id: pushToastId,
+        description: getToastErrorDescription(error, "Unable to push the current branch."),
       })
     } finally {
       setIsPushPending(false)
@@ -552,13 +575,12 @@ export function DiffViewerPage() {
         stagePendingPaths={stagePendingPaths}
         onToggleStage={handleToggleStage}
         commitMessage={commitMessage}
-        commitError={commitError}
         isCommitPending={isCommitPending}
         onCommitMessageChange={setCommitMessage}
         onCommit={handleCommit}
         isPushPending={isPushPending}
+        showPushAction={showPushAction}
         onPush={handlePush}
-        notice={notice}
         variant="inset"
       />
       <SidebarInset>

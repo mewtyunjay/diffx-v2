@@ -39,7 +39,7 @@ export function PierreDiffWorkerProvider({ children }: PierreDiffWorkerProviderP
 
   const highlighterOptions = useMemo(
     () => ({
-      theme: "github-dark-default" as const,
+      theme: "gruvbox-dark-hard" as const,
       langs: [...DEFAULT_WORKER_LANGS],
       lineDiffType: "word" as const,
       tokenizeMaxLineLength: 500,

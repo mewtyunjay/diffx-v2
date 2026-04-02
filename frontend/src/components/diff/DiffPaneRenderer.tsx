@@ -21,12 +21,12 @@ type DraftTarget = HoveredDiffLine
 
 type RenderedAnnotationMetadata =
   | {
-      kind: "draft"
-    }
+    kind: "draft"
+  }
   | {
-      kind: "saved"
-      comment: string
-    }
+    kind: "saved"
+    comment: string
+  }
 
 type RenderablePreparedDiff = PreparedFileDiffResult & {
   parsedDiff: NonNullable<PreparedFileDiffResult["parsedDiff"]>
@@ -70,7 +70,7 @@ function DiffPaneRendererContent({
       diffStyle: viewMode,
       diffIndicators: "bars" as const,
       disableFileHeader: true,
-      overflow: "scroll" as const,
+      overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
       expandUnchanged: false,
       enableHoverUtility: true,
