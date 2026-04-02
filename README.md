@@ -18,7 +18,7 @@ Start the app from the repository root:
 go run ./cmd/diffx
 ```
 
-Open `http://127.0.0.1:8080`.
+Open the URL printed by `diffx`. By default it starts on `http://127.0.0.1:8080`, and if `8080` is already occupied it will automatically move to the next free port.
 
 By default, running from a source checkout also starts or reuses the frontend dev server so UI changes reload automatically while you work.
 
@@ -43,6 +43,8 @@ Change the address or port:
 go run ./cmd/diffx -a 0.0.0.0 -p 9000
 go run ./cmd/diffx --address 0.0.0.0 --port 9000
 ```
+
+If you explicitly pass `--port` or `-p`, that port remains strict and `diffx` will fail instead of auto-selecting another port.
 
 ## Build
 

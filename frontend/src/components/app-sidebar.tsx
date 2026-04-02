@@ -43,12 +43,9 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   hiddenStagedFileCount: number
   stagePendingPaths: string[]
   onToggleStage: (file: ChangedFileItem) => void
-  isCommitComposerOpen: boolean
   commitMessage: string
   commitError: string | null
   isCommitPending: boolean
-  onOpenCommitComposer: () => void
-  onCloseCommitComposer: () => void
   onCommitMessageChange: (value: string) => void
   onCommit: () => void
   isPushPending: boolean
@@ -78,12 +75,9 @@ export function AppSidebar({
   hiddenStagedFileCount,
   stagePendingPaths,
   onToggleStage,
-  isCommitComposerOpen,
   commitMessage,
   commitError,
   isCommitPending,
-  onOpenCommitComposer,
-  onCloseCommitComposer,
   onCommitMessageChange,
   onCommit,
   isPushPending,
@@ -124,8 +118,7 @@ export function AppSidebar({
   const totalStagedCount = stagedVisibleCount + hiddenStagedFileCount
   const canUseGitActions = comparisonMode === "head"
   const canCommit = canUseGitActions && stagedVisibleCount > 0 && hiddenStagedFileCount === 0
-  const commitButtonLabel =
-    stagedVisibleCount === 1 ? "Commit 1 staged file" : `Commit ${stagedVisibleCount} staged files`
+  const showCommitArea = canCommit
 
   React.useEffect(() => {
     const folderPathSet = new Set(folderPaths)
@@ -189,8 +182,8 @@ export function AppSidebar({
         </div>
       </SidebarHeader>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <SidebarContent className="pb-32">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SidebarContent>
           <div className="p-2">
             <SidebarFileTree
               root={tree}
@@ -271,18 +264,14 @@ export function AppSidebar({
               </p>
               {comparisonMode !== "head" ? (
                 <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
-                  Switch back to HEAD to stage files, create commits, or push the current branch.
+                  Switch to HEAD to commit or push.
                 </p>
               ) : hiddenStagedFileCount > 0 ? (
                 <p className="measure-readable mt-1 type-meta text-amber-200">
                   {hiddenStagedFileCount} staged {hiddenStagedFileCount === 1 ? "file is" : "files are"} outside
-                  this scoped view. Open the repo root to commit them safely.
+                  this scope. Open the repo root to commit safely.
                 </p>
-              ) : (
-                <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
-                  Use + or − beside each file to control the real git index.
-                </p>
-              )}
+              ) : null}
             </div>
 
             {notice ? (
@@ -298,71 +287,46 @@ export function AppSidebar({
               </p>
             ) : null}
 
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="flex-1"
-                disabled={!canCommit || isCommitPending || isPushPending}
-                onClick={onOpenCommitComposer}
-              >
-                {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
-                {commitButtonLabel}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="flex-1"
-                disabled={!canUseGitActions || isCommitPending || isPushPending}
-                onClick={onPush}
-              >
-                {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
-                Push
-              </Button>
-            </div>
+            {showCommitArea ? (
+              <div className="space-y-3">
+                <div>
+                  <textarea
+                    value={commitMessage}
+                    onChange={(event) => onCommitMessageChange(event.target.value)}
+                    placeholder="Write a clear commit message..."
+                    className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 type-body text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
+                  />
+                  {commitError ? (
+                    <p className="measure-readable mt-2 type-meta text-rose-300">{commitError}</p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="flex-1"
+                    disabled={isCommitPending || isPushPending || !commitMessage.trim() || !canCommit}
+                    onClick={onCommit}
+                  >
+                    {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
+                    Commit
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
+                    disabled={isCommitPending || isPushPending}
+                    onClick={onPush}
+                  >
+                    {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
+                    Push
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </SidebarFooter>
-
-        {isCommitComposerOpen ? (
-          <div className="absolute inset-x-3 bottom-3 z-20 overflow-hidden rounded-2xl border border-sidebar-border/80 bg-sidebar shadow-2xl">
-            <div className="border-b border-sidebar-border/70 px-4 py-3">
-              <p className="type-title text-sidebar-foreground">Create commit</p>
-              <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
-                Only the staged files in this workspace scope will be committed.
-              </p>
-            </div>
-            <div className="px-4 py-4">
-              <textarea
-                value={commitMessage}
-                onChange={(event) => onCommitMessageChange(event.target.value)}
-                placeholder="Write a clear commit message..."
-                className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 type-body text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
-              />
-              {commitError ? (
-                <p className="measure-readable mt-2 type-meta text-rose-300">{commitError}</p>
-              ) : (
-                <p className="measure-readable mt-2 type-meta text-sidebar-foreground/55">
-                  Multi-line messages are supported. The push action stays separate.
-                </p>
-              )}
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-sidebar-border/70 px-4 py-3">
-              <Button type="button" size="sm" variant="ghost" onClick={onCloseCommitComposer}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isCommitPending || !commitMessage.trim() || !canCommit}
-                onClick={onCommit}
-              >
-                {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
-                Commit
-              </Button>
-            </div>
-          </div>
-        ) : null}
       </div>
     </Sidebar>
   )

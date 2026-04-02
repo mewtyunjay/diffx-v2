@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 )
 
@@ -18,50 +20,55 @@ func TestParseConfig(t *testing.T) {
 		{
 			name: "defaults",
 			want: config{
-				address:    "127.0.0.1",
-				port:       8080,
-				static:     false,
-				targetPath: ".",
+				address:      defaultAddress,
+				port:         defaultPort,
+				explicitPort: false,
+				static:       false,
+				targetPath:   ".",
 			},
 		},
 		{
 			name: "custom address port and path",
 			args: []string{"-address", "0.0.0.0", "-port", "9090", "frontend"},
 			want: config{
-				address:    "0.0.0.0",
-				port:       9090,
-				static:     false,
-				targetPath: "frontend",
+				address:      "0.0.0.0",
+				port:         9090,
+				explicitPort: true,
+				static:       false,
+				targetPath:   "frontend",
 			},
 		},
 		{
 			name: "short address and port flags",
 			args: []string{"-a", "0.0.0.0", "-p", "9090"},
 			want: config{
-				address:    "0.0.0.0",
-				port:       9090,
-				static:     false,
-				targetPath: ".",
+				address:      "0.0.0.0",
+				port:         9090,
+				explicitPort: true,
+				static:       false,
+				targetPath:   ".",
 			},
 		},
 		{
 			name: "host alias still works",
 			args: []string{"-host", "0.0.0.0"},
 			want: config{
-				address:    "0.0.0.0",
-				port:       8080,
-				static:     false,
-				targetPath: ".",
+				address:      "0.0.0.0",
+				port:         defaultPort,
+				explicitPort: false,
+				static:       false,
+				targetPath:   ".",
 			},
 		},
 		{
 			name: "static mode",
 			args: []string{"--static"},
 			want: config{
-				address:    "127.0.0.1",
-				port:       8080,
-				static:     true,
-				targetPath: ".",
+				address:      defaultAddress,
+				port:         defaultPort,
+				explicitPort: false,
+				static:       true,
+				targetPath:   ".",
 			},
 		},
 		{
@@ -161,5 +168,107 @@ func TestServerURL(t *testing.T) {
 				t.Fatalf("serverURL() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestListenWithPortFallbackSkipsOccupiedPorts(t *testing.T) {
+	startPort, listeners := reserveContiguousPorts(t, 3)
+	defer closeListeners(listeners)
+
+	if err := listeners[2].Close(); err != nil {
+		t.Fatalf("close free slot listener: %v", err)
+	}
+	listeners[2] = nil
+
+	listener, err := listenWithPortFallback(defaultAddress, startPort, 3)
+	if err != nil {
+		t.Fatalf("listenWithPortFallback returned error: %v", err)
+	}
+	defer listener.Close()
+
+	if got := listenerPort(listener.Addr()); got != startPort+2 {
+		t.Fatalf("listenerPort() = %d, want %d", got, startPort+2)
+	}
+}
+
+func TestListenWithPortFallbackReturnsErrorWhenRangeExhausted(t *testing.T) {
+	startPort, listeners := reserveContiguousPorts(t, 2)
+	defer closeListeners(listeners)
+
+	_, err := listenWithPortFallback(defaultAddress, startPort, 2)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if !strings.Contains(err.Error(), fmt.Sprintf("no ports available in range %d-%d", startPort, startPort+1)) {
+		t.Fatalf("expected range exhaustion error, got %v", err)
+	}
+}
+
+func TestListenForConfigExplicitPortDoesNotFallback(t *testing.T) {
+	startPort, listeners := reserveContiguousPorts(t, 2)
+	defer closeListeners(listeners)
+
+	if err := listeners[1].Close(); err != nil {
+		t.Fatalf("close next port listener: %v", err)
+	}
+	listeners[1] = nil
+
+	_, err := listenForConfig(config{
+		address:      defaultAddress,
+		port:         startPort,
+		explicitPort: true,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "address already in use") {
+		t.Fatalf("expected address in use error, got %v", err)
+	}
+}
+
+func TestListenWithPortFallbackReturnsDirectListenErrors(t *testing.T) {
+	_, err := listenWithPortFallback("256.0.0.1", defaultPort, 2)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "no ports available in range") {
+		t.Fatalf("expected direct listen error, got %v", err)
+	}
+}
+
+func reserveContiguousPorts(t *testing.T, count int) (int, []net.Listener) {
+	t.Helper()
+
+	for startPort := 20000; startPort <= 60000-count; startPort++ {
+		listeners := make([]net.Listener, 0, count)
+		ok := true
+
+		for offset := 0; offset < count; offset++ {
+			listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", defaultAddress, startPort+offset))
+			if err != nil {
+				ok = false
+				break
+			}
+			listeners = append(listeners, listener)
+		}
+
+		if ok {
+			return startPort, listeners
+		}
+
+		closeListeners(listeners)
+	}
+
+	t.Fatal("could not reserve contiguous ports")
+	return 0, nil
+}
+
+func closeListeners(listeners []net.Listener) {
+	for _, listener := range listeners {
+		if listener == nil {
+			continue
+		}
+		_ = listener.Close()
 	}
 }

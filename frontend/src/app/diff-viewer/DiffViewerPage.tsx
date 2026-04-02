@@ -87,7 +87,6 @@ export function DiffViewerPage() {
   const [clearDraftToken, setClearDraftToken] = useState(0)
   const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
   const [notice, setNotice] = useState<SidebarNotice | null>(null)
-  const [isCommitComposerOpen, setIsCommitComposerOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState("")
   const [commitError, setCommitError] = useState<string | null>(null)
   const [isCommitPending, setIsCommitPending] = useState(false)
@@ -313,7 +312,6 @@ export function DiffViewerPage() {
   const handleSelectBaseRef = useCallback((nextBaseRef: string) => {
     setNotice(null)
     setCommitError(null)
-    setIsCommitComposerOpen(false)
     setSelectedBaseRef(nextBaseRef)
     setIsFilesLoading(true)
   }, [])
@@ -475,17 +473,6 @@ export function DiffViewerPage() {
     [refreshChangedFiles]
   )
 
-  const handleOpenCommitComposer = useCallback(() => {
-    setNotice(null)
-    setCommitError(null)
-    setIsCommitComposerOpen(true)
-  }, [])
-
-  const handleCloseCommitComposer = useCallback(() => {
-    setCommitError(null)
-    setIsCommitComposerOpen(false)
-  }, [])
-
   const handleCommit = useCallback(async () => {
     setNotice(null)
     setCommitError(null)
@@ -494,7 +481,6 @@ export function DiffViewerPage() {
     try {
       const result = await commitStaged(commitMessage)
       setCommitMessage("")
-      setIsCommitComposerOpen(false)
       setNotice({
         tone: "success",
         message: `Created commit ${result.commit.slice(0, 7)} on ${currentRef || "the current branch"}.`,
@@ -565,12 +551,9 @@ export function DiffViewerPage() {
         hiddenStagedFileCount={hiddenStagedFileCount}
         stagePendingPaths={stagePendingPaths}
         onToggleStage={handleToggleStage}
-        isCommitComposerOpen={isCommitComposerOpen}
         commitMessage={commitMessage}
         commitError={commitError}
         isCommitPending={isCommitPending}
-        onOpenCommitComposer={handleOpenCommitComposer}
-        onCloseCommitComposer={handleCloseCommitComposer}
         onCommitMessageChange={setCommitMessage}
         onCommit={handleCommit}
         isPushPending={isPushPending}

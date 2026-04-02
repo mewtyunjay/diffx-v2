@@ -39,7 +39,7 @@ export function PierreDiffWorkerProvider({ children }: PierreDiffWorkerProviderP
 
   const highlighterOptions = useMemo(
     () => ({
-      theme: "pierre-dark" as const,
+      theme: "github-dark-default" as const,
       langs: [...DEFAULT_WORKER_LANGS],
       lineDiffType: "word" as const,
       tokenizeMaxLineLength: 500,
