@@ -27,10 +27,10 @@ export function DiffViewerDockProgress({
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-foreground">
+          <p className="type-title text-foreground type-data">
             {completedCount} of {items.length} checkpoints cleared
           </p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="measure-readable mt-1 type-meta text-muted-foreground">
             Keep this slot for progress, notes, staging cues, or any other diff-scoped context.
           </p>
         </div>
@@ -63,9 +63,9 @@ export function DiffViewerDockProgress({
             </span>
 
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-foreground">{item.label}</span>
+              <span className="block type-meta font-medium text-foreground">{item.label}</span>
               {item.description ? (
-                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                <span className="measure-readable mt-0.5 block type-meta text-muted-foreground">
                   {item.description}
                 </span>
               ) : null}

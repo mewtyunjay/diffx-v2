@@ -57,7 +57,7 @@ function ChatDockComposer({
   return (
     <div className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-background/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="px-4 pt-4">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 type-overline text-muted-foreground">
           <MessageSquareText className="size-3.5" />
           Chat
         </div>
@@ -68,12 +68,12 @@ function ChatDockComposer({
           onChange={(event) => onPromptChange(event.target.value)}
           rows={1}
           placeholder='Ask anything about this diff. "What changed here?"'
-          className="w-full resize-none border-0 bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+          className="w-full resize-none border-0 bg-transparent type-body text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
-        <p className="text-xs text-muted-foreground">
+        <p className="type-meta text-muted-foreground">
           Prompt grows in place before it starts scrolling.
         </p>
 
@@ -118,15 +118,15 @@ export function DiffViewerDock(props: DiffViewerDockProps) {
       style={props.style}
       expandedIntro={
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-primary">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 type-overline text-primary">
             <Sparkles className="size-3.5" />
             Quiz
           </div>
 
           <div>
-            <p className="text-base font-semibold text-foreground">{props.question}</p>
+            <p className="type-title text-foreground">{props.question}</p>
             {props.supportingText ? (
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{props.supportingText}</p>
+              <p className="measure-readable mt-1 type-body text-muted-foreground">{props.supportingText}</p>
             ) : null}
           </div>
         </div>
@@ -139,7 +139,7 @@ export function DiffViewerDock(props: DiffViewerDockProps) {
       }}
       expandedFooter={
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
+          <p className="type-meta text-muted-foreground">
             {props.selectedOptionId
               ? "Answer captured. You can change it before moving on."
               : "Choose one option to continue."}

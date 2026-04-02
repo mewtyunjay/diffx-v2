@@ -161,16 +161,6 @@ func (c *versionCache) touch(key string) {
 	c.order = append(c.order, key)
 }
 
-func FindRepoRoot() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("find repo root: %w", err)
-	}
-
-	return strings.TrimSpace(string(output)), nil
-}
-
 func (s *Service) HeadCommit(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", s.repoRoot, "rev-parse", "HEAD")
 	output, err := cmd.Output()
@@ -179,14 +169,6 @@ func (s *Service) HeadCommit(ctx context.Context) (string, error) {
 	}
 
 	return strings.TrimSpace(string(output)), nil
-}
-
-func (s *Service) ScopePath() string {
-	return s.scopePath
-}
-
-func (s *Service) AllowsFile(path string) bool {
-	return matchesScope(path, s.scopePath)
 }
 
 func (s *Service) AllowsDiff(path, previousPath string) bool {

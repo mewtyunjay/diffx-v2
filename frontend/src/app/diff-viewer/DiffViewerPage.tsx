@@ -589,29 +589,29 @@ export function DiffViewerPage() {
           <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-sm">
             <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="type-overline text-muted-foreground">
                   Fast file diff
                 </p>
-                <h1 className="mt-2 text-xl font-semibold text-foreground">
+                <h1 className="mt-2 type-page-title text-foreground">
                   {selectedFile?.path ?? (isFilesLoading ? "Loading files..." : "No file selected")}
                 </h1>
                 {selectedFile ? (
                   <>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="measure-readable mt-2 type-body text-muted-foreground">
                       {fileSummary}
                     </p>
                     {selectedFile.previousPath ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
+                      <p className="measure-readable mt-1 type-meta text-muted-foreground">
                         from {selectedFile.previousPath}
                       </p>
                     ) : null}
                   </>
                 ) : null}
                 {filesError && !isFilesLoading ? (
-                  <p className="mt-2 text-sm text-destructive">{filesError}</p>
+                  <p className="measure-readable mt-2 type-meta text-destructive">{filesError}</p>
                 ) : null}
                 {selectedFile && diffError && !isDiffLoading ? (
-                  <p className="mt-2 text-sm text-destructive">{diffError}</p>
+                  <p className="measure-readable mt-2 type-meta text-destructive">{diffError}</p>
                 ) : null}
               </div>
 

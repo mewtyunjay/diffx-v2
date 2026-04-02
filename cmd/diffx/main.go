@@ -25,6 +25,7 @@ const shutdownTimeout = 5 * time.Second
 type config struct {
 	address    string
 	port       int
+	static     bool
 	targetPath string
 }
 
@@ -48,10 +49,16 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 	app, err := server.New(server.Config{
 		Workspace: workspace,
+		Frontend: server.FrontendConfig{
+			Static:     cfg.static,
+			WorkingDir: mustGetwd(),
+			DevURL:     "http://127.0.0.1:5173",
+		},
 	})
 	if err != nil {
 		return err
 	}
+	defer app.Close()
 
 	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.address, strconv.Itoa(cfg.port)))
 	if err != nil {
@@ -115,8 +122,9 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flagSet.StringVar(&cfg.address, "address", cfg.address, "HTTP address to bind")
 	flagSet.IntVar(&cfg.port, "p", cfg.port, "HTTP port to bind")
 	flagSet.IntVar(&cfg.port, "port", cfg.port, "HTTP port to bind")
+	flagSet.BoolVar(&cfg.static, "static", cfg.static, "Serve built frontend assets instead of the Vite dev server")
 	flagSet.Usage = func() {
-		fmt.Fprintln(flagSet.Output(), "Usage: diffx [path] [-a 127.0.0.1] [-p 8080]")
+		fmt.Fprintln(flagSet.Output(), "Usage: diffx [path] [-a 127.0.0.1] [-p 8080] [--static]")
 		flagSet.PrintDefaults()
 	}
 
@@ -175,4 +183,13 @@ func serverURL(addr net.Addr) string {
 		Scheme: "http",
 		Host:   net.JoinHostPort(host, strconv.Itoa(tcpAddr.Port)),
 	}).String()
+}
+
+func mustGetwd() string {
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+
+	return workingDir
 }

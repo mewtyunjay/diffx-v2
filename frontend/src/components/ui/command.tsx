@@ -26,13 +26,13 @@ function CommandInput({
   return (
     <div
       data-slot="command-input-wrapper"
-      className="flex items-center gap-2 border-b border-border/60 px-4 py-3"
+      className="flex items-center gap-2 border-b border-border/60 px-3 py-2.5"
     >
-      <RiSearchLine className="size-4 shrink-0 text-muted-foreground" />
+      <RiSearchLine className="size-3.5 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(
-          "flex h-8 w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-6 w-full min-w-0 bg-transparent type-meta text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
           className
         )}
         {...props}
@@ -48,7 +48,7 @@ function CommandList({
   return (
     <CommandPrimitive.List
       data-slot="command-list"
-      className={cn("flex-1 overflow-y-auto overflow-x-hidden px-2 py-2", className)}
+      className={cn("flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-1.5", className)}
       {...props}
     />
   )
@@ -61,7 +61,7 @@ function CommandEmpty({
   return (
     <CommandPrimitive.Empty
       data-slot="command-empty"
-      className={cn("px-3 py-8 text-center text-sm text-muted-foreground", className)}
+      className={cn("px-3 py-6 text-center type-meta text-muted-foreground", className)}
       {...props}
     />
   )
@@ -75,7 +75,7 @@ function CommandGroup({
     <CommandPrimitive.Group
       data-slot="command-group"
       className={cn(
-        "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.18em] [&_[cmdk-group-heading]]:text-muted-foreground",
+        "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:type-meta [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground/80",
         className
       )}
       {...props}
@@ -90,7 +90,7 @@ function CommandSeparator({
   return (
     <CommandPrimitive.Separator
       data-slot="command-separator"
-      className={cn("my-1 h-px bg-border/60", className)}
+      className={cn("my-1 h-px bg-border/55", className)}
       {...props}
     />
   )
@@ -104,7 +104,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "flex cursor-default items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground",
+        "flex cursor-default items-center gap-2.5 rounded-md px-2.5 py-1.5 type-meta outline-none select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-selected:bg-muted data-selected:text-foreground",
         className
       )}
       {...props}

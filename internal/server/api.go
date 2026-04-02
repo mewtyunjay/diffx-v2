@@ -10,12 +10,6 @@ import (
 	"diffx/internal/gitstatus"
 )
 
-type helloResponse struct {
-	Status    string `json:"status"`
-	RepoRoot  string `json:"repoRoot"`
-	ScopePath string `json:"scopePath"`
-}
-
 type stageFileRequest struct {
 	Path         string `json:"path"`
 	PreviousPath string `json:"previousPath,omitempty"`
@@ -31,18 +25,6 @@ type commitResponse struct {
 
 type pushResponse struct {
 	RemoteRef string `json:"remoteRef"`
-}
-
-func (a *App) handleHello(w http.ResponseWriter, r *http.Request) {
-	if !allowMethod(w, r, http.MethodGet) {
-		return
-	}
-
-	writeJSON(w, http.StatusOK, helloResponse{
-		Status:    "ok",
-		RepoRoot:  a.workspace.RepoRoot,
-		ScopePath: a.workspace.ScopePath,
-	})
 }
 
 func (a *App) handleBranches(w http.ResponseWriter, r *http.Request) {

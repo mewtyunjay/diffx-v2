@@ -61,7 +61,7 @@ export function SidebarFileTree<T>({
               className={cn(
                 "justify-start gap-2 rounded-lg font-normal transition-colors",
                 row.depth === 0 && "font-semibold",
-                density === "comfortable" ? "h-8 text-[0.84rem]" : "h-7 text-xs"
+                density === "comfortable" ? "h-8 text-sm" : "h-7 text-xs"
               )}
               style={{
                 paddingLeft: `${10 + row.depth * indent}px`,

@@ -69,10 +69,10 @@ export function SiteHeader({
             {copyButton.label}
           </Button>
           <div className="flex min-w-0 flex-col items-end">
-            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            <span className="type-overline text-muted-foreground">
               Scope
             </span>
-            <span className="max-w-[28rem] truncate text-sm font-medium text-foreground">
+            <span className="max-w-[28rem] truncate type-meta font-medium text-foreground">
               {formatScopeLabel(scopePath)}
             </span>
           </div>

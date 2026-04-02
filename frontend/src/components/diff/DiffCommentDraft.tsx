@@ -56,10 +56,10 @@ export function DiffCommentDraft({
             }
           }}
           placeholder="Ask Codex to fix or explain this change..."
-          className="min-h-24 w-full resize-y border-0 bg-transparent px-3 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          className="min-h-24 w-full resize-y border-0 bg-transparent px-3 py-3 type-meta leading-6 text-foreground outline-none placeholder:text-muted-foreground"
         />
         <div className="flex items-center justify-between gap-3 border-t border-border/60 px-3 py-2">
-          <p className="text-[11px] text-muted-foreground">
+          <p className="measure-readable type-meta text-muted-foreground">
             {isEditingExisting
               ? "Save updates this annotation. Clear the text and save to remove it."
               : "Save stores this annotation in the current session. Cmd/Ctrl+Enter also saves."}

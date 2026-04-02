@@ -142,9 +142,9 @@ export function BottomDockSurface({
           className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
         >
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+            <p className="truncate type-title text-foreground">{title}</p>
             {summary ? (
-              <p className="mt-1 truncate text-xs text-muted-foreground">{summary}</p>
+              <p className="mt-1 truncate type-meta text-muted-foreground">{summary}</p>
             ) : null}
           </div>
 
@@ -211,16 +211,16 @@ export function BottomDockSurface({
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-3">
-                                <p className="text-sm font-medium text-foreground">{item.label}</p>
+                                <p className="type-meta font-medium text-foreground">{item.label}</p>
                                 {item.meta ? (
-                                  <span className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                                  <span className="shrink-0 type-overline text-muted-foreground">
                                     {item.meta}
                                   </span>
                                 ) : null}
                               </div>
 
                               {item.description ? (
-                                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                <p className="measure-readable mt-1 type-meta text-muted-foreground">
                                   {item.description}
                                 </p>
                               ) : null}

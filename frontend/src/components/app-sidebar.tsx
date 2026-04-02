@@ -159,28 +159,30 @@ export function AppSidebar({
             <FolderTree className="size-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/65">
+            <p className="type-overline text-sidebar-foreground/65">
               Workspace
             </p>
-            <p className="mt-1 text-sm font-semibold text-sidebar-foreground">{workspaceName}</p>
-            <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+            <p className="mt-1 type-title text-sidebar-foreground">{workspaceName}</p>
+            <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
               {files.length} changed {files.length === 1 ? "file" : "files"} in{" "}
               {scopePath === "." ? "this repo root" : "this directory"}.
             </p>
             <div className="mt-3 max-w-full">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/65">
-                Compare with
-              </p>
-              <div className="mt-2">
-                <BranchPicker
-                  branches={branches}
-                  selectedBaseRef={selectedBaseRef}
-                  onSelectBaseRef={onSelectBaseRef}
-                  disabled={isBranchesLoading || branchesError != null}
-                />
+              <div className="flex items-center gap-2.5">
+                <p className="shrink-0 text-[0.75rem] leading-none font-medium uppercase tracking-[0.12em] text-sidebar-foreground/65">
+                  Base
+                </p>
+                <div className="min-w-0 flex-1">
+                  <BranchPicker
+                    branches={branches}
+                    selectedBaseRef={selectedBaseRef}
+                    onSelectBaseRef={onSelectBaseRef}
+                    disabled={isBranchesLoading || branchesError != null}
+                  />
+                </div>
               </div>
               {branchesError ? (
-                <p className="mt-2 text-xs leading-5 text-rose-300">{branchesError}</p>
+                <p className="measure-readable mt-2 type-meta text-rose-300">{branchesError}</p>
               ) : null}
             </div>
           </div>
@@ -195,7 +197,7 @@ export function AppSidebar({
               expandedPaths={expandedPaths}
               selectedPath={selectedFile?.displayPath ?? null}
               showRoot={false}
-              indent={12}
+              indent={10}
               density="comfortable"
               getFileIndicatorClassName={(file) => statusClassNames[file.status]}
               renderFileAction={(file) => {
@@ -259,25 +261,25 @@ export function AppSidebar({
         <SidebarFooter className="border-t border-sidebar-border/70 bg-sidebar/95 p-3 backdrop-blur">
           <div className="space-y-3">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-foreground/65">
+              <p className="type-overline text-sidebar-foreground/65">
                 Git actions
               </p>
-              <p className="mt-1 text-sm font-medium text-sidebar-foreground">
+              <p className="mt-1 type-title font-medium text-sidebar-foreground type-data">
                 {totalStagedCount === 0
                   ? "No staged changes"
                   : `${totalStagedCount} staged ${totalStagedCount === 1 ? "file" : "files"}`}
               </p>
               {comparisonMode !== "head" ? (
-                <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+                <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
                   Switch back to HEAD to stage files, create commits, or push the current branch.
                 </p>
               ) : hiddenStagedFileCount > 0 ? (
-                <p className="mt-1 text-xs leading-5 text-amber-200">
+                <p className="measure-readable mt-1 type-meta text-amber-200">
                   {hiddenStagedFileCount} staged {hiddenStagedFileCount === 1 ? "file is" : "files are"} outside
                   this scoped view. Open the repo root to commit them safely.
                 </p>
               ) : (
-                <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+                <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
                   Use + or − beside each file to control the real git index.
                 </p>
               )}
@@ -286,7 +288,7 @@ export function AppSidebar({
             {notice ? (
               <p
                 className={cn(
-                  "rounded-lg border px-3 py-2 text-xs leading-5",
+                  "rounded-lg border px-3 py-2 type-meta",
                   notice.tone === "success"
                     ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
                     : "border-rose-400/30 bg-rose-500/10 text-rose-100"
@@ -325,8 +327,8 @@ export function AppSidebar({
         {isCommitComposerOpen ? (
           <div className="absolute inset-x-3 bottom-3 z-20 overflow-hidden rounded-2xl border border-sidebar-border/80 bg-sidebar shadow-2xl">
             <div className="border-b border-sidebar-border/70 px-4 py-3">
-              <p className="text-sm font-semibold text-sidebar-foreground">Create commit</p>
-              <p className="mt-1 text-xs leading-5 text-sidebar-foreground/60">
+              <p className="type-title text-sidebar-foreground">Create commit</p>
+              <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
                 Only the staged files in this workspace scope will be committed.
               </p>
             </div>
@@ -335,12 +337,12 @@ export function AppSidebar({
                 value={commitMessage}
                 onChange={(event) => onCommitMessageChange(event.target.value)}
                 placeholder="Write a clear commit message..."
-                className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 text-sm text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
+                className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 type-body text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
               />
               {commitError ? (
-                <p className="mt-2 text-xs leading-5 text-rose-300">{commitError}</p>
+                <p className="measure-readable mt-2 type-meta text-rose-300">{commitError}</p>
               ) : (
-                <p className="mt-2 text-xs leading-5 text-sidebar-foreground/55">
+                <p className="measure-readable mt-2 type-meta text-sidebar-foreground/55">
                   Multi-line messages are supported. The push action stays separate.
                 </p>
               )}

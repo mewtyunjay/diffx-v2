@@ -8,19 +8,40 @@ import (
 	"diffx/internal/gitstatus"
 )
 
+type FrontendConfig struct {
+	Static     bool
+	WorkingDir string
+	DevURL     string
+}
+
 type Config struct {
 	Workspace gitstatus.WorkspaceTarget
+	Frontend  FrontendConfig
 }
 
 type App struct {
-	workspace gitstatus.WorkspaceTarget
-	service   *gitstatus.Service
-	assets    fs.FS
-	indexHTML []byte
-	fileSrv   http.Handler
+	service         *gitstatus.Service
+	assets          fs.FS
+	indexHTML       []byte
+	fileSrv         http.Handler
+	frontendHandler http.Handler
+	frontendCloser  func() error
 }
 
 func New(cfg Config) (*App, error) {
+	if shouldUseFrontendDev(cfg.Frontend) {
+		frontendHandler, frontendCloser, err := newFrontendDevServer(cfg.Frontend)
+		if err != nil {
+			return nil, err
+		}
+
+		return &App{
+			service:         gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
+			frontendHandler: frontendHandler,
+			frontendCloser:  frontendCloser,
+		}, nil
+	}
+
 	assets, err := loadAssets(frontendassets.Dist)
 	if err != nil {
 		return nil, err
@@ -45,7 +66,6 @@ func newWithAssetFS(cfg Config, assets fs.FS) (*App, error) {
 	}
 
 	return &App{
-		workspace: cfg.Workspace,
 		service:   gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
 		assets:    assets,
 		indexHTML: indexHTML,
@@ -55,7 +75,6 @@ func newWithAssetFS(cfg Config, assets fs.FS) (*App, error) {
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/hello", a.handleHello)
 	mux.HandleFunc("/api/branches", a.handleBranches)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
@@ -63,6 +82,22 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/git/unstage", a.handleUnstageFile)
 	mux.HandleFunc("/api/git/commit", a.handleCommit)
 	mux.HandleFunc("/api/git/push", a.handlePush)
-	mux.Handle("/", a.staticHandler())
+	mux.Handle("/", a.frontend())
 	return mux
+}
+
+func (a *App) Close() error {
+	if a.frontendCloser == nil {
+		return nil
+	}
+
+	return a.frontendCloser()
+}
+
+func (a *App) frontend() http.Handler {
+	if a.frontendHandler != nil {
+		return a.frontendHandler
+	}
+
+	return a.staticHandler()
 }

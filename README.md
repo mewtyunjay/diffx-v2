@@ -10,11 +10,18 @@ Install frontend dependencies once:
 cd frontend && npm install
 ```
 
-Run the frontend dev server against the Go API:
+Run the Go app in source-checkout dev mode:
 
 ```sh
-cd frontend && npm run dev
 go run ./cmd/diffx
+```
+
+From the repo checkout, `go run ./cmd/diffx` now starts or reuses the Vite dev server and proxies frontend traffic through Go, so UI edits use HMR by default.
+
+Force the current static-bundle behavior with:
+
+```sh
+go run ./cmd/diffx --static
 ```
 
 You can also scope the app to a nested folder inside a git repo:
@@ -23,7 +30,7 @@ You can also scope the app to a nested folder inside a git repo:
 go run ./cmd/diffx ./frontend
 ```
 
-If `frontend/dist/` has not been built into the current binary yet, `go run ./cmd/diffx` will build the local frontend bundle automatically when `frontend/node_modules` is present.
+If static mode is active and `frontend/dist/` has not been built into the current binary yet, `go run ./cmd/diffx --static` will build the local frontend bundle automatically when `frontend/node_modules` is present.
 
 ## Production Build
 

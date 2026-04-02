@@ -1,6 +1,6 @@
 import { FileDiff, type AnnotationSide, type DiffLineAnnotation } from "@pierre/diffs/react"
 import { Plus } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo, useState, type CSSProperties } from "react"
 
 import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
@@ -81,6 +81,19 @@ function DiffPaneRendererContent({
     [diff.isLargeDiff, viewMode]
   )
 
+  const diffStyles = useMemo(
+    () =>
+      ({
+        "--diffs-font-family":
+          '"JetBrains Mono", "SFMono-Regular", "SF Mono", "Cascadia Code", "Roboto Mono", monospace',
+        "--diffs-font-size": "14px",
+        "--diffs-line-height": "1.5",
+        "--diffs-font-features": "normal",
+        "--diffs-header-font-family": '"Instrument Sans", "Segoe UI", system-ui, sans-serif',
+      }) as CSSProperties,
+    []
+  )
+
   const savedAnnotationMap = useMemo(
     () =>
       new Map(savedAnnotations.map((annotation) => [createAnnotationLookupKey(annotation), annotation])),
@@ -148,6 +161,7 @@ function DiffPaneRendererContent({
     <FileDiff<RenderedAnnotationMetadata>
       fileDiff={diff.parsedDiff}
       options={options}
+      style={diffStyles}
       lineAnnotations={lineAnnotations}
       renderAnnotation={(annotation) => {
         if (annotation.metadata?.kind === "saved") {
@@ -208,7 +222,7 @@ function DiffPaneRendererContent({
           <Plus className="size-3.5" />
         </button>
       )}
-      className="block h-full min-h-full min-w-0 font-mono text-sm"
+      className="block h-full min-h-full min-w-0 font-mono"
     />
   )
 }

@@ -1,5 +1,4 @@
 import { DiffViewerPage } from "@/app/diff-viewer/DiffViewerPage"
-import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Suspense, lazy } from "react"
 
@@ -22,19 +21,17 @@ function App() {
     pathname === "/diffx/experimental" || pathname === "/experimental"
 
   return (
-    <ThemeProvider>
-      <TooltipProvider>
-        <Suspense fallback={<div className="min-h-screen bg-background" />}>
-          {isExperimentalSidebarRoute ? (
-            <ExperimentalSidebarPage />
-          ) : isExperimentalDockRoute ? (
-            <ExperimentalDockPage />
-          ) : (
-            <DiffViewerPage />
-          )}
-        </Suspense>
-      </TooltipProvider>
-    </ThemeProvider>
+    <TooltipProvider>
+      <Suspense fallback={<div className="min-h-screen bg-background" />}>
+        {isExperimentalSidebarRoute ? (
+          <ExperimentalSidebarPage />
+        ) : isExperimentalDockRoute ? (
+          <ExperimentalDockPage />
+        ) : (
+          <DiffViewerPage />
+        )}
+      </Suspense>
+    </TooltipProvider>
   )
 }
 

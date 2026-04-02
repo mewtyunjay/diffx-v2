@@ -20,6 +20,7 @@ func TestParseConfig(t *testing.T) {
 			want: config{
 				address:    "127.0.0.1",
 				port:       8080,
+				static:     false,
 				targetPath: ".",
 			},
 		},
@@ -29,6 +30,7 @@ func TestParseConfig(t *testing.T) {
 			want: config{
 				address:    "0.0.0.0",
 				port:       9090,
+				static:     false,
 				targetPath: "frontend",
 			},
 		},
@@ -38,6 +40,7 @@ func TestParseConfig(t *testing.T) {
 			want: config{
 				address:    "0.0.0.0",
 				port:       9090,
+				static:     false,
 				targetPath: ".",
 			},
 		},
@@ -47,6 +50,17 @@ func TestParseConfig(t *testing.T) {
 			want: config{
 				address:    "0.0.0.0",
 				port:       8080,
+				static:     false,
+				targetPath: ".",
+			},
+		},
+		{
+			name: "static mode",
+			args: []string{"--static"},
+			want: config{
+				address:    "127.0.0.1",
+				port:       8080,
+				static:     true,
 				targetPath: ".",
 			},
 		},
