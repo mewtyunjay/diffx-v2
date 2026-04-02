@@ -3,8 +3,6 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,28 +12,25 @@ import (
 func TestShouldUseFrontendDev(t *testing.T) {
 	t.Parallel()
 
-	workingDir := t.TempDir()
-	frontendDir := filepath.Join(workingDir, "frontend")
-	if err := os.Mkdir(frontendDir, 0o755); err != nil {
-		t.Fatalf("mkdir frontend: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(frontendDir, "package.json"), []byte("{}"), 0o644); err != nil {
-		t.Fatalf("write package.json: %v", err)
-	}
-
 	if !shouldUseFrontendDev(FrontendConfig{
-		WorkingDir: workingDir,
-		DevURL:     "http://127.0.0.1:5173",
+		Dev:    true,
+		DevURL: "http://127.0.0.1:5173",
 	}) {
-		t.Fatal("expected source checkout to enable frontend dev mode")
+		t.Fatal("expected --dev to enable frontend dev mode")
 	}
 
 	if shouldUseFrontendDev(FrontendConfig{
-		Static:     true,
-		WorkingDir: workingDir,
-		DevURL:     "http://127.0.0.1:5173",
+		Dev:    false,
+		DevURL: "http://127.0.0.1:5173",
 	}) {
-		t.Fatal("expected --static to disable frontend dev mode")
+		t.Fatal("expected default (no --dev) to disable frontend dev mode")
+	}
+
+	if shouldUseFrontendDev(FrontendConfig{
+		Dev:    true,
+		DevURL: "",
+	}) {
+		t.Fatal("expected empty DevURL to disable frontend dev mode even with --dev")
 	}
 }
 

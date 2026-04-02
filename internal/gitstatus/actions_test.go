@@ -45,6 +45,36 @@ func TestStageAndUnstageFile(t *testing.T) {
 	}
 }
 
+func TestStageFileAllowsTrackedMoveIntoIgnoredPath(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	if err := os.MkdirAll(filepath.Join(repoRoot, "cmd", "diffx"), 0o755); err != nil {
+		t.Fatalf("mkdir cmd/diffx: %v", err)
+	}
+	writeFile(t, filepath.Join(repoRoot, ".gitignore"), "cmd/diffx/*.go\n")
+	if err := os.Rename(
+		filepath.Join(repoRoot, "notes.txt"),
+		filepath.Join(repoRoot, "cmd", "diffx", "main.go"),
+	); err != nil {
+		t.Fatalf("rename notes.txt: %v", err)
+	}
+
+	if err := service.StageFile(context.Background(), "cmd/diffx/main.go", "notes.txt"); err != nil {
+		t.Fatalf("StageFile returned error: %v", err)
+	}
+
+	status := runGitOutput(t, repoRoot, "status", "--porcelain=v1")
+	if !strings.Contains(status, "D  notes.txt") {
+		t.Fatalf("expected tracked deletion to be staged, got %q", status)
+	}
+	if strings.Contains(status, "cmd/diffx/main.go") {
+		t.Fatalf("expected ignored destination to stay out of git status, got %q", status)
+	}
+}
+
 func TestListChangedFilesTracksHiddenStagedFilesOutsideScope(t *testing.T) {
 	t.Parallel()
 

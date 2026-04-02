@@ -13,6 +13,7 @@ var (
 	ErrDetachedHead       = errors.New("current HEAD is detached")
 	ErrEmptyCommitMessage = errors.New("commit message is required")
 	ErrNoStagedChanges    = errors.New("no staged changes to commit")
+	ErrPathIgnored        = errors.New("path is ignored by git")
 	ErrPathOutsideScope   = errors.New("path is outside the current workspace scope")
 )
 
@@ -33,12 +34,43 @@ func (s *Service) StageFile(ctx context.Context, path string, previousPath strin
 		return err
 	}
 
-	args := []string{"add", "-A", "--", path}
+	previousTracked := false
 	if previousPath != "" && previousPath != path {
-		args = append(args, previousPath)
+		var err error
+		previousTracked, err = s.isTrackedPath(ctx, previousPath)
+		if err != nil {
+			return err
+		}
+
+		if previousTracked {
+			if _, err := s.runGitCombined(ctx, "", "add", "--update", "--", previousPath); err != nil {
+				return err
+			}
+		}
 	}
 
-	_, err := s.runGitCombined(ctx, "", args...)
+	pathTracked, err := s.isTrackedPath(ctx, path)
+	if err != nil {
+		return err
+	}
+	if pathTracked {
+		_, err := s.runGitCombined(ctx, "", "add", "--update", "--", path)
+		return err
+	}
+
+	ignored, err := s.isIgnoredPath(ctx, path)
+	if err != nil {
+		return err
+	}
+	if ignored {
+		if previousTracked {
+			return nil
+		}
+
+		return ErrPathIgnored
+	}
+
+	_, err = s.runGitCombined(ctx, "", "add", "--", path)
 	return err
 }
 
@@ -168,6 +200,36 @@ func (s *Service) runGitCombined(ctx context.Context, stdin string, args ...stri
 	}
 
 	return strings.TrimSpace(string(output)), nil
+}
+
+func (s *Service) isTrackedPath(ctx context.Context, path string) (bool, error) {
+	commandArgs := []string{"-C", s.repoRoot, "ls-files", "--error-unmatch", "--", path}
+	cmd := exec.CommandContext(ctx, "git", commandArgs...)
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("git ls-files --error-unmatch -- %s: %w", path, err)
+	}
+
+	return true, nil
+}
+
+func (s *Service) isIgnoredPath(ctx context.Context, path string) (bool, error) {
+	commandArgs := []string{"-C", s.repoRoot, "check-ignore", "--quiet", "--no-index", "--", path}
+	cmd := exec.CommandContext(ctx, "git", commandArgs...)
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("git check-ignore -- %s: %w", path, err)
+	}
+
+	return true, nil
 }
 
 func formatGitCombinedError(args []string, output []byte, err error) error {

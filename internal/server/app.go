@@ -9,7 +9,7 @@ import (
 )
 
 type FrontendConfig struct {
-	Static     bool
+	Dev        bool
 	WorkingDir string
 	DevURL     string
 }

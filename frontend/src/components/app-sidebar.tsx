@@ -23,11 +23,6 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
-type SidebarNotice = {
-  tone: "success" | "error"
-  message: string
-}
-
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
   workspaceName: string
@@ -44,13 +39,12 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   stagePendingPaths: string[]
   onToggleStage: (file: ChangedFileItem) => void
   commitMessage: string
-  commitError: string | null
   isCommitPending: boolean
   onCommitMessageChange: (value: string) => void
   onCommit: () => void
   isPushPending: boolean
+  showPushAction: boolean
   onPush: () => void
-  notice: SidebarNotice | null
 }
 
 const statusClassNames: Record<ChangedFileStatus, string> = {
@@ -76,13 +70,12 @@ export function AppSidebar({
   stagePendingPaths,
   onToggleStage,
   commitMessage,
-  commitError,
   isCommitPending,
   onCommitMessageChange,
   onCommit,
   isPushPending,
+  showPushAction,
   onPush,
-  notice,
   ...props
 }: AppSidebarProps) {
   const selectedFile = React.useMemo(
@@ -119,6 +112,7 @@ export function AppSidebar({
   const canUseGitActions = comparisonMode === "head"
   const canCommit = canUseGitActions && stagedVisibleCount > 0 && hiddenStagedFileCount === 0
   const showCommitArea = canCommit
+  const showPushButton = canUseGitActions && (canCommit || showPushAction)
 
   React.useEffect(() => {
     const folderPathSet = new Set(folderPaths)
@@ -274,32 +268,14 @@ export function AppSidebar({
               ) : null}
             </div>
 
-            {notice ? (
-              <p
-                className={cn(
-                  "rounded-lg border px-3 py-2 type-meta",
-                  notice.tone === "success"
-                    ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-100"
-                    : "border-rose-400/30 bg-rose-500/10 text-rose-100"
-                )}
-              >
-                {notice.message}
-              </p>
-            ) : null}
-
             {showCommitArea ? (
               <div className="space-y-3">
-                <div>
-                  <textarea
-                    value={commitMessage}
-                    onChange={(event) => onCommitMessageChange(event.target.value)}
-                    placeholder="Write a clear commit message..."
-                    className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 type-body text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
-                  />
-                  {commitError ? (
-                    <p className="measure-readable mt-2 type-meta text-rose-300">{commitError}</p>
-                  ) : null}
-                </div>
+                <textarea
+                  value={commitMessage}
+                  onChange={(event) => onCommitMessageChange(event.target.value)}
+                  placeholder="Write a clear commit message..."
+                  className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 type-body text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
+                />
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
@@ -311,19 +287,33 @@ export function AppSidebar({
                     {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
                     Commit
                   </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    disabled={isCommitPending || isPushPending}
-                    onClick={onPush}
-                  >
-                    {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
-                    Push
-                  </Button>
+                  {showPushButton ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      disabled={isCommitPending || isPushPending}
+                      onClick={onPush}
+                    >
+                      {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
+                      Push
+                    </Button>
+                  ) : null}
                 </div>
               </div>
+            ) : showPushButton ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full"
+                disabled={isCommitPending || isPushPending}
+                onClick={onPush}
+              >
+                {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
+                Push
+              </Button>
             ) : null}
           </div>
         </SidebarFooter>

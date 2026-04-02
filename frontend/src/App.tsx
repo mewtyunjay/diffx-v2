@@ -1,4 +1,5 @@
 import { DiffViewerPage } from "@/app/diff-viewer/DiffViewerPage"
+import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Suspense, lazy } from "react"
 
@@ -31,6 +32,7 @@ function App() {
           <DiffViewerPage />
         )}
       </Suspense>
+      <Toaster />
     </TooltipProvider>
   )
 }

@@ -23,21 +23,7 @@ const (
 )
 
 func shouldUseFrontendDev(cfg FrontendConfig) bool {
-	if cfg.Static {
-		return false
-	}
-
-	workingDir := cfg.WorkingDir
-	if workingDir == "" {
-		workingDir = "."
-	}
-
-	if cfg.DevURL == "" {
-		return false
-	}
-
-	info, err := os.Stat(filepath.Join(workingDir, "frontend", "package.json"))
-	return err == nil && !info.IsDir()
+	return cfg.Dev && cfg.DevURL != ""
 }
 
 func newFrontendDevServer(cfg FrontendConfig) (http.Handler, func() error, error) {

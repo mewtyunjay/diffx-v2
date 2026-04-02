@@ -16,10 +16,10 @@ Run commands from the relevant package directory.
 
 - `cd frontend && npm install`: install frontend dependencies.
 - `cd frontend && npm run dev`: start the Vite dev server manually when needed.
-- `go run ./cmd/diffx`: start the Go API on `:8080` and, from a source checkout, start or reuse the Vite dev server with HMR.
+- `go run ./cmd/diffx`: start the Go API on `:8080` serving embedded frontend assets.
+- `go run ./cmd/diffx --dev`: start the Go API and the Vite dev server with HMR for frontend development.
 - `go run ./cmd/diffx ./frontend`: scope the app to a nested folder inside the current git repository.
 - `go generate ./frontend`: run the frontend package's `//go:generate` steps (`npm install`, then `npm run build`) and produce the production bundle in `frontend/dist/`.
-- `go run ./cmd/diffx --static` forces the built frontend bundle path and will automatically build `frontend/dist/` locally if the embedded bundle is just the placeholder and `frontend/node_modules` already exists.
 - `go build ./cmd/diffx`: build the single Go binary after `go generate ./frontend`.
 - `cd frontend && npm run lint`: run ESLint on all `ts` and `tsx` files.
 - `go test ./cmd/... ./internal/...`: run backend tests.
@@ -71,4 +71,4 @@ PRs should include:
 - verification notes listing commands you ran
 
 ## Configuration Notes
-In source-checkout dev mode, the Go server proxies frontend traffic to Vite and still serves `/api` itself on port `8080`. Keep local config changes out of commits unless they are required for all contributors.
+When `--dev` is passed, the Go server proxies frontend traffic to Vite and still serves `/api` itself on port `8080`. Keep local config changes out of commits unless they are required for all contributors.

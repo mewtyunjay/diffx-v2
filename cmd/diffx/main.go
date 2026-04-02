@@ -33,7 +33,7 @@ type config struct {
 	address      string
 	port         int
 	explicitPort bool
-	static       bool
+	dev          bool
 	targetPath   string
 }
 
@@ -58,7 +58,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	app, err := server.New(server.Config{
 		Workspace: workspace,
 		Frontend: server.FrontendConfig{
-			Static:     cfg.static,
+			Dev:        cfg.dev,
 			WorkingDir: mustGetwd(),
 			DevURL:     defaultFrontendURL,
 		},
@@ -135,9 +135,9 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flagSet.StringVar(&cfg.address, "address", cfg.address, "HTTP address to bind")
 	flagSet.IntVar(&cfg.port, "p", cfg.port, "HTTP port to bind")
 	flagSet.IntVar(&cfg.port, "port", cfg.port, "HTTP port to bind")
-	flagSet.BoolVar(&cfg.static, "static", cfg.static, "Serve built frontend assets instead of the Vite dev server")
+	flagSet.BoolVar(&cfg.dev, "dev", cfg.dev, "Start the Vite dev server for frontend development")
 	flagSet.Usage = func() {
-		fmt.Fprintln(flagSet.Output(), "Usage: diffx [path] [-a 127.0.0.1] [-p 8080] [--static]")
+		fmt.Fprintln(flagSet.Output(), "Usage: diffx [path] [-a 127.0.0.1] [-p 8080] [--dev]")
 		flagSet.PrintDefaults()
 	}
 

@@ -20,21 +20,18 @@ go run ./cmd/diffx
 
 Open the URL printed by `diffx`. By default it starts on `http://127.0.0.1:8080`, and if `8080` is already occupied it will automatically move to the next free port.
 
-By default, running from a source checkout also starts or reuses the frontend dev server so UI changes reload automatically while you work.
-
 ## Common Commands
 
-Run the app:
+Run the app (serves embedded frontend assets):
 
 ```sh
 go run ./cmd/diffx
 ```
 
-
-Force the built frontend instead of dev mode:
+Start with the Vite dev server for frontend development:
 
 ```sh
-go run ./cmd/diffx --static
+go run ./cmd/diffx --dev
 ```
 
 Change the address or port:
