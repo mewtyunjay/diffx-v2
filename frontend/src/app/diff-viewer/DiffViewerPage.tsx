@@ -22,14 +22,12 @@ import {
   type BranchOption,
   type ChangedFileItem,
   type ChangedFilesResult,
-  type ChangedFileStatus,
   type ComparisonMode,
   type FileDiffResult,
 } from "@/app/changed-files/api"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { SiteHeader } from "@/components/site-header"
-import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/sonner"
 import {
   SidebarInset,
@@ -44,19 +42,6 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 
 function createDiffCacheKey(baseCommit: string, file: Pick<ChangedFileItem, "path" | "contentKey">) {
   return `${baseCommit}:${file.path}:${file.contentKey}`
-}
-
-function formatStatus(status: ChangedFileStatus) {
-  switch (status) {
-    case "added":
-      return "added"
-    case "deleted":
-      return "deleted"
-    case "renamed":
-      return "renamed"
-    default:
-      return "modified"
-  }
 }
 
 type InlineAnnotationTarget = Pick<SavedDiffAnnotation, "side" | "lineNumber">
@@ -95,7 +80,6 @@ export function DiffViewerPage() {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
   const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
   const [baseCommit, setBaseCommit] = useState("")
-  const [currentRef, setCurrentRef] = useState("")
   const [workspaceName, setWorkspaceName] = useState("workspace")
   const [scopePath, setScopePath] = useState(".")
   const [hiddenStagedFileCount, setHiddenStagedFileCount] = useState(0)
@@ -220,7 +204,6 @@ export function DiffViewerPage() {
     async (signal?: AbortSignal) => {
       const result = await fetchBranches(signal)
       setBranches(result.branches)
-      setCurrentRef(result.currentRef)
       setBranchesError(null)
     },
     []
@@ -241,7 +224,6 @@ export function DiffViewerPage() {
 
       setComparisonMode(result.mode)
       setBaseCommit(result.baseCommit)
-      setCurrentRef(result.currentRef)
       setWorkspaceName(result.workspaceName)
       setScopePath(result.scopePath)
       setHiddenStagedFileCount(result.hiddenStagedFileCount)
@@ -305,7 +287,6 @@ export function DiffViewerPage() {
 
         setComparisonMode("head")
         setBaseCommit("")
-        setCurrentRef("")
         setWorkspaceName("workspace")
         setScopePath(".")
         setHiddenStagedFileCount(0)
@@ -538,14 +519,12 @@ export function DiffViewerPage() {
     }
   }, [refreshBranches, refreshChangedFiles])
 
-  const fileSummary =
-    comparisonMode === "head"
-      ? `${formatStatus(selectedFile?.status ?? "modified")} · ${selectedFile?.isTracked ? "tracked" : "untracked"
-      } · ${selectedFile?.hasStagedChanges ? "staged" : "not staged"} · ${selectedFile?.hasUnstagedChanges ? "has unstaged changes" : "no unstaged changes"
-      }`
-      : selectedFile?.isTracked
-        ? `${formatStatus(selectedFile?.status ?? "modified")} relative to ${selectedBaseRef} · current branch ${currentRef}`
-        : `untracked in working tree · not present on ${selectedBaseRef}`
+  const headerError =
+    filesError && !isFilesLoading
+      ? filesError
+      : selectedFile && diffError && !isDiffLoading
+        ? diffError
+        : null
 
   return (
     <SidebarProvider
@@ -588,67 +567,20 @@ export function DiffViewerPage() {
           canCopyAnnotations={savedAnnotations.length > 0}
           onCopyAnnotations={handleCopyAnnotations}
         />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
-          <section className="surface-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="type-overline text-muted-foreground">
-                  Fast file diff
-                </p>
-                <h1 className="mt-2 type-title text-foreground">
-                  {selectedFile?.path ?? (isFilesLoading ? "Loading files..." : "No file selected")}
-                </h1>
-                {selectedFile ? (
-                  <>
-                    <p className="measure-readable mt-2 type-body text-muted-foreground">
-                      {fileSummary}
-                    </p>
-                    {selectedFile.previousPath ? (
-                      <p className="measure-readable mt-1 type-meta text-muted-foreground">
-                        from {selectedFile.previousPath}
-                      </p>
-                    ) : null}
-                  </>
-                ) : null}
-                {filesError && !isFilesLoading ? (
-                  <p className="measure-readable mt-2 type-meta text-destructive">{filesError}</p>
-                ) : null}
-                {selectedFile && diffError && !isDiffLoading ? (
-                  <p className="measure-readable mt-2 type-meta text-destructive">{diffError}</p>
-                ) : null}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            {headerError ? (
+              <div className="border-b border-border/60 px-4 py-2">
+                <p className="measure-readable type-meta text-destructive">{headerError}</p>
               </div>
+            ) : null}
 
-              <div className="flex flex-wrap items-center gap-2 self-start">
-                <Button type="button" size="sm" variant="outline" asChild>
-                  <a href="/diffx/experimental">Experimental dock</a>
-                </Button>
-
-                <div className="surface-segmented flex items-center gap-2 p-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={viewMode === "unified" ? "secondary" : "ghost"}
-                    onClick={() => setViewMode("unified")}
-                  >
-                    Unified
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={viewMode === "split" ? "secondary" : "ghost"}
-                    onClick={() => setViewMode("split")}
-                  >
-                    Split
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 min-w-0 flex-1 overflow-auto p-5">
+            <div className="min-h-0 min-w-0 flex-1 overflow-auto">
               <DiffPane
                 diff={selectedFile ? displayedDiff : null}
                 hasSelectedFile={!!selectedFile}
                 viewMode={viewMode}
+                onViewModeChange={setViewMode}
                 savedAnnotations={visibleSavedAnnotations}
                 clearDraftToken={clearDraftToken}
                 onSaveAnnotation={handleSaveAnnotation}
