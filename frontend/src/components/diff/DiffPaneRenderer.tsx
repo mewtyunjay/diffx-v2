@@ -1,6 +1,6 @@
 import { FileDiff, type AnnotationSide, type DiffLineAnnotation } from "@pierre/diffs/react"
 import { Plus } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react"
 
 import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
@@ -54,6 +54,17 @@ function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
   }
 
   return a.lineNumber === b.lineNumber && a.side === b.side
+}
+
+function openAnnotationDraft(
+  target: DraftTarget,
+  savedAnnotationMap: Map<string, SavedDiffAnnotation>,
+  setDraftText: (value: string) => void,
+  setOpenDraft: Dispatch<SetStateAction<DraftTarget | null>>
+) {
+  const existingAnnotation = savedAnnotationMap.get(createAnnotationLookupKey(target))
+  setDraftText(existingAnnotation?.comment ?? "")
+  setOpenDraft(target)
 }
 
 function DiffPaneRendererContent({
@@ -147,6 +158,25 @@ function DiffPaneRendererContent({
     handleCloseDraft()
   }
 
+  const handleDeleteDraft = () => {
+    if (!openDraft) {
+      return
+    }
+
+    onDeleteAnnotation(openDraft)
+    handleCloseDraft()
+  }
+
+  const handleOpenDraft = (target: DraftTarget) => {
+    if (isSameDraftTarget(openDraft, target)) {
+      setDraftText("")
+      setOpenDraft(null)
+      return
+    }
+
+    openAnnotationDraft(target, savedAnnotationMap, setDraftText, setOpenDraft)
+  }
+
   return (
     <FileDiff<RenderedAnnotationMetadata>
       fileDiff={diff.parsedDiff}
@@ -154,7 +184,14 @@ function DiffPaneRendererContent({
       lineAnnotations={lineAnnotations}
       renderAnnotation={(annotation) => {
         if (annotation.metadata?.kind === "saved") {
-          return <DiffSavedComment comment={annotation.metadata.comment} />
+          return (
+            <DiffSavedComment
+              comment={annotation.metadata.comment}
+              onOpen={() =>
+                handleOpenDraft(annotation)
+              }
+            />
+          )
         }
 
         const draftKey = openDraft == null ? "closed" : `${openDraft.side}:${openDraft.lineNumber}`
@@ -168,6 +205,7 @@ function DiffPaneRendererContent({
             canSave={canSaveDraft}
             isEditingExisting={isEditingExisting}
             onChange={setDraftText}
+            onDelete={isEditingExisting ? handleDeleteDraft : undefined}
             onSave={handleSaveDraft}
             onEscape={handleCloseDraft}
           />
@@ -176,7 +214,7 @@ function DiffPaneRendererContent({
       renderHoverUtility={(getHoveredLine) => (
         <button
           type="button"
-          aria-label="Add inline comment"
+          aria-label="Add or edit annotation"
           className="diff-pane-hover-utility pointer-events-auto z-10 inline-flex items-center justify-center -translate-x-1.5 rounded-md text-foreground"
           onClick={(event) => {
             event.preventDefault()
@@ -187,16 +225,7 @@ function DiffPaneRendererContent({
               return
             }
 
-            setOpenDraft((currentDraft) => {
-              if (isSameDraftTarget(currentDraft, hoveredLine)) {
-                setDraftText("")
-                return null
-              }
-
-              const existingAnnotation = savedAnnotationMap.get(createAnnotationLookupKey(hoveredLine))
-              setDraftText(existingAnnotation?.comment ?? "")
-              return hoveredLine
-            })
+            handleOpenDraft(hoveredLine)
           }}
         >
           <Plus className="size-3.5" />

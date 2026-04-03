@@ -1,18 +1,21 @@
 type DiffSavedCommentProps = {
   comment: string
+  onOpen: () => void
 }
 
-export function DiffSavedComment({ comment }: DiffSavedCommentProps) {
+export function DiffSavedComment({ comment, onOpen }: DiffSavedCommentProps) {
   return (
-    <div className="px-2 py-2">
-      <div className="surface-elevated overflow-hidden">
-        <div className="px-3 py-3">
-          <p className="whitespace-pre-wrap type-meta leading-6 text-foreground">{comment}</p>
-        </div>
-        <div className="border-t border-border/60 px-3 py-2 type-meta text-muted-foreground">
-          Click <span className="font-medium text-foreground">+</span> on this line to edit.
-        </div>
-      </div>
+    <div className="diff-annotation-wrap">
+      <button
+        type="button"
+        className="diff-annotation-surface diff-annotation-surface-button"
+        aria-label="Edit annotation"
+        onClick={onOpen}
+      >
+        <p className="diff-annotation-body whitespace-pre-wrap break-words type-meta leading-5 text-foreground">
+          {comment}
+        </p>
+      </button>
     </div>
   )
 }

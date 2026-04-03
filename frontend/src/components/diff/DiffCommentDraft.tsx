@@ -8,6 +8,7 @@ type DiffCommentDraftProps = {
   canSave: boolean
   isEditingExisting: boolean
   onChange: (value: string) => void
+  onDelete?: () => void
   onSave: () => void
   onEscape: () => void
 }
@@ -18,6 +19,7 @@ export function DiffCommentDraft({
   canSave,
   isEditingExisting,
   onChange,
+  onDelete,
   onSave,
   onEscape,
 }: DiffCommentDraftProps) {
@@ -35,8 +37,8 @@ export function DiffCommentDraft({
   }, [focusKey])
 
   return (
-    <div className="px-2 py-2">
-      <div className="surface-elevated overflow-hidden">
+    <div className="diff-annotation-wrap">
+      <div className="diff-annotation-surface overflow-hidden">
         <textarea
           ref={textareaRef}
           value={value}
@@ -48,27 +50,39 @@ export function DiffCommentDraft({
               return
             }
 
-            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+            if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault()
               if (canSave) {
                 onSave()
               }
             }
           }}
-          placeholder="Ask Codex to fix or explain this change..."
-          className="min-h-24 w-full resize-y border-0 bg-transparent px-3 py-3 type-meta leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+          placeholder="Add annotation..."
+          className="diff-annotation-textarea"
         />
-        <div className="flex items-center justify-between gap-3 border-t border-border/60 px-3 py-2">
-          <p className="measure-readable type-meta text-muted-foreground">
-            {isEditingExisting
-              ? "Save updates this annotation. Clear the text and save to remove it."
-              : "Save stores this annotation in the current session. Cmd/Ctrl+Enter also saves."}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="ghost" onClick={onEscape}>
+        <div className="diff-annotation-actions">
+          {isEditingExisting && onDelete ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={onDelete}
+            >
+              Delete
+            </Button>
+          ) : null}
+          <div className="flex items-center gap-1.5">
+            <Button type="button" size="xs" variant="ghost" onClick={onEscape}>
               Cancel
             </Button>
-            <Button type="button" size="sm" onClick={onSave} disabled={!canSave}>
+            <Button
+              type="button"
+              size="xs"
+              title="Save annotation (Enter)"
+              onClick={onSave}
+              disabled={!canSave}
+            >
               Save
             </Button>
           </div>
