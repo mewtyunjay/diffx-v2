@@ -6,7 +6,6 @@ type DiffPaneProps = {
   diff: PreparedFileDiffResult | null
   hasSelectedFile: boolean
   viewMode: "split" | "unified"
-  onViewModeChange: (mode: "split" | "unified") => void
   savedAnnotations: SavedDiffAnnotation[]
   clearDraftToken: number
   onSaveAnnotation: (
@@ -24,7 +23,6 @@ export function DiffPane({
   diff,
   hasSelectedFile,
   viewMode,
-  onViewModeChange,
   savedAnnotations,
   clearDraftToken,
   onSaveAnnotation,
@@ -81,7 +79,6 @@ export function DiffPane({
       key={`${viewMode}:${clearDraftToken}:${renderableDiff.path}:${renderableDiff.before.cacheKey}:${renderableDiff.after.cacheKey}`}
       diff={renderableDiff}
       viewMode={viewMode}
-      onViewModeChange={onViewModeChange}
       savedAnnotations={savedAnnotations}
       onSaveAnnotation={onSaveAnnotation}
       onDeleteAnnotation={onDeleteAnnotation}

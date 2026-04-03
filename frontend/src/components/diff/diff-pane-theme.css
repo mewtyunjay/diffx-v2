@@ -4,8 +4,6 @@
   --diffs-line-height: 1.5;
   --diffs-font-features: normal;
   --diffs-header-font-family: var(--font-sans);
-  --diffs-gap-inline: 0.625rem;
-  --diffs-gap-block: 0.375rem;
 }
 
 .diff-pane-hover-utility {
@@ -18,21 +16,10 @@
   opacity: 1;
 }
 
-.diff-pane-theme [slot="header-metadata"] {
-  display: inline-flex;
-  align-items: center;
-  margin-inline-start: 0.25rem;
+.diff-toolbar-deletions {
+  color: var(--destructive);
 }
 
-.diff-pane-header-toggle {
-  min-height: 2rem;
-  backdrop-filter: blur(12px);
-}
-
-.diff-pane-header-toggle-button {
-  color: var(--text-secondary);
-}
-
-.diff-pane-header-toggle-button[aria-pressed="true"] {
-  color: var(--text-primary);
+.diff-toolbar-additions {
+  color: var(--primary);
 }

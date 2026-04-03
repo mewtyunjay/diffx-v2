@@ -25,6 +25,7 @@ import {
   type ComparisonMode,
   type FileDiffResult,
 } from "@/app/changed-files/api"
+import { DiffViewerToolbar } from "@/app/diff-viewer/DiffViewerToolbar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { SiteHeader } from "@/components/site-header"
@@ -307,6 +308,16 @@ export function DiffViewerPage() {
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
 
+  const currentDisplayedDiff =
+    displayedDiff &&
+    selectedFile &&
+    displayedDiff.path === selectedFile.path &&
+    (displayedDiff.previousPath ?? "") === (selectedFile.previousPath ?? "") &&
+    displayedDiff.status === selectedFile.status &&
+    (selectedFile.status === "deleted" || displayedDiff.after.cacheKey === selectedFile.contentKey)
+      ? displayedDiff
+      : null
+
   const resetCopyState = useCallback((nextState: "success" | "error") => {
     setCopyState(nextState)
     if (copyStateTimeoutRef.current != null) {
@@ -576,11 +587,19 @@ export function DiffViewerPage() {
             ) : null}
 
             <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+              {selectedFile ? (
+                <DiffViewerToolbar
+                  path={selectedFile.path}
+                  diff={currentDisplayedDiff}
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                />
+              ) : null}
+
               <DiffPane
                 diff={selectedFile ? displayedDiff : null}
                 hasSelectedFile={!!selectedFile}
                 viewMode={viewMode}
-                onViewModeChange={setViewMode}
                 savedAnnotations={visibleSavedAnnotations}
                 clearDraftToken={clearDraftToken}
                 onSaveAnnotation={handleSaveAnnotation}

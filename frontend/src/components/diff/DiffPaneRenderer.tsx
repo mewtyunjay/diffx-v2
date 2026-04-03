@@ -5,7 +5,6 @@ import { useMemo, useState } from "react"
 import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
-import { DiffViewModeToggle } from "@/components/diff/DiffViewModeToggle"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
 import "@/components/diff/diff-pane-theme.css"
 
@@ -36,7 +35,6 @@ type RenderablePreparedDiff = PreparedFileDiffResult & {
 type DiffPaneRendererProps = {
   diff: RenderablePreparedDiff
   viewMode: "split" | "unified"
-  onViewModeChange: (mode: "split" | "unified") => void
   savedAnnotations: SavedDiffAnnotation[]
   onSaveAnnotation: (
     target: Pick<SavedDiffAnnotation, "side" | "lineNumber">,
@@ -60,7 +58,6 @@ function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
 function DiffPaneRendererContent({
   diff,
   viewMode,
-  onViewModeChange,
   savedAnnotations,
   onSaveAnnotation,
   onDeleteAnnotation,
@@ -72,7 +69,7 @@ function DiffPaneRendererContent({
     () => ({
       diffStyle: viewMode,
       diffIndicators: "bars" as const,
-      disableFileHeader: false,
+      disableFileHeader: true,
       overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
       expandUnchanged: false,
@@ -153,9 +150,6 @@ function DiffPaneRendererContent({
       fileDiff={diff.parsedDiff}
       options={options}
       lineAnnotations={lineAnnotations}
-      renderHeaderMetadata={() => (
-        <DiffViewModeToggle value={viewMode} onChange={onViewModeChange} />
-      )}
       renderAnnotation={(annotation) => {
         if (annotation.metadata?.kind === "saved") {
           return <DiffSavedComment comment={annotation.metadata.comment} />
