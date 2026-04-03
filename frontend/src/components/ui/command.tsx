@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
-import { RiSearchLine } from "@remixicon/react"
+import { Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -28,7 +28,7 @@ function CommandInput({
       data-slot="command-input-wrapper"
       className="flex items-center gap-2 border-b border-border/60 px-3 py-2.5"
     >
-      <RiSearchLine className="size-3.5 shrink-0 text-muted-foreground" />
+      <Search className="size-3.5 shrink-0 text-muted-foreground" />
       <CommandPrimitive.Input
         data-slot="command-input"
         className={cn(

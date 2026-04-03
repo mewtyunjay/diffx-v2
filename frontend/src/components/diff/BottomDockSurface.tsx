@@ -132,14 +132,14 @@ export function BottomDockSurface({
       <section
         style={style}
         className={cn(
-          "pointer-events-auto w-full max-w-4xl overflow-hidden rounded-[1.5rem] border border-border/70 bg-[color-mix(in_oklab,var(--popover)_92%,black)] shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl",
+          "surface-dock pointer-events-auto w-full max-w-4xl overflow-hidden",
           className
         )}
       >
         <button
           type="button"
           onClick={onHeaderClick}
-          className="flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-white/[0.03]"
+          className="interactive-soft flex w-full items-start gap-3 px-4 py-3 text-left"
         >
           <div className="min-w-0 flex-1">
             <p className="truncate type-title text-foreground">{title}</p>

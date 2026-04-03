@@ -23,7 +23,7 @@ const toastClassNames = {
     "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-right-2"
   ),
   title: "type-meta leading-5 font-medium tracking-[-0.01em]",
-  description: "text-[0.8125rem] leading-5 text-muted-foreground",
+  description: "type-meta text-muted-foreground",
   content: "flex flex-row items-center gap-2",
   icon: "text-current",
   success: "border-emerald-500/25 bg-background text-emerald-300",

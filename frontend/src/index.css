@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 @import "@fontsource/instrument-sans/400.css";
 @import "@fontsource/instrument-sans/500.css";
 @import "@fontsource/instrument-sans/600.css";
@@ -8,6 +7,101 @@
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
 @import "@fontsource/jetbrains-mono/700.css";
+
+@theme inline {
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(
+        --radix-accordion-content-height,
+        var(--accordion-panel-height, auto)
+      );
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(
+        --radix-accordion-content-height,
+        var(--accordion-panel-height, auto)
+      );
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-unchecked {
+  &:where([data-state="unchecked"]),
+  &:where([data-unchecked]:not([data-unchecked="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,6 +144,41 @@
   --sidebar-border: oklch(0.922 0.005 34.3);
   --sidebar-ring: oklch(0.714 0.014 41.2);
   --text-body-measure: 65ch;
+  --surface-app: var(--background);
+  --surface-panel: color-mix(in oklab, var(--card) 30%, transparent);
+  --surface-panel-strong: color-mix(in oklab, var(--card) 40%, transparent);
+  --surface-elevated: color-mix(in oklab, var(--popover) 92%, black);
+  --surface-field: color-mix(in oklab, var(--background) 60%, transparent);
+  --surface-field-quiet: color-mix(in oklab, var(--background) 45%, transparent);
+  --surface-hover: color-mix(in oklab, var(--foreground) 3%, transparent);
+  --surface-selected: color-mix(in oklab, var(--primary) 12%, transparent);
+  --surface-sidebar-panel: color-mix(in oklab, var(--sidebar) 95%, transparent);
+  --surface-sidebar-field: color-mix(in oklab, var(--sidebar) 32%, transparent);
+  --surface-sidebar-hover: color-mix(in oklab, var(--sidebar-accent) 36%, transparent);
+  --surface-sidebar-accent: color-mix(in oklab, var(--sidebar-accent) 60%, transparent);
+  --surface-sidebar-elevated: var(--sidebar);
+  --border-subtle: color-mix(in oklab, var(--border) 50%, transparent);
+  --border-strong: color-mix(in oklab, var(--border) 70%, transparent);
+  --sidebar-border-subtle: color-mix(in oklab, var(--sidebar-border) 55%, transparent);
+  --sidebar-border-strong: color-mix(in oklab, var(--sidebar-border) 80%, transparent);
+  --accent-soft: color-mix(in oklab, var(--primary) 12%, transparent);
+  --accent-border: color-mix(in oklab, var(--primary) 30%, transparent);
+  --danger-soft: color-mix(in oklab, var(--destructive) 12%, transparent);
+  --focus-ring-soft: color-mix(in oklab, var(--ring) 50%, transparent);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-tertiary: color-mix(in oklab, var(--muted-foreground) 80%, transparent);
+  --text-sidebar-primary: var(--sidebar-foreground);
+  --text-sidebar-secondary: color-mix(in oklab, var(--sidebar-foreground) 65%, transparent);
+  --radius-control: 0.625rem;
+  --radius-panel: 1rem;
+  --radius-elevated: 1.35rem;
+  --radius-dock: 1.5rem;
+  --space-compact: 0.75rem;
+  --space-panel: 1rem;
+  --space-section: 1.25rem;
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
 }
 
 html,
@@ -156,6 +285,109 @@ body {
 }
 
 @layer utilities {
+  .surface-panel {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-panel);
+    background: var(--surface-panel);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+  }
+
+  .surface-panel-strong {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-panel);
+    background: var(--surface-panel-strong);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  }
+
+  .surface-elevated {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-elevated);
+    background: var(--surface-elevated);
+    box-shadow: 0 18px 42px -24px rgb(0 0 0 / 0.72);
+    backdrop-filter: blur(16px);
+  }
+
+  .surface-dock {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-dock);
+    background: var(--surface-elevated);
+    box-shadow: 0 28px 80px rgb(0 0 0 / 0.45);
+    backdrop-filter: blur(20px);
+  }
+
+  .surface-field {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface-field);
+  }
+
+  .surface-field-quiet {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface-field-quiet);
+  }
+
+  .surface-segmented {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface-field);
+  }
+
+  .surface-sidebar-field {
+    border: 1px solid var(--sidebar-border-subtle);
+    border-radius: var(--radius-control);
+    background: var(--surface-sidebar-field);
+    color: var(--text-sidebar-primary);
+  }
+
+  .surface-sidebar-elevated {
+    border: 1px solid var(--sidebar-border-strong);
+    border-radius: var(--radius-elevated);
+    background: var(--surface-sidebar-elevated);
+    color: var(--text-sidebar-primary);
+    box-shadow: 0 18px 42px -24px rgb(0 0 0 / 0.72);
+    backdrop-filter: blur(16px);
+  }
+
+  .surface-chip {
+    border: 1px solid var(--border-subtle);
+    border-radius: 999px;
+    background: var(--surface-field);
+  }
+
+  .surface-chip-accent {
+    border: 1px solid var(--accent-border);
+    border-radius: 999px;
+    background: var(--accent-soft);
+  }
+
+  .interactive-soft {
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease;
+  }
+
+  .interactive-soft:hover {
+    background: var(--surface-hover);
+  }
+
+  .interactive-sidebar:hover {
+    background: var(--surface-sidebar-hover);
+  }
+
+  .focus-ring-default {
+    outline: none;
+    transition:
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease;
+  }
+
+  .focus-ring-default:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px var(--focus-ring-soft);
+  }
+
   .type-overline {
     font-size: 0.75rem;
     line-height: 1.2;

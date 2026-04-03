@@ -34,7 +34,7 @@ export function DiffPane({
     }
 
     return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
         Select a file to view its diff.
       </div>
     )
@@ -42,7 +42,7 @@ export function DiffPane({
 
   if (diff.binary) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
         Binary files are not rendered in the inline diff viewer yet.
       </div>
     )
@@ -50,7 +50,7 @@ export function DiffPane({
 
   if (diff.tooLarge) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
         This file is too large for the fast inline diff path right now.
       </div>
     )
@@ -58,7 +58,7 @@ export function DiffPane({
 
   if (diff.isPureRename) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
         File renamed without textual changes.
       </div>
     )
@@ -66,7 +66,7 @@ export function DiffPane({
 
   if (!diff.parsedDiff) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
         No text diff is available for this file.
       </div>
     )

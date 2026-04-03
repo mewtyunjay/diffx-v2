@@ -142,7 +142,7 @@ export function AppSidebar({
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader className="gap-3 border-b border-sidebar-border/70 p-3">
         <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-sidebar-border/70 bg-sidebar-accent/60 p-2 text-sidebar-primary">
+          <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-2 text-sidebar-primary">
             <FolderTree className="size-4" />
           </div>
           <div className="min-w-0">
@@ -156,7 +156,7 @@ export function AppSidebar({
             </p>
             <div className="mt-3 max-w-full">
               <div className="flex items-center gap-2.5">
-                <p className="shrink-0 text-[0.75rem] leading-none font-medium uppercase tracking-[0.12em] text-sidebar-foreground/65">
+                <p className="shrink-0 type-overline text-sidebar-foreground/65">
                   Base
                 </p>
                 <div className="min-w-0 flex-1">
@@ -251,7 +251,7 @@ export function AppSidebar({
               <p className="type-overline text-sidebar-foreground/65">
                 Git actions
               </p>
-              <p className="mt-1 type-title font-medium text-sidebar-foreground type-data">
+              <p className="mt-1 type-meta font-medium text-sidebar-foreground type-data">
                 {totalStagedCount === 0
                   ? "No staged changes"
                   : `${totalStagedCount} staged ${totalStagedCount === 1 ? "file" : "files"}`}
@@ -273,8 +273,8 @@ export function AppSidebar({
                 <textarea
                   value={commitMessage}
                   onChange={(event) => onCommitMessageChange(event.target.value)}
-                  placeholder="Write a clear commit message..."
-                  className="min-h-28 w-full resize-y rounded-xl border border-sidebar-border/70 bg-sidebar-accent/35 px-3 py-3 type-body text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/45"
+                  placeholder="Commit message..."
+                  className="surface-sidebar-field focus-ring-default min-h-20 w-full resize-y px-2.5 py-2 type-meta text-sidebar-foreground placeholder:text-sidebar-foreground/40"
                 />
                 <div className="flex items-center gap-2">
                   <Button

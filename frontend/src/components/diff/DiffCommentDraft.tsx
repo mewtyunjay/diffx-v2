@@ -36,7 +36,7 @@ export function DiffCommentDraft({
 
   return (
     <div className="px-2 py-2">
-      <div className="overflow-hidden rounded-xl border border-border/70 bg-popover/95 shadow-lg backdrop-blur-sm">
+      <div className="surface-elevated overflow-hidden">
         <textarea
           ref={textareaRef}
           value={value}

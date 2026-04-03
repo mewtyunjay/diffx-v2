@@ -55,9 +55,9 @@ function ChatDockComposer({
   }, [prompt])
 
   return (
-    <div className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-background/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+    <div className="surface-panel-strong overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="px-4 pt-4">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/50 px-2.5 py-1 type-overline text-muted-foreground">
+        <div className="surface-chip mb-3 inline-flex items-center gap-2 px-2.5 py-1 type-overline text-muted-foreground">
           <MessageSquareText className="size-3.5" />
           Chat
         </div>
@@ -118,7 +118,7 @@ export function DiffViewerDock(props: DiffViewerDockProps) {
       style={props.style}
       expandedIntro={
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 type-overline text-primary">
+          <div className="surface-chip-accent inline-flex items-center gap-2 px-2.5 py-1 type-overline text-primary">
             <Sparkles className="size-3.5" />
             Quiz
           </div>

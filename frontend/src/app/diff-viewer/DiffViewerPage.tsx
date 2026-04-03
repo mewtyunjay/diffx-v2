@@ -106,7 +106,7 @@ export function DiffViewerPage() {
   const [filesError, setFilesError] = useState<string | null>(null)
   const [isFilesLoading, setIsFilesLoading] = useState(true)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<"unified" | "split">("unified")
+  const [viewMode, setViewMode] = useState<"unified" | "split">("split")
   const [displayedDiff, setDisplayedDiff] = useState<PreparedFileDiffResult | null>(null)
   const [diffError, setDiffError] = useState<string | null>(null)
   const [isDiffLoading, setIsDiffLoading] = useState(false)
@@ -540,11 +540,9 @@ export function DiffViewerPage() {
 
   const fileSummary =
     comparisonMode === "head"
-      ? `${formatStatus(selectedFile?.status ?? "modified")} · ${
-          selectedFile?.isTracked ? "tracked" : "untracked"
-        } · ${selectedFile?.hasStagedChanges ? "staged" : "not staged"} · ${
-          selectedFile?.hasUnstagedChanges ? "has unstaged changes" : "no unstaged changes"
-        }`
+      ? `${formatStatus(selectedFile?.status ?? "modified")} · ${selectedFile?.isTracked ? "tracked" : "untracked"
+      } · ${selectedFile?.hasStagedChanges ? "staged" : "not staged"} · ${selectedFile?.hasUnstagedChanges ? "has unstaged changes" : "no unstaged changes"
+      }`
       : selectedFile?.isTracked
         ? `${formatStatus(selectedFile?.status ?? "modified")} relative to ${selectedBaseRef} · current branch ${currentRef}`
         : `untracked in working tree · not present on ${selectedBaseRef}`
@@ -591,13 +589,13 @@ export function DiffViewerPage() {
           onCopyAnnotations={handleCopyAnnotations}
         />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-4">
-          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/50 bg-card/30 shadow-sm">
+          <section className="surface-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="type-overline text-muted-foreground">
                   Fast file diff
                 </p>
-                <h1 className="mt-2 type-page-title text-foreground">
+                <h1 className="mt-2 type-title text-foreground">
                   {selectedFile?.path ?? (isFilesLoading ? "Loading files..." : "No file selected")}
                 </h1>
                 {selectedFile ? (
@@ -625,7 +623,7 @@ export function DiffViewerPage() {
                   <a href="/diffx/experimental">Experimental dock</a>
                 </Button>
 
-                <div className="flex items-center gap-2 rounded-lg border border-border/70 bg-background/60 p-1">
+                <div className="surface-segmented flex items-center gap-2 p-1">
                   <Button
                     type="button"
                     size="sm"

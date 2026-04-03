@@ -1,9 +1,5 @@
 import * as React from "react"
-import {
-  RiArrowDownSLine,
-  RiCheckLine,
-  RiGitBranchLine,
-} from "@remixicon/react"
+import { Check, ChevronDown, GitBranch } from "lucide-react"
 
 import type { BranchOption } from "@/app/changed-files/api"
 import {
@@ -93,14 +89,14 @@ export function BranchPicker({
         <Button
           type="button"
           variant="ghost"
-          className="h-7 w-full justify-between rounded-lg border border-sidebar-border/55 bg-sidebar/32 px-3 text-left text-sidebar-foreground shadow-none hover:bg-sidebar-accent/36"
+          className="surface-sidebar-field interactive-soft interactive-sidebar h-7 w-full justify-between px-3 text-left text-sidebar-foreground shadow-none"
           disabled={disabled}
           aria-label="Select diff base branch"
         >
           <span className="min-w-0 truncate type-meta font-medium text-sidebar-foreground">
             {selectedBaseRef}
           </span>
-          <RiArrowDownSLine
+          <ChevronDown
             data-icon="inline-end"
             className={cn(
               "size-3.5 shrink-0 text-sidebar-foreground/42 transition-transform duration-200 ease-in-out motion-reduce:transition-none",
@@ -113,7 +109,7 @@ export function BranchPicker({
         side="bottom"
         align="start"
         sideOffset={8}
-        className="min-w-[var(--radix-popover-trigger-width)] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-[20px] border-sidebar-border/80 bg-sidebar p-0 text-sidebar-foreground shadow-[0_18px_42px_-24px_rgba(0,0,0,0.72)]"
+        className="surface-sidebar-elevated min-w-[var(--radix-popover-trigger-width)] w-[min(22rem,calc(100vw-2rem))] overflow-hidden p-0 text-sidebar-foreground"
       >
         <Command
           shouldFilter={false}
@@ -132,7 +128,7 @@ export function BranchPicker({
               <CommandItem
                 value="HEAD"
                 onSelect={() => handleSelect("HEAD")}
-                className="justify-between rounded-lg px-2.5 py-1.5 text-sidebar-foreground data-selected:bg-sidebar-accent/55"
+                className="justify-between rounded-md px-2.5 py-1.5 text-sidebar-foreground data-selected:bg-sidebar-accent/55"
               >
                 <BranchOptionRow label="HEAD" selected={selectedBaseRef === "HEAD"} />
               </CommandItem>
@@ -146,7 +142,7 @@ export function BranchPicker({
                       key={branch.name}
                       value={branch.name}
                       onSelect={() => handleSelect(branch.name)}
-                      className="justify-between rounded-lg px-2.5 py-1.5 text-sidebar-foreground data-selected:bg-sidebar-accent/55"
+                      className="justify-between rounded-md px-2.5 py-1.5 text-sidebar-foreground data-selected:bg-sidebar-accent/55"
                     >
                       <BranchOptionRow
                         label={branch.name}
@@ -174,10 +170,10 @@ function BranchOptionRow({ label, selected }: BranchOptionRowProps) {
   return (
     <>
       <div className="flex min-w-0 items-center gap-2">
-        <RiGitBranchLine className="size-3.5 shrink-0 text-sidebar-foreground/42" />
+        <GitBranch className="size-3.5 shrink-0 text-sidebar-foreground/42" />
         <span className="truncate text-sidebar-foreground">{label}</span>
       </div>
-      <RiCheckLine
+      <Check
         className={cn(
           "size-3.5 shrink-0 text-sidebar-foreground/82 opacity-0 transition-opacity duration-150 motion-reduce:transition-none",
           selected && "opacity-100"
