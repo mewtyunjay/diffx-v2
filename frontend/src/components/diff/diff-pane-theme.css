@@ -17,9 +17,9 @@
 }
 
 .diff-toolbar-deletions {
-  color: var(--destructive);
+  color: var(--diff-delete);
 }
 
 .diff-toolbar-additions {
-  color: var(--primary);
+  color: var(--diff-add);
 }

@@ -92,6 +92,7 @@ export function DiffViewerPage() {
   const [isFilesLoading, setIsFilesLoading] = useState(true)
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"unified" | "split">("split")
+  const [isCurrentFileExpanded, setIsCurrentFileExpanded] = useState(false)
   const [displayedDiff, setDisplayedDiff] = useState<PreparedFileDiffResult | null>(null)
   const [diffError, setDiffError] = useState<string | null>(null)
   const [isDiffLoading, setIsDiffLoading] = useState(false)
@@ -313,10 +314,13 @@ export function DiffViewerPage() {
     selectedFile &&
     displayedDiff.path === selectedFile.path &&
     (displayedDiff.previousPath ?? "") === (selectedFile.previousPath ?? "") &&
-    displayedDiff.status === selectedFile.status &&
-    (selectedFile.status === "deleted" || displayedDiff.after.cacheKey === selectedFile.contentKey)
+    displayedDiff.status === selectedFile.status
       ? displayedDiff
       : null
+
+  useEffect(() => {
+    setIsCurrentFileExpanded(false)
+  }, [baseCommit, selectedFile?.contentKey, selectedFile?.path])
 
   const resetCopyState = useCallback((nextState: "success" | "error") => {
     setCopyState(nextState)
@@ -333,6 +337,10 @@ export function DiffViewerPage() {
   const handleSelectBaseRef = useCallback((nextBaseRef: string) => {
     setSelectedBaseRef(nextBaseRef)
     setIsFilesLoading(true)
+  }, [])
+
+  const handleExpandCurrentFile = useCallback(() => {
+    setIsCurrentFileExpanded(true)
   }, [])
 
   useEffect(() => {
@@ -388,28 +396,28 @@ export function DiffViewerPage() {
     return () => controller.abort()
   }, [baseCommit, loadDiff, readCachedDiff, selectedBaseRef, selectedFile])
 
-  const visibleSavedAnnotations = displayedDiff
-    ? getSavedAnnotationsForDiff(savedAnnotations, displayedDiff)
+  const visibleSavedAnnotations = currentDisplayedDiff
+    ? getSavedAnnotationsForDiff(savedAnnotations, currentDisplayedDiff)
     : []
 
   const handleSaveAnnotation = useCallback(
     (target: InlineAnnotationTarget, comment: string) => {
-      if (!selectedFile || !displayedDiff) {
+      if (!selectedFile || !currentDisplayedDiff) {
         return
       }
 
       const nextAnnotation = createSavedAnnotation({
         ...target,
-        path: displayedDiff.path,
-        previousPath: displayedDiff.previousPath,
-        status: displayedDiff.status,
+        path: currentDisplayedDiff.path,
+        previousPath: currentDisplayedDiff.previousPath,
+        status: currentDisplayedDiff.status,
         comment,
         contentKey: selectedFile.contentKey,
-        baseRef: displayedDiff.baseRef,
-        baseCommit: displayedDiff.baseCommit,
-        beforeCacheKey: displayedDiff.before.cacheKey,
-        afterCacheKey: displayedDiff.after.cacheKey,
-        patchMetadata: findPatchMetadataForAnnotation(displayedDiff, target),
+        baseRef: currentDisplayedDiff.baseRef,
+        baseCommit: currentDisplayedDiff.baseCommit,
+        beforeCacheKey: currentDisplayedDiff.before.cacheKey,
+        afterCacheKey: currentDisplayedDiff.after.cacheKey,
+        patchMetadata: findPatchMetadataForAnnotation(currentDisplayedDiff, target),
       })
 
       if (!nextAnnotation) {
@@ -420,25 +428,25 @@ export function DiffViewerPage() {
         upsertSavedAnnotation(currentAnnotations, nextAnnotation)
       )
     },
-    [displayedDiff, selectedFile]
+    [currentDisplayedDiff, selectedFile]
   )
 
   const handleDeleteAnnotation = useCallback(
     (target: InlineAnnotationTarget) => {
-      if (!displayedDiff) {
+      if (!currentDisplayedDiff) {
         return
       }
 
       setSavedAnnotations((currentAnnotations) =>
         removeSavedAnnotation(currentAnnotations, {
           ...target,
-          path: displayedDiff.path,
-          previousPath: displayedDiff.previousPath,
-          status: displayedDiff.status,
+          path: currentDisplayedDiff.path,
+          previousPath: currentDisplayedDiff.previousPath,
+          status: currentDisplayedDiff.status,
         })
       )
     },
-    [displayedDiff]
+    [currentDisplayedDiff]
   )
 
   const handleCopyAnnotations = useCallback(async () => {
@@ -586,20 +594,23 @@ export function DiffViewerPage() {
               </div>
             ) : null}
 
-            <div className="min-h-0 min-w-0 flex-1 overflow-auto">
+            <div className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
               {selectedFile ? (
                 <DiffViewerToolbar
                   path={selectedFile.path}
                   diff={currentDisplayedDiff}
                   viewMode={viewMode}
+                  isExpanded={isCurrentFileExpanded}
+                  onExpandAll={handleExpandCurrentFile}
                   onViewModeChange={setViewMode}
                 />
               ) : null}
 
               <DiffPane
-                diff={selectedFile ? displayedDiff : null}
+                diff={selectedFile ? currentDisplayedDiff : null}
                 hasSelectedFile={!!selectedFile}
                 viewMode={viewMode}
+                expandAll={isCurrentFileExpanded}
                 savedAnnotations={visibleSavedAnnotations}
                 clearDraftToken={clearDraftToken}
                 onSaveAnnotation={handleSaveAnnotation}

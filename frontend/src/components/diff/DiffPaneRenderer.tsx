@@ -35,6 +35,7 @@ type RenderablePreparedDiff = PreparedFileDiffResult & {
 type DiffPaneRendererProps = {
   diff: RenderablePreparedDiff
   viewMode: "split" | "unified"
+  expandAll: boolean
   savedAnnotations: SavedDiffAnnotation[]
   onSaveAnnotation: (
     target: Pick<SavedDiffAnnotation, "side" | "lineNumber">,
@@ -58,6 +59,7 @@ function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
 function DiffPaneRendererContent({
   diff,
   viewMode,
+  expandAll,
   savedAnnotations,
   onSaveAnnotation,
   onDeleteAnnotation,
@@ -72,14 +74,14 @@ function DiffPaneRendererContent({
       disableFileHeader: true,
       overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
-      expandUnchanged: false,
+      expandUnchanged: expandAll,
       enableHoverUtility: true,
       expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
       maxLineDiffLength: diff.isLargeDiff
         ? LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH
         : FAST_INLINE_DIFF_MAX_LINE_LENGTH,
     }),
-    [diff.isLargeDiff, viewMode]
+    [diff.isLargeDiff, expandAll, viewMode]
   )
 
   const savedAnnotationMap = useMemo(
