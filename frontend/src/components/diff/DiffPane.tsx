@@ -1,6 +1,7 @@
 import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
-import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
+import { DiffPlaceholder } from "@/components/diff/DiffPlaceholder"
 import DiffPaneRenderer from "@/components/diff/DiffPaneRenderer"
+import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
 
 type DiffPaneProps = {
   diff: PreparedFileDiffResult | null
@@ -35,43 +36,23 @@ export function DiffPane({
       return <div className="h-full min-h-0" />
     }
 
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
-        Select a file to view its diff.
-      </div>
-    )
+    return <DiffPlaceholder>Select a file to view its diff.</DiffPlaceholder>
   }
 
   if (diff.binary) {
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
-        Binary files are not rendered in the inline diff viewer yet.
-      </div>
-    )
+    return <DiffPlaceholder>Binary files are not rendered in the inline diff viewer yet.</DiffPlaceholder>
   }
 
   if (diff.tooLarge) {
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
-        This file is too large for the fast inline diff path right now.
-      </div>
-    )
+    return <DiffPlaceholder>This file is too large for the fast inline diff path right now.</DiffPlaceholder>
   }
 
   if (diff.isPureRename) {
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
-        File renamed without textual changes.
-      </div>
-    )
+    return <DiffPlaceholder>File renamed without textual changes.</DiffPlaceholder>
   }
 
   if (!diff.parsedDiff) {
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/40 px-6 text-center type-meta text-muted-foreground">
-        No text diff is available for this file.
-      </div>
-    )
+    return <DiffPlaceholder>No text diff is available for this file.</DiffPlaceholder>
   }
 
   const renderableDiff = diff as RenderablePreparedDiff

@@ -16,15 +16,15 @@ import { cn } from "@/lib/utils"
 
 const toastClassNames = {
   toast: cn(
-    "group w-full max-w-[22rem] rounded-lg border bg-background p-3 text-foreground shadow-lg",
+    "group flex w-full max-w-[22rem] items-center gap-3 rounded-lg border bg-background p-3 text-foreground shadow-lg",
     "data-[swipe=move]:transition-none data-[swipe=cancel]:transition-[transform,opacity]",
     "data-[swipe=end]:animate-out data-[swipe=end]:fade-out-0 data-[swipe=end]:slide-out-to-right-full",
     "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-right-2",
     "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-right-2"
   ),
-  title: "type-meta leading-5 font-medium tracking-[-0.01em]",
+  title: "truncate type-meta leading-5 font-medium tracking-[-0.01em]",
   description: "type-meta text-muted-foreground",
-  content: "flex flex-row items-center gap-2",
+  content: "min-w-0 flex-1",
   icon: "text-current",
   success: "border-emerald-500/25 bg-background text-emerald-300",
   warning: "border-amber-500/25 bg-background text-amber-300",

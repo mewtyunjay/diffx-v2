@@ -96,39 +96,32 @@ export function DiffViewerToolbar({
           </div>
         ) : null}
 
+        {showExpandAll ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={isExpanded ? "secondary" : "ghost"}
+                className="surface-segmented p-0.5"
+                aria-label={isExpanded ? "File fully expanded" : "Expand full file"}
+                disabled={isExpanded}
+                onClick={onExpandAll}
+              >
+                <ChevronsUpDown className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {isExpanded ? "File fully expanded" : "Expand full file"}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+
         <div
           className="surface-segmented flex items-center gap-0.5 p-0.5"
           role="group"
-          aria-label="Diff viewer controls"
+          aria-label="View mode"
         >
-          {showExpandAll ? (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant={isExpanded ? "secondary" : "ghost"}
-                    aria-label={isExpanded ? "File fully expanded" : "Expand full file"}
-                    title={isExpanded ? "File fully expanded" : "Expand full file"}
-                    disabled={isExpanded}
-                    onClick={onExpandAll}
-                  >
-                    <ChevronsUpDown className="size-3.5" />
-                    <span className="sr-only">
-                      {isExpanded ? "File fully expanded" : "Expand full file"}
-                    </span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {isExpanded ? "File fully expanded" : "Expand full file"}
-                </TooltipContent>
-              </Tooltip>
-
-              <div className="h-4 w-px bg-border/70" aria-hidden="true" />
-            </>
-          ) : null}
-
           {VIEW_MODES.map(({ value, label, Icon }) => {
             const isActive = viewMode === value
 
@@ -141,7 +134,6 @@ export function DiffViewerToolbar({
                     variant={isActive ? "secondary" : "ghost"}
                     aria-label={label}
                     aria-pressed={isActive}
-                    title={label}
                     onClick={() => onViewModeChange(value)}
                   >
                     <Icon className="size-3.5" />
