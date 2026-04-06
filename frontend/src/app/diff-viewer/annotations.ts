@@ -269,6 +269,25 @@ function sortAnnotations(a: SavedDiffAnnotation, b: SavedDiffAnnotation) {
   return a.updatedAt.localeCompare(b.updatedAt)
 }
 
+function formatFileHeader(annotation: Pick<SavedDiffAnnotation, "path" | "previousPath">) {
+  if (annotation.previousPath && annotation.previousPath !== annotation.path) {
+    return `File: ${annotation.path} (from ${annotation.previousPath})`
+  }
+
+  return `File: ${annotation.path}`
+}
+
+function formatLineLabel(annotation: Pick<SavedDiffAnnotation, "side" | "lineNumber">) {
+  switch (annotation.side) {
+    case "additions":
+      return `added line ${annotation.lineNumber}`
+    case "deletions":
+      return `deleted line ${annotation.lineNumber}`
+    default:
+      return `line ${annotation.lineNumber}`
+  }
+}
+
 export function formatSavedAnnotationsForCopy(annotations: SavedDiffAnnotation[]) {
   const sorted = [...annotations].sort(sortAnnotations)
   const groups = new Map<string, SavedDiffAnnotation[]>()
@@ -286,42 +305,28 @@ export function formatSavedAnnotationsForCopy(annotations: SavedDiffAnnotation[]
   return Array.from(groups.values())
     .map((group) => {
       const [first] = group
-      const headerParts = [`File: ${first.path}`, `[${first.status}]`]
-      if (first.previousPath) {
-        headerParts.push(`from ${first.previousPath}`)
-      }
-
       const lines = group.map((annotation) => {
         const annotationLines = annotation.comment.split(/\r?\n/)
-        const formattedAnnotationLines = annotationLines.map((line, index) =>
-          index === 0 ? `  annotation: ${line}` : `    ${line}`
-        )
-        const patchMetadataLines = annotation.patchMetadata
-          ? [
-              `  patch metadata:`,
-              `    hunk index: ${annotation.patchMetadata.hunkIndex}`,
-              annotation.patchMetadata.hunkSpecs
-                ? `    hunk specs: ${annotation.patchMetadata.hunkSpecs}`
-                : null,
-              annotation.patchMetadata.hunkContext
-                ? `    hunk context: ${annotation.patchMetadata.hunkContext}`
-                : null,
-              `    additions: start=${annotation.patchMetadata.additionStart} count=${annotation.patchMetadata.additionCount} lines=${annotation.patchMetadata.additionLines}`,
-              `    deletions: start=${annotation.patchMetadata.deletionStart} count=${annotation.patchMetadata.deletionCount} lines=${annotation.patchMetadata.deletionLines}`,
-              `    split lines: start=${annotation.patchMetadata.splitLineStart} count=${annotation.patchMetadata.splitLineCount}`,
-              `    unified lines: start=${annotation.patchMetadata.unifiedLineStart} count=${annotation.patchMetadata.unifiedLineCount}`,
-            ].filter((line): line is string => line != null)
-          : [`  patch metadata: none`]
+        const formattedAnnotationLines = annotationLines.map((line) => `  ${line}`)
 
         return [
-          `- ${annotation.side} line ${annotation.lineNumber}`,
+          `- ${formatLineLabel(annotation)}`,
           ...formattedAnnotationLines,
-          `  file metadata: base=${annotation.baseRef}@${annotation.baseCommit} status=${annotation.status} before=${annotation.beforeCacheKey} after=${annotation.afterCacheKey}`,
-          ...patchMetadataLines,
         ].join("\n")
       })
 
-      return [headerParts.join(" "), ...lines].join("\n")
+      return [formatFileHeader(first), ...lines].join("\n")
     })
-    .join("\n\n")
+    .reduce<string[]>((accumulator, group, index) => {
+      if (index > 0) {
+        accumulator.push("")
+      }
+      accumulator.push(group)
+      return accumulator
+    }, [
+      "These are the user's annotations/requests for the current diff.",
+      "Address each item in the relevant file and line context.",
+      "",
+    ])
+    .join("\n")
 }

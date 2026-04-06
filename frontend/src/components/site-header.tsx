@@ -4,14 +4,9 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 type SiteHeaderProps = {
-  scopePath: string
   copyState: "idle" | "copying" | "success" | "error"
   canCopyAnnotations: boolean
   onCopyAnnotations: () => void
-}
-
-function formatScopeLabel(scopePath: string) {
-  return scopePath === "." ? "repo root" : scopePath
 }
 
 function getCopyButtonContents(copyState: SiteHeaderProps["copyState"]) {
@@ -40,7 +35,6 @@ function getCopyButtonContents(copyState: SiteHeaderProps["copyState"]) {
 }
 
 export function SiteHeader({
-  scopePath,
   copyState,
   canCopyAnnotations,
   onCopyAnnotations,
@@ -68,14 +62,6 @@ export function SiteHeader({
             {copyButton.icon}
             {copyButton.label}
           </Button>
-          <div className="flex min-w-0 flex-col items-end">
-            <span className="type-overline text-muted-foreground">
-              Scope
-            </span>
-            <span className="max-w-[28rem] truncate type-meta font-medium text-foreground">
-              {formatScopeLabel(scopePath)}
-            </span>
-          </div>
         </div>
       </div>
     </header>

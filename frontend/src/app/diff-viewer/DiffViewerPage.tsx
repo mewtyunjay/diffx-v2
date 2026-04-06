@@ -277,6 +277,53 @@ export function DiffViewerPage() {
     return () => controller.abort()
   }, [refreshChangedFiles])
 
+  useEffect(() => {
+    let isRefreshing = false
+    let activeController: AbortController | null = null
+
+    // Temporary stopgap until the sidebar is driven by a backend watcher/SSE flow.
+    const refreshOnInterval = async () => {
+      if (document.visibilityState !== "visible" || isRefreshing) {
+        return
+      }
+
+      isRefreshing = true
+      const controller = new AbortController()
+      activeController = controller
+
+      try {
+        await refreshChangedFiles(controller.signal)
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setFilesError(error instanceof Error ? error.message : "Unable to refresh changed files.")
+        }
+      } finally {
+        if (activeController === controller) {
+          activeController = null
+        }
+        isRefreshing = false
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshOnInterval()
+    }, 1000)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshOnInterval()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      activeController?.abort()
+    }
+  }, [refreshChangedFiles])
+
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
 
@@ -552,7 +599,6 @@ export function DiffViewerPage() {
       />
       <SidebarInset>
         <SiteHeader
-          scopePath={scopePath}
           copyState={copyState}
           canCopyAnnotations={savedAnnotations.length > 0}
           onCopyAnnotations={handleCopyAnnotations}

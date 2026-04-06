@@ -72,3 +72,7 @@ PRs should include:
 
 ## Configuration Notes
 When `--dev` is passed, the Go server proxies frontend traffic to Vite and still serves `/api` itself on port `8080`. Keep local config changes out of commits unless they are required for all contributors.
+
+## Temporary Sidebar Refresh Note
+- The changed-files sidebar currently uses a 1 second frontend polling loop in `frontend/src/app/diff-viewer/DiffViewerPage.tsx` as a stopgap for near-real-time refresh.
+- Treat that polling as temporary infrastructure. Replace it with a backend-driven watcher or push mechanism such as SSE/WebSocket when touching sidebar refresh behavior again.
