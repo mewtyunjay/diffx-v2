@@ -187,6 +187,7 @@ export function AppSidebar({
               indent={10}
               density="comfortable"
               getFileIndicatorClassName={(file) => statusClassNames[file.status]}
+              getFileLanguage={(file) => file.language}
               renderFileAction={(file) => {
                 const isPending = stagePendingPathSet.has(file.path)
                 const hasAction = file.hasStagedChanges || file.hasUnstagedChanges

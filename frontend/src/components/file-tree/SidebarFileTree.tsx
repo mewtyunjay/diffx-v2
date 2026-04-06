@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react"
+import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
 
 import {
   SidebarMenu,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
+import { FileTreeFileIcon } from "@/components/file-tree/file-icon"
 import { flattenVisibleTree, type SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
 
 type SidebarFileTreeProps<T> = {
@@ -19,6 +20,7 @@ type SidebarFileTreeProps<T> = {
   indent?: number
   density?: "compact" | "comfortable"
   getFileIndicatorClassName?: (data: T) => string | null
+  getFileLanguage?: (data: T) => string | undefined
   renderFileAction?: (data: T) => ReactNode
   onToggleFolder: (path: string) => void
   onSelectFile: (path: string, data: T | undefined) => void
@@ -32,6 +34,7 @@ export function SidebarFileTree<T>({
   indent = 12,
   density = "comfortable",
   getFileIndicatorClassName,
+  getFileLanguage,
   renderFileAction,
   onToggleFolder,
   onSelectFile,
@@ -49,6 +52,8 @@ export function SidebarFileTree<T>({
           isFile && row.data && getFileIndicatorClassName
             ? getFileIndicatorClassName(row.data)
             : null
+        const fileLanguage =
+          isFile && row.data && getFileLanguage ? getFileLanguage(row.data) : undefined
         const fileAction = isFile && row.data && renderFileAction ? renderFileAction(row.data) : null
 
         return (
@@ -68,25 +73,28 @@ export function SidebarFileTree<T>({
               title={row.path === "." ? "repo root" : row.path}
             >
               {isFile ? (
-                <span aria-hidden="true" className="size-3.5 shrink-0" />
+                indicatorClassName ? (
+                  <span
+                    aria-hidden="true"
+                    className="flex size-3.5 shrink-0 items-center justify-center"
+                  >
+                    <span className={cn("size-2 rounded-full", indicatorClassName)} />
+                  </span>
+                ) : (
+                  <span aria-hidden="true" className="size-3.5 shrink-0" />
+                )
               ) : row.isExpanded ? (
                 <ChevronDown className="size-3.5 text-sidebar-foreground/45" />
               ) : (
                 <ChevronRight className="size-3.5 text-sidebar-foreground/45" />
               )}
               {isFile ? (
-                <FileText className="size-4 shrink-0 text-sidebar-foreground/55" />
+                <FileTreeFileIcon path={row.path} language={fileLanguage} />
               ) : row.isExpanded ? (
                 <FolderOpen className="size-4 shrink-0 text-sidebar-primary" />
               ) : (
                 <Folder className="size-4 shrink-0 text-sidebar-primary" />
               )}
-              {indicatorClassName ? (
-                <span
-                  aria-hidden="true"
-                  className={cn("size-2 shrink-0 rounded-full", indicatorClassName)}
-                />
-              ) : null}
               <span className="min-w-0 truncate">{row.name}</span>
             </SidebarMenuButton>
             {fileAction ? <SidebarMenuAction asChild>{fileAction}</SidebarMenuAction> : null}
