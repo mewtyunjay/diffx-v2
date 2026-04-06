@@ -53,6 +53,7 @@ export function DiffViewerPage() {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
   const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
   const [baseCommit, setBaseCommit] = useState("")
+  const [currentRef, setCurrentRef] = useState("HEAD")
   const [workspaceName, setWorkspaceName] = useState("workspace")
   const [scopePath, setScopePath] = useState(".")
   const [hiddenStagedFileCount, setHiddenStagedFileCount] = useState(0)
@@ -177,6 +178,7 @@ export function DiffViewerPage() {
   const refreshBranches = useCallback(
     async (signal?: AbortSignal) => {
       const result = await fetchBranches(signal)
+      setCurrentRef(result.currentRef)
       setBranches(result.branches)
       setBranchesError(null)
     },
@@ -198,6 +200,7 @@ export function DiffViewerPage() {
 
       setComparisonMode(result.mode)
       setBaseCommit(result.baseCommit)
+      setCurrentRef(result.currentRef)
       setWorkspaceName(result.workspaceName)
       setScopePath(result.scopePath)
       setHiddenStagedFileCount(result.hiddenStagedFileCount)
@@ -283,6 +286,7 @@ export function DiffViewerPage() {
 
         setComparisonMode("head")
         setBaseCommit("")
+        setCurrentRef("HEAD")
         setWorkspaceName("workspace")
         setScopePath(".")
         setHiddenStagedFileCount(0)
@@ -333,8 +337,8 @@ export function DiffViewerPage() {
     setIsFilesLoading(true)
   }, [])
 
-  const handleExpandCurrentFile = useCallback(() => {
-    setIsCurrentFileExpanded(true)
+  const handleToggleCurrentFileExpanded = useCallback(() => {
+    setIsCurrentFileExpanded((current) => !current)
   }, [])
 
   useEffect(() => {
@@ -483,6 +487,50 @@ export function DiffViewerPage() {
     [refreshChangedFiles]
   )
 
+  const handleBulkStage = useCallback(
+    async (nextFiles: ChangedFileItem[], mode: "stage" | "unstage") => {
+      if (nextFiles.length === 0) {
+        return
+      }
+
+      const targetPaths = nextFiles.map((file) => file.path)
+      setStagePendingPaths((current) => [...new Set([...current, ...targetPaths])])
+
+      try {
+        await Promise.all(
+          nextFiles.map((file) => (mode === "unstage" ? unstageFile(file) : stageFile(file)))
+        )
+        await refreshChangedFiles()
+      } catch (error) {
+        toast.error(`Couldn’t ${mode} files.`, {
+          description: getToastErrorDescription(
+            error,
+            mode === "unstage"
+              ? "Unable to update the staged files."
+              : "Unable to stage the changed files."
+          ),
+        })
+      } finally {
+        setStagePendingPaths((current) => current.filter((path) => !targetPaths.includes(path)))
+      }
+    },
+    [refreshChangedFiles]
+  )
+
+  const handleStageAll = useCallback(() => {
+    void handleBulkStage(
+      files.filter((file) => file.hasUnstagedChanges),
+      "stage"
+    )
+  }, [files, handleBulkStage])
+
+  const handleUnstageAll = useCallback(() => {
+    void handleBulkStage(
+      files.filter((file) => file.hasStagedChanges),
+      "unstage"
+    )
+  }, [files, handleBulkStage])
+
   const handleCommit = useCallback(async () => {
     setIsCommitPending(true)
     const commitToastId = toast.warning("Creating commit...", {
@@ -554,6 +602,7 @@ export function DiffViewerPage() {
         workspaceName={workspaceName}
         scopePath={scopePath}
         branches={branches}
+        currentRef={currentRef}
         comparisonMode={comparisonMode}
         selectedBaseRef={selectedBaseRef}
         onSelectBaseRef={handleSelectBaseRef}
@@ -564,6 +613,8 @@ export function DiffViewerPage() {
         hiddenStagedFileCount={hiddenStagedFileCount}
         stagePendingPaths={stagePendingPaths}
         onToggleStage={handleToggleStage}
+        onStageAll={handleStageAll}
+        onUnstageAll={handleUnstageAll}
         commitMessage={commitMessage}
         isCommitPending={isCommitPending}
         onCommitMessageChange={setCommitMessage}
@@ -575,7 +626,6 @@ export function DiffViewerPage() {
       />
       <SidebarInset>
         <SiteHeader
-          scopePath={scopePath}
           copyState={copyState}
           canCopyAnnotations={savedAnnotations.length > 0}
           onCopyAnnotations={handleCopyAnnotations}
@@ -595,7 +645,7 @@ export function DiffViewerPage() {
                   diff={currentDisplayedDiff}
                   viewMode={viewMode}
                   isExpanded={isCurrentFileExpanded}
-                  onExpandAll={handleExpandCurrentFile}
+                  onToggleExpandAll={handleToggleCurrentFileExpanded}
                   onViewModeChange={setViewMode}
                 />
               ) : null}

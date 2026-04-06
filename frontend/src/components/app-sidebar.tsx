@@ -28,6 +28,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   workspaceName: string
   scopePath: string
   branches: BranchOption[]
+  currentRef: string
   comparisonMode: ComparisonMode
   selectedBaseRef: string
   onSelectBaseRef: (path: string) => void
@@ -38,6 +39,8 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   hiddenStagedFileCount: number
   stagePendingPaths: string[]
   onToggleStage: (file: ChangedFileItem) => void
+  onStageAll: () => void
+  onUnstageAll: () => void
   commitMessage: string
   isCommitPending: boolean
   onCommitMessageChange: (value: string) => void
@@ -59,6 +62,7 @@ export function AppSidebar({
   workspaceName,
   scopePath,
   branches,
+  currentRef,
   comparisonMode,
   selectedBaseRef,
   onSelectBaseRef,
@@ -69,6 +73,8 @@ export function AppSidebar({
   hiddenStagedFileCount,
   stagePendingPaths,
   onToggleStage,
+  onStageAll,
+  onUnstageAll,
   commitMessage,
   isCommitPending,
   onCommitMessageChange,
@@ -108,11 +114,20 @@ export function AppSidebar({
     () => files.filter((file) => file.hasStagedChanges).length,
     [files]
   )
+  const stageAllCount = React.useMemo(
+    () => files.filter((file) => file.hasUnstagedChanges).length,
+    [files]
+  )
+  const unstageAllCount = React.useMemo(
+    () => files.filter((file) => file.hasStagedChanges).length,
+    [files]
+  )
   const totalStagedCount = stagedVisibleCount + hiddenStagedFileCount
   const canUseGitActions = comparisonMode === "head"
   const canCommit = canUseGitActions && stagedVisibleCount > 0 && hiddenStagedFileCount === 0
   const showCommitArea = canCommit
   const showPushButton = canUseGitActions && (canCommit || showPushAction)
+  const hasPendingStageAction = stagePendingPathSet.size > 0
 
   React.useEffect(() => {
     const folderPathSet = new Set(folderPaths)
@@ -162,6 +177,7 @@ export function AppSidebar({
                 <div className="min-w-0 flex-1">
                   <BranchPicker
                     branches={branches}
+                    currentRef={currentRef}
                     selectedBaseRef={selectedBaseRef}
                     onSelectBaseRef={onSelectBaseRef}
                     disabled={isBranchesLoading || branchesError != null}
@@ -179,6 +195,28 @@ export function AppSidebar({
       <div className="flex min-h-0 flex-1 flex-col">
         <SidebarContent>
           <div className="p-2">
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="flex-1"
+                disabled={!canUseGitActions || stageAllCount === 0 || hasPendingStageAction}
+                onClick={onStageAll}
+              >
+                Stage all
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                className="flex-1"
+                disabled={!canUseGitActions || unstageAllCount === 0 || hasPendingStageAction}
+                onClick={onUnstageAll}
+              >
+                Unstage all
+              </Button>
+            </div>
             <SidebarFileTree
               root={tree}
               expandedPaths={expandedPaths}

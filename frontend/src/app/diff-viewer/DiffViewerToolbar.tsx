@@ -9,7 +9,7 @@ type DiffViewerToolbarProps = {
   diff: PreparedFileDiffResult | null
   viewMode: "split" | "unified"
   isExpanded: boolean
-  onExpandAll: () => void
+  onToggleExpandAll: () => void
   onViewModeChange: (mode: "split" | "unified") => void
 }
 
@@ -74,11 +74,12 @@ export function DiffViewerToolbar({
   diff,
   viewMode,
   isExpanded,
-  onExpandAll,
+  onToggleExpandAll,
   onViewModeChange,
 }: DiffViewerToolbarProps) {
   const counts = getChangeCounts(diff)
-  const showExpandAll = canExpandEntireFile(diff)
+  const showExpandToggle = canExpandEntireFile(diff) || isExpanded
+  const expandLabel = isExpanded ? "Collapse to diff view" : "Expand full file"
 
   return (
     <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border/60 bg-background/92 px-4 py-2 backdrop-blur">
@@ -96,7 +97,7 @@ export function DiffViewerToolbar({
           </div>
         ) : null}
 
-        {showExpandAll ? (
+        {showExpandToggle ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -104,15 +105,15 @@ export function DiffViewerToolbar({
                 size="icon-sm"
                 variant={isExpanded ? "secondary" : "ghost"}
                 className="surface-segmented p-0.5"
-                aria-label={isExpanded ? "File fully expanded" : "Expand full file"}
-                disabled={isExpanded}
-                onClick={onExpandAll}
+                aria-label={expandLabel}
+                aria-pressed={isExpanded}
+                onClick={onToggleExpandAll}
               >
                 <ChevronsUpDown className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {isExpanded ? "File fully expanded" : "Expand full file"}
+              {expandLabel}
             </TooltipContent>
           </Tooltip>
         ) : null}

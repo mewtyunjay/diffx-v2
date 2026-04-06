@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 
 type BranchPickerProps = {
   branches: BranchOption[]
+  currentRef: string
   selectedBaseRef: string
   onSelectBaseRef: (baseRef: string) => void
   disabled?: boolean
@@ -45,6 +46,7 @@ function filterBranches(branches: BranchOption[], query: string) {
 
 export function BranchPicker({
   branches,
+  currentRef,
   selectedBaseRef,
   onSelectBaseRef,
   disabled = false,
@@ -83,6 +85,9 @@ export function BranchPicker({
     [onSelectBaseRef]
   )
 
+  const headLabel = currentRef || "HEAD"
+  const selectedLabel = selectedBaseRef === "HEAD" ? headLabel : selectedBaseRef
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -94,7 +99,7 @@ export function BranchPicker({
           aria-label="Select diff base branch"
         >
           <span className="min-w-0 truncate type-meta font-medium text-sidebar-foreground">
-            {selectedBaseRef}
+            {selectedLabel}
           </span>
           <ChevronDown
             data-icon="inline-end"
@@ -130,7 +135,10 @@ export function BranchPicker({
                 onSelect={() => handleSelect("HEAD")}
                 className="justify-between rounded-md px-2.5 py-1.5 text-sidebar-foreground data-selected:bg-sidebar-accent/55"
               >
-                <BranchOptionRow label="HEAD" selected={selectedBaseRef === "HEAD"} />
+                <BranchOptionRow
+                  label={`Current branch (${headLabel})`}
+                  selected={selectedBaseRef === "HEAD"}
+                />
               </CommandItem>
             </CommandGroup>
             {branchGroups.length > 0 ? <CommandSeparator /> : null}
