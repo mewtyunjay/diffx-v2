@@ -30,6 +30,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { SiteHeader } from "@/components/site-header"
 import { toast } from "@/components/ui/sonner"
+import { useRepoEventsRefresh } from "@/app/diff-viewer/useRepoEventsRefresh"
 import {
   SidebarInset,
   SidebarProvider,
@@ -227,6 +228,28 @@ export function DiffViewerPage() {
     },
     [applyChangedFilesResult, selectedBaseRef]
   )
+
+  const handleLiveRefreshError = useCallback(
+    (error: Error, phase: "files" | "branches", signal: AbortSignal) => {
+      if (signal.aborted) {
+        return
+      }
+
+      if (phase === "files") {
+        setFilesError(error.message)
+        return
+      }
+
+      setBranchesError(error.message)
+    },
+    []
+  )
+
+  useRepoEventsRefresh({
+    refreshChangedFiles,
+    refreshBranches,
+    onError: handleLiveRefreshError,
+  })
 
   useEffect(() => {
     const controller = new AbortController()

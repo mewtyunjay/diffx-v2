@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 
@@ -21,6 +22,8 @@ type Config struct {
 
 type App struct {
 	service         *gitstatus.Service
+	repoEvents      *repoEventHub
+	repoWatcher     *repoWatcher
 	assets          fs.FS
 	indexHTML       []byte
 	fileSrv         http.Handler
@@ -29,17 +32,24 @@ type App struct {
 }
 
 func New(cfg Config) (*App, error) {
+	repoEvents := newRepoEventHub()
+
 	if shouldUseFrontendDev(cfg.Frontend) {
 		frontendHandler, frontendCloser, err := newFrontendDevServer(cfg.Frontend)
 		if err != nil {
 			return nil, err
 		}
 
-		return &App{
-			service:         gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
-			frontendHandler: frontendHandler,
-			frontendCloser:  frontendCloser,
-		}, nil
+		app, err := newApp(cfg, repoEvents)
+		if err != nil {
+			_ = frontendCloser()
+			return nil, err
+		}
+
+		app.frontendHandler = frontendHandler
+		app.frontendCloser = frontendCloser
+
+		return app, nil
 	}
 
 	assets, err := loadAssets(frontendassets.Dist)
@@ -65,12 +75,16 @@ func newWithAssetFS(cfg Config, assets fs.FS) (*App, error) {
 		return nil, err
 	}
 
-	return &App{
-		service:   gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
-		assets:    assets,
-		indexHTML: indexHTML,
-		fileSrv:   http.FileServerFS(assets),
-	}, nil
+	app, err := newApp(cfg, newRepoEventHub())
+	if err != nil {
+		return nil, err
+	}
+
+	app.assets = assets
+	app.indexHTML = indexHTML
+	app.fileSrv = http.FileServerFS(assets)
+
+	return app, nil
 }
 
 func (a *App) Handler() http.Handler {
@@ -78,6 +92,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/branches", a.handleBranches)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
+	mux.HandleFunc("/api/events", a.handleEvents)
 	mux.HandleFunc("/api/git/stage", a.handleStageFile)
 	mux.HandleFunc("/api/git/unstage", a.handleUnstageFile)
 	mux.HandleFunc("/api/git/commit", a.handleCommit)
@@ -87,11 +102,32 @@ func (a *App) Handler() http.Handler {
 }
 
 func (a *App) Close() error {
-	if a.frontendCloser == nil {
-		return nil
+	var errs []error
+	if a.repoWatcher != nil {
+		errs = append(errs, a.repoWatcher.Close())
+	}
+	if a.repoEvents != nil {
+		errs = append(errs, a.repoEvents.Close())
+	}
+	if a.frontendCloser != nil {
+		errs = append(errs, a.frontendCloser())
 	}
 
-	return a.frontendCloser()
+	return errors.Join(errs...)
+}
+
+func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
+	watcher, err := newRepoWatcher(cfg.Workspace, repoEvents)
+	if err != nil {
+		_ = repoEvents.Close()
+		return nil, err
+	}
+
+	return &App{
+		service:     gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
+		repoEvents:  repoEvents,
+		repoWatcher: watcher,
+	}, nil
 }
 
 func (a *App) frontend() http.Handler {

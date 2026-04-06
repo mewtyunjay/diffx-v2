@@ -49,6 +49,10 @@ export type PushResult = {
   remoteRef: string
 }
 
+export type RepoChangedEvent = {
+  kind: "worktree" | "git"
+}
+
 export type FileVersionResult = {
   name: string
   contents: string
@@ -175,4 +179,42 @@ export async function commitStaged(message: string, signal?: AbortSignal) {
 
 export async function pushCurrentBranch(signal?: AbortSignal) {
   return postJSON<PushResult>("/api/git/push", undefined, signal)
+}
+
+export function subscribeRepoEvents(
+  onChange: (event: RepoChangedEvent) => void,
+  onError?: (event: Event) => void,
+) {
+  if (typeof EventSource === "undefined") {
+    return () => {}
+  }
+
+  const source = new EventSource("/api/events")
+  const handleChange = (event: Event) => {
+    const message = event as MessageEvent<string>
+
+    try {
+      const payload = JSON.parse(message.data) as RepoChangedEvent
+      if (payload.kind !== "git" && payload.kind !== "worktree") {
+        return
+      }
+
+      onChange(payload)
+    } catch {
+      return
+    }
+  }
+
+  source.addEventListener("repo-changed", handleChange)
+  if (onError) {
+    source.addEventListener("error", onError)
+  }
+
+  return () => {
+    source.removeEventListener("repo-changed", handleChange)
+    if (onError) {
+      source.removeEventListener("error", onError)
+    }
+    source.close()
+  }
 }

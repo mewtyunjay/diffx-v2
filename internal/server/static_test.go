@@ -45,10 +45,11 @@ func TestStaticHandlerReturnsNotFoundForMissingAssets(t *testing.T) {
 func newTestApp(t *testing.T) *App {
 	t.Helper()
 
+	repoRoot := createServerActionRepo(t)
 	app, err := newWithAssets(
 		Config{
 			Workspace: gitstatus.WorkspaceTarget{
-				RepoRoot:  "/tmp/repo",
+				RepoRoot:  repoRoot,
 				ScopePath: ".",
 			},
 		},
@@ -57,6 +58,11 @@ func newTestApp(t *testing.T) *App {
 	if err != nil {
 		t.Fatalf("newWithAssets returned error: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := app.Close(); err != nil {
+			t.Fatalf("close app: %v", err)
+		}
+	})
 
 	return app
 }

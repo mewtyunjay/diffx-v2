@@ -102,6 +102,11 @@ func newRepoBackedTestApp(t *testing.T, repoRoot string, scopePath string) *App 
 	if err != nil {
 		t.Fatalf("newWithAssets returned error: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := app.Close(); err != nil {
+			t.Fatalf("close app: %v", err)
+		}
+	})
 
 	return app
 }
