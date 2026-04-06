@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
+	"sync"
 
 	frontendassets "diffx/frontend"
 	"diffx/internal/gitstatus"
@@ -29,6 +30,8 @@ type App struct {
 	fileSrv         http.Handler
 	frontendHandler http.Handler
 	frontendCloser  func() error
+	closeOnce       sync.Once
+	closeErr        error
 }
 
 func New(cfg Config) (*App, error) {
@@ -102,18 +105,22 @@ func (a *App) Handler() http.Handler {
 }
 
 func (a *App) Close() error {
-	var errs []error
-	if a.repoWatcher != nil {
-		errs = append(errs, a.repoWatcher.Close())
-	}
-	if a.repoEvents != nil {
-		errs = append(errs, a.repoEvents.Close())
-	}
-	if a.frontendCloser != nil {
-		errs = append(errs, a.frontendCloser())
-	}
+	a.closeOnce.Do(func() {
+		var errs []error
+		if a.repoWatcher != nil {
+			errs = append(errs, a.repoWatcher.Close())
+		}
+		if a.repoEvents != nil {
+			errs = append(errs, a.repoEvents.Close())
+		}
+		if a.frontendCloser != nil {
+			errs = append(errs, a.frontendCloser())
+		}
 
-	return errors.Join(errs...)
+		a.closeErr = errors.Join(errs...)
+	})
+
+	return a.closeErr
 }
 
 func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {

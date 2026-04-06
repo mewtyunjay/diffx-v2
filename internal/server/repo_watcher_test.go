@@ -1,6 +1,7 @@
 package server
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -20,10 +21,10 @@ func TestResolveRepoWatchRootsUsesScopeAndGitDir(t *testing.T) {
 		t.Fatalf("resolveRepoWatchRoots returned error: %v", err)
 	}
 
-	if got, want := roots.worktreeRoot, repoRoot+"/frontend"; got != want {
+	if got, want := roots.worktreeRoot, filepath.Join(repoRoot, "frontend"); got != want {
 		t.Fatalf("expected worktree root %q, got %q", want, got)
 	}
-	if got, want := roots.gitDir, repoRoot+"/.git"; got != want {
+	if got, want := roots.gitDir, filepath.Join(repoRoot, ".git"); got != want {
 		t.Fatalf("expected git dir %q, got %q", want, got)
 	}
 }
@@ -46,7 +47,7 @@ func TestRepoWatcherPublishesWorktreeEvents(t *testing.T) {
 	events, unsubscribe := hub.Subscribe()
 	defer unsubscribe()
 
-	writeServerTestFile(t, repoRoot+"/notes.txt", "base\nupdated\n")
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
 
 	event := waitForRepoChangedEvent(t, events)
 	if event.Kind != repoChangeWorktree {

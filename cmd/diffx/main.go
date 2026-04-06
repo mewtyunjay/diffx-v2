@@ -83,6 +83,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 		Handler:           app.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	httpServer.RegisterOnShutdown(func() {
+		_ = app.Close()
+	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
