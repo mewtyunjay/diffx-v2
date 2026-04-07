@@ -212,7 +212,15 @@ export function BranchPicker({
             {shortcutItems.length > 0 && branchGroups.length > 0 ? <CommandSeparator /> : null}
             {branchGroups.map((group, index) => (
               <React.Fragment key={group.heading}>
-                <CommandGroup heading={group.heading}>
+                <CommandGroup>
+                  <p
+                    className={cn(
+                      "type-section-label px-2 pb-1 pt-1",
+                      isHeader ? "text-muted-foreground/62" : "text-sidebar-foreground/46"
+                    )}
+                  >
+                    {group.heading}
+                  </p>
                   {group.items.map((branch) => (
                     <CommandItem
                       key={branch.name}
