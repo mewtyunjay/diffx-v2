@@ -61,6 +61,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 			Dev:        cfg.dev,
 			WorkingDir: mustGetwd(),
 			DevURL:     defaultFrontendURL,
+			LogOutput:  stdout,
 		},
 	})
 	if err != nil {

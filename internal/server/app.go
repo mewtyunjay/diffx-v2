@@ -2,7 +2,9 @@ package server
 
 import (
 	"errors"
+	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"sync"
 
@@ -14,6 +16,7 @@ type FrontendConfig struct {
 	Dev        bool
 	WorkingDir string
 	DevURL     string
+	LogOutput  io.Writer
 }
 
 type Config struct {
@@ -30,12 +33,14 @@ type App struct {
 	fileSrv         http.Handler
 	frontendHandler http.Handler
 	frontendCloser  func() error
+	apiLogger       *log.Logger
 	closeOnce       sync.Once
 	closeErr        error
 }
 
 func New(cfg Config) (*App, error) {
 	repoEvents := newRepoEventHub()
+	logger := newAPILogger(cfg.Frontend)
 
 	if shouldUseFrontendDev(cfg.Frontend) {
 		frontendHandler, frontendCloser, err := newFrontendDevServer(cfg.Frontend)
@@ -51,6 +56,7 @@ func New(cfg Config) (*App, error) {
 
 		app.frontendHandler = frontendHandler
 		app.frontendCloser = frontendCloser
+		app.apiLogger = logger
 
 		return app, nil
 	}
@@ -60,7 +66,13 @@ func New(cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	return newWithAssetFS(cfg, assets)
+	app, err := newWithAssetFS(cfg, assets)
+	if err != nil {
+		return nil, err
+	}
+	app.apiLogger = logger
+
+	return app, nil
 }
 
 func newWithAssets(cfg Config, embeddedAssets fs.FS) (*App, error) {
@@ -103,6 +115,10 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/git/commit", a.handleCommit)
 	mux.HandleFunc("/api/git/push", a.handlePush)
 	mux.Handle("/", a.frontend())
+	if a.apiLogger != nil {
+		return a.logAPIMiddleware(mux)
+	}
+
 	return mux
 }
 
