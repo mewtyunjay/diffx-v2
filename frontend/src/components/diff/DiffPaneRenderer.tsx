@@ -1,8 +1,17 @@
-import { FileDiff, type AnnotationSide, type DiffLineAnnotation } from "@pierre/diffs/react"
-import { Plus } from "lucide-react"
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react"
+import {
+  FileDiff,
+  type AnnotationSide,
+  type DiffLineAnnotation,
+  type DiffLineEventBaseProps,
+} from "@pierre/diffs/react"
+import { useCallback, useMemo, useState } from "react"
 
-import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
+import {
+  createAnnotationTargetKey,
+  createDraftDiffAnnotation,
+  type DraftDiffAnnotation,
+  type SavedDiffAnnotation,
+} from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
@@ -12,12 +21,11 @@ const DIFF_EXPANSION_LINE_COUNT = 20
 const FAST_INLINE_DIFF_MAX_LINE_LENGTH = 300
 const LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH = 120
 
-type HoveredDiffLine = {
+type DraftTarget = {
   lineNumber: number
   side: AnnotationSide
 }
-
-type DraftTarget = HoveredDiffLine
+type DiffLinePointerEvent = DiffLineEventBaseProps & { event: PointerEvent }
 
 type RenderedAnnotationMetadata =
   | {
@@ -34,6 +42,8 @@ type RenderablePreparedDiff = PreparedFileDiffResult & {
 
 type DiffPaneRendererProps = {
   diff: RenderablePreparedDiff
+  initialDraft: DraftDiffAnnotation | null
+  onDraftChange: (draft: DraftDiffAnnotation | null) => void
   viewMode: "split" | "unified"
   expandAll: boolean
   savedAnnotations: SavedDiffAnnotation[]
@@ -44,10 +54,6 @@ type DiffPaneRendererProps = {
   onDeleteAnnotation: (target: Pick<SavedDiffAnnotation, "side" | "lineNumber">) => void
 }
 
-function createAnnotationLookupKey(target: DraftTarget) {
-  return `${target.side}:${target.lineNumber}`
-}
-
 function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
   if (a == null || b == null) {
     return false
@@ -56,27 +62,56 @@ function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
   return a.lineNumber === b.lineNumber && a.side === b.side
 }
 
-function openAnnotationDraft(
-  target: DraftTarget,
-  savedAnnotationMap: Map<string, SavedDiffAnnotation>,
-  setDraftText: (value: string) => void,
-  setOpenDraft: Dispatch<SetStateAction<DraftTarget | null>>
-) {
-  const existingAnnotation = savedAnnotationMap.get(createAnnotationLookupKey(target))
-  setDraftText(existingAnnotation?.comment ?? "")
-  setOpenDraft(target)
-}
-
 function DiffPaneRendererContent({
   diff,
+  initialDraft,
+  onDraftChange,
   viewMode,
   expandAll,
   savedAnnotations,
   onSaveAnnotation,
   onDeleteAnnotation,
 }: DiffPaneRendererProps) {
-  const [openDraft, setOpenDraft] = useState<DraftTarget | null>(null)
-  const [draftText, setDraftText] = useState("")
+  const [draft, setDraft] = useState<DraftDiffAnnotation | null>(() => initialDraft)
+
+  const draftTarget = useMemo(
+    () =>
+      draft
+        ? {
+            lineNumber: draft.lineNumber,
+            side: draft.side,
+          }
+        : null,
+    [draft]
+  )
+  const draftText = draft?.comment ?? ""
+
+  const savedAnnotationMap = useMemo(
+    () =>
+      new Map(savedAnnotations.map((annotation) => [createAnnotationTargetKey(annotation), annotation])),
+    [savedAnnotations]
+  )
+
+  const setStoredDraft = useCallback(
+    (nextDraft: DraftDiffAnnotation | null) => {
+      setDraft(nextDraft)
+      onDraftChange(nextDraft)
+    },
+    [onDraftChange]
+  )
+
+  const handleOpenDraft = useCallback(
+    (target: DraftTarget) => {
+      if (isSameDraftTarget(draftTarget, target)) {
+        setStoredDraft(null)
+        return
+      }
+
+      const existingAnnotation = savedAnnotationMap.get(createAnnotationTargetKey(target))
+      setStoredDraft(createDraftDiffAnnotation(diff, target, existingAnnotation?.comment ?? ""))
+    },
+    [diff, draftTarget, savedAnnotationMap, setStoredDraft]
+  )
 
   const options = useMemo(
     () => ({
@@ -86,26 +121,27 @@ function DiffPaneRendererContent({
       overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
       expandUnchanged: expandAll,
-      enableHoverUtility: true,
       expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
       maxLineDiffLength: diff.isLargeDiff
         ? LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH
         : FAST_INLINE_DIFF_MAX_LINE_LENGTH,
+      onLineNumberClick: (line: DiffLinePointerEvent) => {
+        line.event.preventDefault()
+        line.event.stopPropagation()
+        handleOpenDraft({
+          lineNumber: line.lineNumber,
+          side: line.annotationSide,
+        })
+      },
     }),
-    [diff.isLargeDiff, expandAll, viewMode]
-  )
-
-  const savedAnnotationMap = useMemo(
-    () =>
-      new Map(savedAnnotations.map((annotation) => [createAnnotationLookupKey(annotation), annotation])),
-    [savedAnnotations]
+    [diff.isLargeDiff, expandAll, handleOpenDraft, viewMode]
   )
 
   const lineAnnotations = useMemo<DiffLineAnnotation<RenderedAnnotationMetadata>[]>(
     () => {
-      const draftKey = openDraft ? createAnnotationLookupKey(openDraft) : null
+      const draftKey = draftTarget ? createAnnotationTargetKey(draftTarget) : null
       const annotations: DiffLineAnnotation<RenderedAnnotationMetadata>[] = savedAnnotations
-        .filter((annotation) => createAnnotationLookupKey(annotation) !== draftKey)
+        .filter((annotation) => createAnnotationTargetKey(annotation) !== draftKey)
         .map((annotation) => ({
           side: annotation.side,
           lineNumber: annotation.lineNumber,
@@ -115,10 +151,10 @@ function DiffPaneRendererContent({
           },
         }))
 
-      if (openDraft) {
+      if (draftTarget) {
         annotations.push({
-          side: openDraft.side,
-          lineNumber: openDraft.lineNumber,
+          side: draftTarget.side,
+          lineNumber: draftTarget.lineNumber,
           metadata: {
             kind: "draft",
           },
@@ -127,54 +163,43 @@ function DiffPaneRendererContent({
 
       return annotations
     },
-    [openDraft, savedAnnotations]
+    [draftTarget, savedAnnotations]
   )
 
   const canSaveDraft = useMemo(() => {
     const trimmed = draftText.trim()
-    return trimmed.length > 0 || (openDraft != null && savedAnnotationMap.has(createAnnotationLookupKey(openDraft)))
-  }, [draftText, openDraft, savedAnnotationMap])
+    return trimmed.length > 0 || (draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget)))
+  }, [draftTarget, draftText, savedAnnotationMap])
 
   const handleCloseDraft = () => {
-    setOpenDraft(null)
-    setDraftText("")
+    setStoredDraft(null)
   }
 
   const handleSaveDraft = () => {
-    if (!openDraft) {
+    if (!draftTarget) {
       return
     }
 
     const trimmed = draftText.trim()
     if (trimmed.length === 0) {
-      if (savedAnnotationMap.has(createAnnotationLookupKey(openDraft))) {
-        onDeleteAnnotation(openDraft)
+      if (savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))) {
+        onDeleteAnnotation(draftTarget)
       }
       handleCloseDraft()
       return
     }
 
-    onSaveAnnotation(openDraft, trimmed)
+    onSaveAnnotation(draftTarget, trimmed)
     handleCloseDraft()
   }
 
   const handleDeleteDraft = () => {
-    if (!openDraft) {
+    if (!draftTarget) {
       return
     }
 
-    onDeleteAnnotation(openDraft)
+    onDeleteAnnotation(draftTarget)
     handleCloseDraft()
-  }
-
-  const handleOpenDraft = (target: DraftTarget) => {
-    if (isSameDraftTarget(openDraft, target)) {
-      setDraftText("")
-      setOpenDraft(null)
-      return
-    }
-
-    openAnnotationDraft(target, savedAnnotationMap, setDraftText, setOpenDraft)
   }
 
   return (
@@ -184,53 +209,32 @@ function DiffPaneRendererContent({
       lineAnnotations={lineAnnotations}
       renderAnnotation={(annotation) => {
         if (annotation.metadata?.kind === "saved") {
-          return (
-            <DiffSavedComment
-              comment={annotation.metadata.comment}
-              onOpen={() =>
-                handleOpenDraft(annotation)
-              }
-            />
-          )
+          return <DiffSavedComment comment={annotation.metadata.comment} onOpen={() => handleOpenDraft(annotation)} />
         }
 
-        const draftKey = openDraft == null ? "closed" : `${openDraft.side}:${openDraft.lineNumber}`
+        const focusKey = draftTarget == null ? "closed" : `${draftTarget.side}:${draftTarget.lineNumber}`
         const isEditingExisting =
-          openDraft != null && savedAnnotationMap.has(createAnnotationLookupKey(openDraft))
+          draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))
 
         return (
           <DiffCommentDraft
-            focusKey={draftKey}
+            focusKey={focusKey}
             value={draftText}
             canSave={canSaveDraft}
             isEditingExisting={isEditingExisting}
-            onChange={setDraftText}
+            onChange={(value) => {
+              if (!draftTarget) {
+                return
+              }
+
+              setStoredDraft(createDraftDiffAnnotation(diff, draftTarget, value))
+            }}
             onDelete={isEditingExisting ? handleDeleteDraft : undefined}
             onSave={handleSaveDraft}
             onEscape={handleCloseDraft}
           />
         )
       }}
-      renderHoverUtility={(getHoveredLine) => (
-        <button
-          type="button"
-          aria-label="Add or edit annotation"
-          className="diff-pane-hover-utility pointer-events-auto z-10 inline-flex items-center justify-center -translate-x-1.5 rounded-md text-foreground"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-
-            const hoveredLine = getHoveredLine() as HoveredDiffLine | undefined
-            if (!hoveredLine) {
-              return
-            }
-
-            handleOpenDraft(hoveredLine)
-          }}
-        >
-          <Plus className="size-3.5" />
-        </button>
-      )}
       className="diff-pane-theme block h-full min-h-full min-w-0"
     />
   )

@@ -10,11 +10,12 @@ import (
 )
 
 var (
-	ErrDetachedHead       = errors.New("current HEAD is detached")
-	ErrEmptyCommitMessage = errors.New("commit message is required")
-	ErrNoStagedChanges    = errors.New("no staged changes to commit")
-	ErrPathIgnored        = errors.New("path is ignored by git")
-	ErrPathOutsideScope   = errors.New("path is outside the current workspace scope")
+	ErrDetachedHead        = errors.New("current HEAD is detached")
+	ErrBulkActionNotAtRoot = errors.New("bulk stage actions require opening the repo root")
+	ErrEmptyCommitMessage  = errors.New("commit message is required")
+	ErrNoStagedChanges     = errors.New("no staged changes to commit")
+	ErrPathIgnored         = errors.New("path is ignored by git")
+	ErrPathOutsideScope    = errors.New("path is outside the current workspace scope")
 )
 
 type ScopedCommitBlockedError struct {
@@ -85,6 +86,24 @@ func (s *Service) UnstageFile(ctx context.Context, path string, previousPath str
 	}
 
 	_, err := s.runGitCombined(ctx, "", args...)
+	return err
+}
+
+func (s *Service) StageAll(ctx context.Context) error {
+	if err := s.ensureRepoRootScope(); err != nil {
+		return err
+	}
+
+	_, err := s.runGitCombined(ctx, "", "add", "-A", "--", ".")
+	return err
+}
+
+func (s *Service) UnstageAll(ctx context.Context) error {
+	if err := s.ensureRepoRootScope(); err != nil {
+		return err
+	}
+
+	_, err := s.runGitCombined(ctx, "", "restore", "--staged", "--", ".")
 	return err
 }
 
@@ -182,6 +201,14 @@ func (s *Service) ensureScopedDiffPath(path string, previousPath string) error {
 	}
 	if !s.AllowsDiff(path, previousPath) {
 		return ErrPathOutsideScope
+	}
+
+	return nil
+}
+
+func (s *Service) ensureRepoRootScope() error {
+	if s.scopePath != "." {
+		return ErrBulkActionNotAtRoot
 	}
 
 	return nil

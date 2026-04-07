@@ -17,7 +17,9 @@ import {
   fetchChangedFiles,
   fetchFileDiff,
   pushCurrentBranch,
+  stageAll,
   stageFile,
+  unstageAll,
   unstageFile,
   type BranchOption,
   type ChangedFileItem,
@@ -353,13 +355,13 @@ export function DiffViewerPage() {
     const cachedDiff = readCachedDiff(cacheKey)
     const controller = new AbortController()
     diffAbortRef.current = controller
+    setDiffError(null)
     if (!cachedDiff) {
       queueMicrotask(() => {
         if (controller.signal.aborted) {
           return
         }
 
-        setDiffError(null)
         setIsDiffLoading(true)
       })
     }
@@ -497,9 +499,12 @@ export function DiffViewerPage() {
       setStagePendingPaths((current) => [...new Set([...current, ...targetPaths])])
 
       try {
-        await Promise.all(
-          nextFiles.map((file) => (mode === "unstage" ? unstageFile(file) : stageFile(file)))
-        )
+        if (mode === "unstage") {
+          await unstageAll()
+        } else {
+          await stageAll()
+        }
+
         await refreshChangedFiles()
       } catch (error) {
         toast.error(`Couldn’t ${mode} files.`, {

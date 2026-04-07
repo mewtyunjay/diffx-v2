@@ -107,6 +107,19 @@ func (a *App) handleStageFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *App) handleStageAll(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	if err := a.service.StageAll(r.Context()); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *App) handleUnstageFile(w http.ResponseWriter, r *http.Request) {
 	if !allowMethod(w, r, http.MethodPost) {
 		return
@@ -119,6 +132,19 @@ func (a *App) handleUnstageFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.service.UnstageFile(r.Context(), request.Path, request.PreviousPath); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) handleUnstageAll(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	if err := a.service.UnstageAll(r.Context()); err != nil {
 		writeAPIError(w, err)
 		return
 	}
@@ -199,7 +225,7 @@ func writeAPIError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, gitstatus.ErrInvalidBaseRef):
 		http.Error(w, err.Error(), http.StatusBadRequest)
-	case errors.Is(err, gitstatus.ErrEmptyCommitMessage), errors.Is(err, gitstatus.ErrPathOutsideScope):
+	case errors.Is(err, gitstatus.ErrEmptyCommitMessage), errors.Is(err, gitstatus.ErrPathOutsideScope), errors.Is(err, gitstatus.ErrBulkActionNotAtRoot):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, gitstatus.ErrNoStagedChanges), errors.Is(err, gitstatus.ErrDetachedHead):
 		http.Error(w, err.Error(), http.StatusConflict)

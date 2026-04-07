@@ -166,11 +166,19 @@ export async function stageFile(
   return postJSON<void>("/api/git/stage", toStageFileRequest(file), signal)
 }
 
+export async function stageAll(signal?: AbortSignal) {
+  return postJSON<void>("/api/git/stage-all", undefined, signal)
+}
+
 export async function unstageFile(
   file: Pick<ChangedFileItem, "path" | "previousPath">,
   signal?: AbortSignal
 ) {
   return postJSON<void>("/api/git/unstage", toStageFileRequest(file), signal)
+}
+
+export async function unstageAll(signal?: AbortSignal) {
+  return postJSON<void>("/api/git/unstage-all", undefined, signal)
 }
 
 export async function commitStaged(message: string, signal?: AbortSignal) {

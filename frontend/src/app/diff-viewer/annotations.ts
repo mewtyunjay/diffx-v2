@@ -11,12 +11,21 @@ type SavedAnnotationsPayload = {
   annotations: SavedDiffAnnotation[]
 }
 
+type DiffAnnotationIdentity = Pick<
+  PreparedFileDiffResult,
+  "path" | "previousPath" | "status" | "baseCommit" | "before" | "after"
+>
+
 export type SavedAnnotationTarget = {
   path: string
   previousPath?: string
   status: ChangedFileStatus
   side: AnnotationSide
   lineNumber: number
+}
+
+export type DraftDiffAnnotation = SavedAnnotationTarget & {
+  comment: string
 }
 
 export type SavedDiffAnnotation = SavedAnnotationTarget & {
@@ -64,14 +73,43 @@ function normalizeComment(comment: string) {
   return comment.trim()
 }
 
+export function createAnnotationTargetKey(annotation: Pick<SavedAnnotationTarget, "side" | "lineNumber">) {
+  return [annotation.side, String(annotation.lineNumber)].join("::")
+}
+
+export function createDiffAnnotationIdentityKey(diff: DiffAnnotationIdentity) {
+  return [
+    diff.path,
+    diff.previousPath ?? "",
+    diff.status,
+    diff.baseCommit,
+    diff.before.cacheKey,
+    diff.after.cacheKey,
+  ].join("::")
+}
+
 function createAnnotationKey(annotation: SavedAnnotationTarget) {
   return [
     annotation.path,
     annotation.previousPath ?? "",
     annotation.status,
-    annotation.side,
-    String(annotation.lineNumber),
+    createAnnotationTargetKey(annotation),
   ].join("::")
+}
+
+export function createDraftDiffAnnotation(
+  diff: Pick<PreparedFileDiffResult, "path" | "previousPath" | "status">,
+  target: Pick<SavedAnnotationTarget, "side" | "lineNumber">,
+  comment = ""
+): DraftDiffAnnotation {
+  return {
+    path: diff.path,
+    previousPath: diff.previousPath,
+    status: diff.status,
+    side: target.side,
+    lineNumber: target.lineNumber,
+    comment,
+  }
 }
 
 function matchesFile(

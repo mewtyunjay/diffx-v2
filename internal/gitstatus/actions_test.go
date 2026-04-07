@@ -45,6 +45,70 @@ func TestStageAndUnstageFile(t *testing.T) {
 	}
 }
 
+func TestStageAndUnstageAllAtRepoRoot(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
+	writeFile(t, filepath.Join(repoRoot, "fresh.txt"), "fresh\n")
+	if err := os.Remove(filepath.Join(repoRoot, "root.txt")); err != nil {
+		t.Fatalf("remove root.txt: %v", err)
+	}
+
+	if err := service.StageAll(context.Background()); err != nil {
+		t.Fatalf("StageAll returned error: %v", err)
+	}
+
+	result, err := service.ListChangedFiles(context.Background(), "HEAD")
+	if err != nil {
+		t.Fatalf("ListChangedFiles returned error: %v", err)
+	}
+
+	if len(result.Files) != 3 {
+		t.Fatalf("expected 3 changed files after StageAll, got %#v", result.Files)
+	}
+	for _, file := range result.Files {
+		if !file.HasStagedChanges || file.HasUnstagedChanges {
+			t.Fatalf("expected fully staged files after StageAll, got %#v", result.Files)
+		}
+	}
+
+	if err := service.UnstageAll(context.Background()); err != nil {
+		t.Fatalf("UnstageAll returned error: %v", err)
+	}
+
+	result, err = service.ListChangedFiles(context.Background(), "HEAD")
+	if err != nil {
+		t.Fatalf("ListChangedFiles returned error: %v", err)
+	}
+
+	if len(result.Files) != 3 {
+		t.Fatalf("expected 3 changed files after UnstageAll, got %#v", result.Files)
+	}
+	for _, file := range result.Files {
+		if file.HasStagedChanges || !file.HasUnstagedChanges {
+			t.Fatalf("expected fully unstaged files after UnstageAll, got %#v", result.Files)
+		}
+	}
+}
+
+func TestBulkStageActionsRequireRepoRootScope(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, "frontend")
+
+	if err := service.StageAll(context.Background()); !errors.Is(err, ErrBulkActionNotAtRoot) {
+		t.Fatalf("expected ErrBulkActionNotAtRoot from StageAll, got %v", err)
+	}
+
+	if err := service.UnstageAll(context.Background()); !errors.Is(err, ErrBulkActionNotAtRoot) {
+		t.Fatalf("expected ErrBulkActionNotAtRoot from UnstageAll, got %v", err)
+	}
+}
+
 func TestStageFileAllowsTrackedMoveIntoIgnoredPath(t *testing.T) {
 	t.Parallel()
 

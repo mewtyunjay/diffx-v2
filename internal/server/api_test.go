@@ -64,6 +64,58 @@ func TestHandleStageFileRejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestHandleStageAllStagesRepoRootChanges(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
+	writeServerTestFile(t, filepath.Join(repoRoot, "fresh.txt"), "fresh\n")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/git/stage-all", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	result, err := app.service.ListChangedFiles(request.Context(), "HEAD")
+	if err != nil {
+		t.Fatalf("ListChangedFiles returned error: %v", err)
+	}
+	if len(result.Files) != 2 {
+		t.Fatalf("expected 2 changed files, got %#v", result.Files)
+	}
+	for _, file := range result.Files {
+		if !file.HasStagedChanges || file.HasUnstagedChanges {
+			t.Fatalf("expected fully staged files, got %#v", result.Files)
+		}
+	}
+}
+
+func TestHandleUnstageAllRejectsSubfolderScope(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "frontend", "app.tsx"), "export const app = 2\n")
+	runServerGit(t, repoRoot, "add", "frontend/app.tsx")
+	app := newRepoBackedTestApp(t, repoRoot, "frontend")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/git/unstage-all", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "opening the repo root") {
+		t.Fatalf("expected repo root message, got %q", recorder.Body.String())
+	}
+}
+
 func TestHandleCommitReturnsConflictForScopedHiddenStagedFiles(t *testing.T) {
 	t.Parallel()
 

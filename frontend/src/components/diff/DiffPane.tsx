@@ -1,4 +1,10 @@
-import type { SavedDiffAnnotation } from "@/app/diff-viewer/annotations"
+import { useState } from "react"
+
+import {
+  createDiffAnnotationIdentityKey,
+  type DraftDiffAnnotation,
+  type SavedDiffAnnotation,
+} from "@/app/diff-viewer/annotations"
 import { DiffPlaceholder } from "@/components/diff/DiffPlaceholder"
 import DiffPaneRenderer from "@/components/diff/DiffPaneRenderer"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
@@ -31,6 +37,8 @@ export function DiffPane({
   onSaveAnnotation,
   onDeleteAnnotation,
 }: DiffPaneProps) {
+  const [draftsByDiff, setDraftsByDiff] = useState<Record<string, DraftDiffAnnotation | undefined>>({})
+
   if (!diff) {
     if (hasSelectedFile) {
       return <div className="h-full min-h-0" />
@@ -56,11 +64,31 @@ export function DiffPane({
   }
 
   const renderableDiff = diff as RenderablePreparedDiff
+  const diffIdentityKey = createDiffAnnotationIdentityKey(renderableDiff)
 
   return (
     <DiffPaneRenderer
-      key={`${viewMode}:${clearDraftToken}:${renderableDiff.path}:${renderableDiff.before.cacheKey}:${renderableDiff.after.cacheKey}`}
+      key={`${clearDraftToken}:${diffIdentityKey}`}
       diff={renderableDiff}
+      initialDraft={draftsByDiff[diffIdentityKey] ?? null}
+      onDraftChange={(nextDraft) => {
+        setDraftsByDiff((current) => {
+          if (nextDraft == null) {
+            if (!(diffIdentityKey in current)) {
+              return current
+            }
+
+            const nextDrafts = { ...current }
+            delete nextDrafts[diffIdentityKey]
+            return nextDrafts
+          }
+
+          return {
+            ...current,
+            [diffIdentityKey]: nextDraft,
+          }
+        })
+      }}
       viewMode={viewMode}
       expandAll={expandAll}
       savedAnnotations={savedAnnotations}

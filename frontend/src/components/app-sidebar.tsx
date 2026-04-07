@@ -123,6 +123,7 @@ export function AppSidebar({
     [files]
   )
   const totalStagedCount = stagedVisibleCount + hiddenStagedFileCount
+  const showBulkStageActions = scopePath === "."
   const canUseGitActions = comparisonMode === "head"
   const canCommit = canUseGitActions && stagedVisibleCount > 0 && hiddenStagedFileCount === 0
   const showCommitArea = canCommit
@@ -195,28 +196,30 @@ export function AppSidebar({
       <div className="flex min-h-0 flex-1 flex-col">
         <SidebarContent>
           <div className="p-2">
-            <div className="mb-2 flex items-center gap-2 px-1">
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                className="flex-1"
-                disabled={!canUseGitActions || stageAllCount === 0 || hasPendingStageAction}
-                onClick={onStageAll}
-              >
-                Stage all
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="ghost"
-                className="flex-1"
-                disabled={!canUseGitActions || unstageAllCount === 0 || hasPendingStageAction}
-                onClick={onUnstageAll}
-              >
-                Unstage all
-              </Button>
-            </div>
+            {showBulkStageActions ? (
+              <div className="mb-2 flex items-center gap-2 px-1">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="flex-1"
+                  disabled={!canUseGitActions || stageAllCount === 0 || hasPendingStageAction}
+                  onClick={onStageAll}
+                >
+                  Stage all
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="flex-1"
+                  disabled={!canUseGitActions || unstageAllCount === 0 || hasPendingStageAction}
+                  onClick={onUnstageAll}
+                >
+                  Unstage all
+                </Button>
+              </div>
+            ) : null}
             <SidebarFileTree
               root={tree}
               expandedPaths={expandedPaths}
