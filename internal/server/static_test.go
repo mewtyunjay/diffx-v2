@@ -15,7 +15,7 @@ func TestStaticHandlerServesIndexForRoutes(t *testing.T) {
 	t.Parallel()
 
 	app := newTestApp(t)
-	request := httptest.NewRequest(http.MethodGet, "/experimental/sidebar", nil)
+	request := httptest.NewRequest(http.MethodGet, "/app", nil)
 	recorder := httptest.NewRecorder()
 
 	app.staticHandler().ServeHTTP(recorder, request)

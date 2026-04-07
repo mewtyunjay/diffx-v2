@@ -64,7 +64,7 @@ func TestAppHandlerProxiesFrontendRoutesInDevMode(t *testing.T) {
 		_, _ = w.Write([]byte("frontend"))
 	}))
 
-	request := httptest.NewRequest(http.MethodGet, "/experimental/sidebar", nil)
+	request := httptest.NewRequest(http.MethodGet, "/app", nil)
 	recorder := httptest.NewRecorder()
 
 	app.Handler().ServeHTTP(recorder, request)
@@ -75,8 +75,8 @@ func TestAppHandlerProxiesFrontendRoutesInDevMode(t *testing.T) {
 	if body := recorder.Body.String(); body != "frontend" {
 		t.Fatalf("expected frontend response body, got %q", body)
 	}
-	if got := recorder.Header().Get("X-Frontend-Path"); got != "/experimental/sidebar" {
-		t.Fatalf("expected proxied path /experimental/sidebar, got %q", got)
+	if got := recorder.Header().Get("X-Frontend-Path"); got != "/app" {
+		t.Fatalf("expected proxied path /app, got %q", got)
 	}
 }
 
