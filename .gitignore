@@ -1,8 +1,5 @@
 .agents
-*.tgz
-diffx
-.codex
-skills-lock.json
 .codex
 .notes.md
-skills-lock.json
+.impeccable.md
+/docs
