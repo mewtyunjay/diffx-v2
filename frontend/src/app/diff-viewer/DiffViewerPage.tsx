@@ -56,7 +56,6 @@ export function DiffViewerPage() {
   const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
   const [baseCommit, setBaseCommit] = useState("")
   const [currentRef, setCurrentRef] = useState("HEAD")
-  const [workspaceName, setWorkspaceName] = useState("workspace")
   const [scopePath, setScopePath] = useState(".")
   const [hiddenStagedFileCount, setHiddenStagedFileCount] = useState(0)
   const [branches, setBranches] = useState<BranchOption[]>([])
@@ -203,7 +202,6 @@ export function DiffViewerPage() {
       setComparisonMode(result.mode)
       setBaseCommit(result.baseCommit)
       setCurrentRef(result.currentRef)
-      setWorkspaceName(result.workspaceName)
       setScopePath(result.scopePath)
       setHiddenStagedFileCount(result.hiddenStagedFileCount)
       setFiles(result.files)
@@ -289,7 +287,6 @@ export function DiffViewerPage() {
         setComparisonMode("head")
         setBaseCommit("")
         setCurrentRef("HEAD")
-        setWorkspaceName("workspace")
         setScopePath(".")
         setHiddenStagedFileCount(0)
         setFiles([])
@@ -588,6 +585,8 @@ export function DiffViewerPage() {
   const headerError =
     filesError && !isFilesLoading
       ? filesError
+      : branchesError && !isBranchesLoading
+        ? branchesError
       : selectedFile && diffError && !isDiffLoading
         ? diffError
         : null
@@ -604,15 +603,8 @@ export function DiffViewerPage() {
     >
       <AppSidebar
         files={files}
-        workspaceName={workspaceName}
         scopePath={scopePath}
-        branches={branches}
-        currentRef={currentRef}
         comparisonMode={comparisonMode}
-        selectedBaseRef={selectedBaseRef}
-        onSelectBaseRef={handleSelectBaseRef}
-        isBranchesLoading={isBranchesLoading}
-        branchesError={branchesError}
         selectedFilePath={selectedFilePath}
         onSelectFile={setSelectedFilePath}
         hiddenStagedFileCount={hiddenStagedFileCount}
@@ -631,8 +623,14 @@ export function DiffViewerPage() {
       />
       <SidebarInset>
         <SiteHeader
+          branches={branches}
+          currentRef={currentRef}
+          selectedBaseRef={selectedBaseRef}
+          isBranchesLoading={isBranchesLoading}
+          branchesError={branchesError}
           copyState={copyState}
           canCopyAnnotations={savedAnnotations.length > 0}
+          onSelectBaseRef={handleSelectBaseRef}
           onCopyAnnotations={handleCopyAnnotations}
         />
         <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

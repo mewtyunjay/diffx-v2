@@ -1,9 +1,7 @@
 import * as React from "react"
 import { FolderTree, LoaderCircle, Minus, Plus } from "lucide-react"
 
-import { BranchPicker } from "@/app/diff-viewer/BranchPicker"
 import type {
-  BranchOption,
   ChangedFileItem,
   ChangedFileStatus,
   ComparisonMode,
@@ -25,15 +23,8 @@ import { cn } from "@/lib/utils"
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
-  workspaceName: string
   scopePath: string
-  branches: BranchOption[]
-  currentRef: string
   comparisonMode: ComparisonMode
-  selectedBaseRef: string
-  onSelectBaseRef: (path: string) => void
-  isBranchesLoading: boolean
-  branchesError: string | null
   selectedFilePath: string | null
   onSelectFile: (path: string) => void
   hiddenStagedFileCount: number
@@ -59,15 +50,8 @@ const statusClassNames: Record<ChangedFileStatus, string> = {
 
 export function AppSidebar({
   files,
-  workspaceName,
   scopePath,
-  branches,
-  currentRef,
   comparisonMode,
-  selectedBaseRef,
-  onSelectBaseRef,
-  isBranchesLoading,
-  branchesError,
   selectedFilePath,
   onSelectFile,
   hiddenStagedFileCount,
@@ -96,10 +80,10 @@ export function AppSidebar({
           data: file,
         })),
         {
-          rootName: workspaceName,
+          rootName: "diffx",
         }
       ),
-    [files, workspaceName]
+    [files]
   )
   const folderPaths = React.useMemo(() => collectFolderPaths(tree), [tree])
   const selectedAncestorPaths = React.useMemo(
@@ -129,6 +113,13 @@ export function AppSidebar({
   const showCommitArea = canCommit
   const showPushButton = canUseGitActions && (canCommit || showPushAction)
   const hasPendingStageAction = stagePendingPathSet.size > 0
+  const visibleFileCountLabel = `${files.length} changed ${files.length === 1 ? "file" : "files"}`
+  const showUnstageAll = stageAllCount === 0 && unstageAllCount > 0
+  const bulkActionLabel = showUnstageAll ? "Unstage All" : "Stage All"
+  const bulkActionDisabled =
+    !canUseGitActions ||
+    hasPendingStageAction ||
+    (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
 
   React.useEffect(() => {
     const folderPathSet = new Set(folderPaths)
@@ -156,39 +147,13 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader className="gap-3 border-b border-sidebar-border/70 p-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-2 text-sidebar-primary">
+      <SidebarHeader className="border-b border-sidebar-border/70 p-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
             <FolderTree className="size-4" />
           </div>
           <div className="min-w-0">
-            <p className="type-overline text-sidebar-foreground/65">
-              Workspace
-            </p>
-            <p className="mt-1 type-title text-sidebar-foreground">{workspaceName}</p>
-            <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
-              {files.length} changed {files.length === 1 ? "file" : "files"} in{" "}
-              {scopePath === "." ? "this repo root" : "this directory"}.
-            </p>
-            <div className="mt-3 max-w-full">
-              <div className="flex items-center gap-2.5">
-                <p className="shrink-0 type-overline text-sidebar-foreground/65">
-                  Base
-                </p>
-                <div className="min-w-0 flex-1">
-                  <BranchPicker
-                    branches={branches}
-                    currentRef={currentRef}
-                    selectedBaseRef={selectedBaseRef}
-                    onSelectBaseRef={onSelectBaseRef}
-                    disabled={isBranchesLoading || branchesError != null}
-                  />
-                </div>
-              </div>
-              {branchesError ? (
-                <p className="measure-readable mt-2 type-meta text-rose-300">{branchesError}</p>
-              ) : null}
-            </div>
+            <p className="type-title text-sidebar-foreground">diffx</p>
           </div>
         </div>
       </SidebarHeader>
@@ -196,30 +161,21 @@ export function AppSidebar({
       <div className="flex min-h-0 flex-1 flex-col">
         <SidebarContent>
           <div className="p-2">
-            {showBulkStageActions ? (
-              <div className="mb-2 flex items-center gap-2 px-1">
+            <div className="mb-2 flex items-center justify-between gap-2 px-1">
+              <p className="type-meta font-medium text-sidebar-foreground/72">{visibleFileCountLabel}</p>
+              {showBulkStageActions ? (
                 <Button
                   type="button"
                   size="xs"
-                  variant="ghost"
-                  className="flex-1"
-                  disabled={!canUseGitActions || stageAllCount === 0 || hasPendingStageAction}
-                  onClick={onStageAll}
+                  variant="outline"
+                  className="border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  disabled={bulkActionDisabled}
+                  onClick={showUnstageAll ? onUnstageAll : onStageAll}
                 >
-                  Stage all
+                  {bulkActionLabel}
                 </Button>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  className="flex-1"
-                  disabled={!canUseGitActions || unstageAllCount === 0 || hasPendingStageAction}
-                  onClick={onUnstageAll}
-                >
-                  Unstage all
-                </Button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
             <SidebarFileTree
               root={tree}
               expandedPaths={expandedPaths}

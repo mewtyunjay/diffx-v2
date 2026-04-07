@@ -68,7 +68,7 @@ export function SidebarFileTree<T>({
                 row.depth === 0 && "font-semibold",
               )}
               style={{
-                paddingLeft: `${10 + row.depth * indent}px`,
+                paddingLeft: `${2 + row.depth * indent}px`,
               }}
               title={row.path === "." ? "repo root" : row.path}
             >

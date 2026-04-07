@@ -1,11 +1,20 @@
 import { AlertCircle, Check, Copy, LoaderCircle } from "lucide-react"
+
+import { BranchPicker } from "@/app/diff-viewer/BranchPicker"
+import type { BranchOption } from "@/app/changed-files/api"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
 type SiteHeaderProps = {
+  branches: BranchOption[]
+  currentRef: string
+  selectedBaseRef: string
+  isBranchesLoading: boolean
+  branchesError: string | null
   copyState: "idle" | "copying" | "success" | "error"
   canCopyAnnotations: boolean
+  onSelectBaseRef: (baseRef: string) => void
   onCopyAnnotations: () => void
 }
 
@@ -35,8 +44,14 @@ function getCopyButtonContents(copyState: SiteHeaderProps["copyState"]) {
 }
 
 export function SiteHeader({
+  branches,
+  currentRef,
+  selectedBaseRef,
+  isBranchesLoading,
+  branchesError,
   copyState,
   canCopyAnnotations,
+  onSelectBaseRef,
   onCopyAnnotations,
 }: SiteHeaderProps) {
   const copyButton = getCopyButtonContents(copyState)
@@ -49,6 +64,14 @@ export function SiteHeader({
           <Separator
             orientation="vertical"
             className="mx-1 data-[orientation=vertical]:h-6"
+          />
+          <BranchPicker
+            branches={branches}
+            currentRef={currentRef}
+            selectedBaseRef={selectedBaseRef}
+            onSelectBaseRef={onSelectBaseRef}
+            disabled={isBranchesLoading || branchesError != null}
+            variant="header"
           />
         </div>
         <div className="ml-auto flex items-center gap-3">
