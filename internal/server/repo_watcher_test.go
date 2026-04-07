@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -81,6 +82,62 @@ func TestRepoWatcherPublishesGitEvents(t *testing.T) {
 	}
 }
 
+func TestRepoWatcherIgnoresIndexLockChanges(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	hub := newRepoEventHub()
+	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
+		RepoRoot:  repoRoot,
+		ScopePath: ".",
+	}, hub)
+	if err != nil {
+		t.Fatalf("newRepoWatcher returned error: %v", err)
+	}
+	defer watcher.Close()
+	defer hub.Close()
+
+	events, unsubscribe := hub.Subscribe()
+	defer unsubscribe()
+
+	lockPath := filepath.Join(repoRoot, ".git", "index.lock")
+	writeServerTestFile(t, lockPath, "")
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatalf("remove %s: %v", lockPath, err)
+	}
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+}
+
+func TestRepoWatcherIgnoresOtherGitLockChanges(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	hub := newRepoEventHub()
+	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
+		RepoRoot:  repoRoot,
+		ScopePath: ".",
+	}, hub)
+	if err != nil {
+		t.Fatalf("newRepoWatcher returned error: %v", err)
+	}
+	defer watcher.Close()
+	defer hub.Close()
+
+	events, unsubscribe := hub.Subscribe()
+	defer unsubscribe()
+
+	lockPath := filepath.Join(repoRoot, ".git", "refs", "heads", "watcher-test.lock")
+	writeServerTestFile(t, lockPath, "lock\n")
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatalf("remove %s: %v", lockPath, err)
+	}
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+}
+
 func waitForRepoChangedEvent(t *testing.T, events <-chan repoChangedEvent) repoChangedEvent {
 	t.Helper()
 
@@ -90,5 +147,18 @@ func waitForRepoChangedEvent(t *testing.T, events <-chan repoChangedEvent) repoC
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for repo event")
 		return repoChangedEvent{}
+	}
+}
+
+func assertNoRepoChangedEvent(t *testing.T, events <-chan repoChangedEvent, wait time.Duration) {
+	t.Helper()
+
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+
+	select {
+	case event := <-events:
+		t.Fatalf("expected no repo event, got %q", event.Kind)
+	case <-timer.C:
 	}
 }

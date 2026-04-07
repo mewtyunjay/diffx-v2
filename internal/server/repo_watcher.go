@@ -29,6 +29,8 @@ type repoWatcher struct {
 	worktreeRoot string
 	gitDir       string
 	watched      map[string]repoChangeKind
+	suppressMu   sync.Mutex
+	suppressGit  int
 	done         chan struct{}
 	closeOnce    sync.Once
 }
@@ -233,6 +235,9 @@ func (w *repoWatcher) handleEvent(event fsnotify.Event) (repoChangeKind, bool) {
 	}
 
 	cleanPath := filepath.Clean(event.Name)
+	if w.shouldIgnoreGitPath(cleanPath) {
+		return "", false
+	}
 	if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.removeWatchSubtree(cleanPath)
 	}
@@ -246,11 +251,44 @@ func (w *repoWatcher) handleEvent(event fsnotify.Event) (repoChangeKind, bool) {
 		w.addCreatedDirectory(cleanPath, kind)
 	}
 
+	if kind == repoChangeGit && w.suppressingGitEvents() {
+		return "", false
+	}
+
 	if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) == 0 {
 		return "", false
 	}
 
 	return kind, true
+}
+
+func (w *repoWatcher) shouldIgnoreGitPath(path string) bool {
+	if !pathWithinRoot(path, w.gitDir) {
+		return false
+	}
+
+	return strings.HasSuffix(filepath.Base(path), ".lock")
+}
+
+func (w *repoWatcher) suppressGitEvents() func() {
+	w.suppressMu.Lock()
+	w.suppressGit++
+	w.suppressMu.Unlock()
+
+	return func() {
+		w.suppressMu.Lock()
+		if w.suppressGit > 0 {
+			w.suppressGit--
+		}
+		w.suppressMu.Unlock()
+	}
+}
+
+func (w *repoWatcher) suppressingGitEvents() bool {
+	w.suppressMu.Lock()
+	defer w.suppressMu.Unlock()
+
+	return w.suppressGit > 0
 }
 
 func (w *repoWatcher) classifyPath(path string) (repoChangeKind, bool) {

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"diffx/internal/gitstatus"
 )
@@ -93,6 +94,46 @@ func TestHandleStageAllStagesRepoRootChanges(t *testing.T) {
 			t.Fatalf("expected fully staged files, got %#v", result.Files)
 		}
 	}
+}
+
+func TestHandleFilesDoesNotPublishRepoEvents(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+	events, unsubscribe := app.repoEvents.Subscribe()
+	defer unsubscribe()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/files", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+}
+
+func TestHandleBranchesDoesNotPublishRepoEvents(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+	events, unsubscribe := app.repoEvents.Subscribe()
+	defer unsubscribe()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/branches", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
 }
 
 func TestHandleUnstageAllRejectsSubfolderScope(t *testing.T) {

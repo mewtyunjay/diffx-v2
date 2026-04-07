@@ -115,11 +115,12 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("/api/git/commit", a.handleCommit)
 	mux.HandleFunc("/api/git/push", a.handlePush)
 	mux.Handle("/", a.frontend())
+	handler := a.suppressRepoWatcherGitEventsMiddleware(mux)
 	if a.apiLogger != nil {
-		return a.logAPIMiddleware(mux)
+		return a.logAPIMiddleware(handler)
 	}
 
-	return mux
+	return handler
 }
 
 func (a *App) Close() error {
