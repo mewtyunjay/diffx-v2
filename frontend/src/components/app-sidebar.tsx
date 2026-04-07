@@ -147,20 +147,22 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
-      <SidebarHeader className="border-b border-sidebar-border/70 p-3">
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
-            <FolderTree className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="type-title text-sidebar-foreground">diffx</p>
+      <SidebarHeader className="relative h-(--header-height) justify-center gap-0 px-0 py-0">
+        <div className="flex h-full items-center px-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
+              <FolderTree className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="type-title text-sidebar-foreground">diffx</p>
+            </div>
           </div>
         </div>
       </SidebarHeader>
 
       <div className="flex min-h-0 flex-1 flex-col">
         <SidebarContent>
-          <div className="p-2">
+          <div className="px-2 pb-2 pt-3">
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
               <p className="type-meta font-medium text-sidebar-foreground/72">{visibleFileCountLabel}</p>
               {showBulkStageActions ? (
