@@ -64,6 +64,7 @@ export function DiffViewerPage() {
   const [files, setFiles] = useState<ChangedFileItem[]>([])
   const [filesError, setFilesError] = useState<string | null>(null)
   const [isFilesLoading, setIsFilesLoading] = useState(true)
+  const [workspaceName, setWorkspaceName] = useState("")
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"unified" | "split">("split")
   const [isCurrentFileExpanded, setIsCurrentFileExpanded] = useState(false)
@@ -203,6 +204,7 @@ export function DiffViewerPage() {
       setBaseCommit(result.baseCommit)
       setCurrentRef(result.currentRef)
       setScopePath(result.scopePath)
+      setWorkspaceName(result.workspaceName)
       setHiddenStagedFileCount(result.hiddenStagedFileCount)
       setFiles(result.files)
       setSavedAnnotations((currentAnnotations) =>
@@ -603,6 +605,7 @@ export function DiffViewerPage() {
     >
       <AppSidebar
         files={files}
+        workspaceName={workspaceName}
         scopePath={scopePath}
         comparisonMode={comparisonMode}
         selectedFilePath={selectedFilePath}

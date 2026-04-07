@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
+  workspaceName: string
   scopePath: string
   comparisonMode: ComparisonMode
   selectedFilePath: string | null
@@ -50,6 +51,7 @@ const statusClassNames: Record<ChangedFileStatus, string> = {
 
 export function AppSidebar({
   files,
+  workspaceName,
   scopePath,
   comparisonMode,
   selectedFilePath,
@@ -80,7 +82,7 @@ export function AppSidebar({
           data: file,
         })),
         {
-          rootName: "diffx",
+          rootName: workspaceName || "diffx",
         }
       ),
     [files]
@@ -155,6 +157,9 @@ export function AppSidebar({
             </div>
             <div className="min-w-0">
               <p className="type-title text-sidebar-foreground">diffx</p>
+              {workspaceName ? (
+                <p className="truncate type-meta text-sidebar-foreground/50">{workspaceName}</p>
+              ) : null}
             </div>
           </div>
         </div>

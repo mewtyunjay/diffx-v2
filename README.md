@@ -116,21 +116,28 @@ Start the app from the repository root:
 go run ./cmd/diffx
 ```
 
-## Common Commands
+## Running
 
-Run the app (serves embedded frontend assets):
-
-```sh
-go run ./cmd/diffx
-```
-
-Start with the Vite dev server for frontend development:
+### Development (HMR)
 
 ```sh
 go run ./cmd/diffx --dev
 ```
 
-Change the address or port:
+Starts the Go server and proxies frontend requests to a Vite dev server. Frontend changes reflect instantly via hot module reload without rebuilding.
+
+### Production build
+
+```sh
+go generate ./frontend
+go build -o diffx ./cmd/diffx
+```
+
+`go generate ./frontend` installs frontend dependencies and bundles the frontend into `frontend/dist/`. `go build` then embeds that bundle into the binary.
+
+For quick local runs without creating a binary, `go run ./cmd/diffx` also works — it auto-builds the frontend if the bundle is missing.
+
+### Address and port
 
 ```sh
 go run ./cmd/diffx -a 0.0.0.0 -p 9000
@@ -138,15 +145,6 @@ go run ./cmd/diffx --address 0.0.0.0 --port 9000
 ```
 
 If you explicitly pass `--port` or `-p`, that port remains strict and `diffx` will fail instead of auto-selecting another port.
-
-## Build
-
-```sh
-go generate ./frontend
-go build ./cmd/diffx
-```
-
-`go generate ./frontend` installs frontend dependencies and builds the frontend bundle before you build the Go binary.
 
 ## Development
 
