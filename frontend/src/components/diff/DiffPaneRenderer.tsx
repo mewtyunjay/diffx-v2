@@ -1,3 +1,4 @@
+import { diffAcceptRejectHunk, type FileDiffMetadata, type Hunk } from "@pierre/diffs"
 import {
   FileDiff,
   type AnnotationSide,
@@ -13,6 +14,7 @@ import {
   type SavedDiffAnnotation,
 } from "@/app/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
+import { DiffHunkActions } from "@/components/diff/DiffHunkActions"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
 import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
 import "@/components/diff/diff-pane-theme.css"
@@ -34,6 +36,10 @@ type RenderedAnnotationMetadata =
   | {
     kind: "saved"
     comment: string
+  }
+  | {
+    kind: "hunk-actions"
+    hunkIndex: number
   }
 
 type RenderablePreparedDiff = PreparedFileDiffResult & {
@@ -62,6 +68,41 @@ function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
   return a.lineNumber === b.lineNumber && a.side === b.side
 }
 
+function computeHunkAnnotationTarget(hunk: Hunk): { side: AnnotationSide; lineNumber: number } | null {
+  if (hunk.additionLines === 0 && hunk.deletionLines === 0) {
+    return null
+  }
+
+  let additionLine = hunk.additionStart
+  let deletionLine = hunk.deletionStart
+  let lastAdditionEnd = -1
+  let lastDeletionEnd = -1
+
+  for (const content of hunk.hunkContent) {
+    if (content.type === "context") {
+      additionLine += content.lines.length
+      deletionLine += content.lines.length
+    } else {
+      if (content.additions.length > 0) {
+        lastAdditionEnd = additionLine + content.additions.length - 1
+        additionLine += content.additions.length
+      }
+      if (content.deletions.length > 0) {
+        lastDeletionEnd = deletionLine + content.deletions.length - 1
+        deletionLine += content.deletions.length
+      }
+    }
+  }
+
+  if (lastAdditionEnd >= 0) {
+    return { side: "additions", lineNumber: lastAdditionEnd }
+  }
+  if (lastDeletionEnd >= 0) {
+    return { side: "deletions", lineNumber: lastDeletionEnd }
+  }
+  return null
+}
+
 function DiffPaneRendererContent({
   diff,
   initialDraft,
@@ -85,6 +126,15 @@ function DiffPaneRendererContent({
     [draft]
   )
   const draftText = draft?.comment ?? ""
+
+  const [activeDiff, setActiveDiff] = useState<FileDiffMetadata>(() => diff.parsedDiff)
+
+  const handleHunkAction = useCallback(
+    (hunkIndex: number, action: "accept" | "reject") => {
+      setActiveDiff((current) => diffAcceptRejectHunk(current, hunkIndex, action))
+    },
+    []
+  )
 
   const savedAnnotationMap = useMemo(
     () =>
@@ -161,9 +211,19 @@ function DiffPaneRendererContent({
         })
       }
 
+      for (let i = 0; i < activeDiff.hunks.length; i++) {
+        const target = computeHunkAnnotationTarget(activeDiff.hunks[i])
+        if (target) {
+          annotations.push({
+            ...target,
+            metadata: { kind: "hunk-actions", hunkIndex: i },
+          })
+        }
+      }
+
       return annotations
     },
-    [draftTarget, savedAnnotations]
+    [activeDiff.hunks, draftTarget, savedAnnotations]
   )
 
   const canSaveDraft = useMemo(() => {
@@ -204,10 +264,14 @@ function DiffPaneRendererContent({
 
   return (
     <FileDiff<RenderedAnnotationMetadata>
-      fileDiff={diff.parsedDiff}
+      fileDiff={activeDiff}
       options={options}
       lineAnnotations={lineAnnotations}
       renderAnnotation={(annotation) => {
+        if (annotation.metadata?.kind === "hunk-actions") {
+          return <DiffHunkActions hunkIndex={annotation.metadata.hunkIndex} onAction={handleHunkAction} />
+        }
+
         if (annotation.metadata?.kind === "saved") {
           return <DiffSavedComment comment={annotation.metadata.comment} onOpen={() => handleOpenDraft(annotation)} />
         }

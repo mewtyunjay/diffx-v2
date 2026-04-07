@@ -4,6 +4,8 @@
   --diffs-line-height: 1.5;
   --diffs-font-features: normal;
   --diffs-header-font-family: var(--font-sans);
+  --diff-hunk-accept: #b8bb26;
+  --diff-hunk-reject: #cc241d;
 }
 
 .diff-annotation-wrap {
@@ -77,4 +79,19 @@
 
 .diff-toolbar-additions {
   color: var(--diff-add);
+}
+
+.diff-hunk-actions-anchor {
+  position: relative;
+}
+
+.diff-hunk-actions {
+  position: absolute;
+  right: 0.5rem;
+  top: 0;
+  transform: translateY(-100%);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  z-index: 1;
 }
