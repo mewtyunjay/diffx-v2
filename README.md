@@ -8,9 +8,44 @@
 
 Prerequisites:
 
-- Go `1.26+`
+- Go `1.25+`
 - Node.js `20+`
 - npm
+
+### One-command agent setup (Claude + Codex, macOS/Linux)
+
+If you want seamless agent integration (Claude `/diffx`, Codex `$diffx`) with source build setup:
+
+```sh
+git clone https://github.com/mewtyunjay/diffx-v2.git
+cd diffx-v2
+bash ./scripts/setup-agent-integrations.sh
+```
+
+If you're already in the repository root, the setup is a single command:
+
+```sh
+bash ./scripts/setup-agent-integrations.sh
+```
+
+This installer will:
+
+- build `diffx` from source and install it at `~/.local/bin/diffx`
+- install Claude command at `~/.claude/commands/diffx.md`
+- install Codex skill at `~/.codex/skills/diffx/SKILL.md`
+
+On first run, it may download Go modules and npm dependencies.
+
+Then use:
+
+- Claude Code: `/diffx [optional diffx review args]`
+- Codex: `$diffx` and include optional review args in the prompt text
+
+The browser window launched by `diffx review` is ephemeral — it opens for the duration of the review and closes once the agent finishes reading your feedback. A persistent UI mode is planned for the next version.
+
+The installer does not edit your shell startup files. If `~/.local/bin` is not on your `PATH`, it prints exact copy-paste commands.
+
+Note: this repository currently ships source-based setup only. When prebuilt binaries are published, setup becomes a shorter two-command flow.
 
 ### macOS
 
@@ -116,21 +151,42 @@ Start the app from the repository root:
 go run ./cmd/diffx
 ```
 
-## Common Commands
+## Running
 
-Run the app (serves embedded frontend assets):
-
-```sh
-go run ./cmd/diffx
-```
-
-Start with the Vite dev server for frontend development:
+### Development (HMR)
 
 ```sh
 go run ./cmd/diffx --dev
 ```
 
-Change the address or port:
+Starts the Go server and proxies frontend requests to a Vite dev server. Frontend changes reflect instantly via hot module reload without rebuilding.
+
+### Agent review mode (stdout handoff)
+
+```sh
+go run ./cmd/diffx review
+# or
+diffx review
+```
+
+This starts the same diff UI but enables `/api/feedback` for plannotator-style handoff.  
+Use **Send to agent** in the header after annotating. `diffx` prints the submitted feedback to stdout and exits so the calling agent can continue in chat.
+
+By default, `diffx` opens the review URL in your browser automatically.  
+Use `--no-browser` to disable browser launch and `--review-timeout 30m` (or another duration) to limit how long review mode waits for feedback.
+
+### Production build
+
+```sh
+go generate ./frontend
+go build -o diffx ./cmd/diffx
+```
+
+`go generate ./frontend` installs frontend dependencies and bundles the frontend into `frontend/dist/`. `go build` then embeds that bundle into the binary.
+
+For quick local runs without creating a binary, `go run ./cmd/diffx` also works — it auto-builds the frontend if the bundle is missing.
+
+### Address and port
 
 ```sh
 go run ./cmd/diffx -a 0.0.0.0 -p 9000
@@ -138,15 +194,6 @@ go run ./cmd/diffx --address 0.0.0.0 --port 9000
 ```
 
 If you explicitly pass `--port` or `-p`, that port remains strict and `diffx` will fail instead of auto-selecting another port.
-
-## Build
-
-```sh
-go generate ./frontend
-go build ./cmd/diffx
-```
-
-`go generate ./frontend` installs frontend dependencies and builds the frontend bundle before you build the Go binary.
 
 ## Development
 

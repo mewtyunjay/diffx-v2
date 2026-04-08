@@ -2,6 +2,8 @@ package server
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,6 +39,155 @@ func TestHandleStageFileStagesChanges(t *testing.T) {
 	}
 	if len(result.Files) != 1 || !result.Files[0].HasStagedChanges {
 		t.Fatalf("expected notes.txt to be staged, got %#v", result.Files)
+	}
+}
+
+func TestHandleReviewFeedbackSubmitsDecision(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestAppWithReview(t, repoRoot, ".", true)
+
+	resultCh := make(chan ReviewFeedback, 1)
+	errCh := make(chan error, 1)
+
+	go func() {
+		result, err := app.WaitForReviewFeedback(context.Background())
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- result
+	}()
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/feedback",
+		bytes.NewBufferString(`{"approved":false,"feedback":"Fix null handling","annotations":[{"path":"notes.txt","line":2}]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	select {
+	case err := <-errCh:
+		t.Fatalf("WaitForReviewFeedback returned error: %v", err)
+	case result := <-resultCh:
+		if result.Approved {
+			t.Fatalf("expected approved false, got %#v", result)
+		}
+		if result.Feedback != "Fix null handling" {
+			t.Fatalf("expected feedback to match, got %#v", result)
+		}
+		if len(result.Annotations) != 1 {
+			t.Fatalf("expected one annotation, got %#v", result.Annotations)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for review feedback")
+	}
+}
+
+func TestHandleReviewFeedbackReturnsNotFoundWhenDisabled(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestAppWithReview(t, repoRoot, ".", false)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/feedback",
+		bytes.NewBufferString(`{"approved":true,"feedback":"","annotations":[]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleReviewStateReturnsDisabledWhenReviewModeOff(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestAppWithReview(t, repoRoot, ".", false)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/review/state", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload ReviewState
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode review state: %v", err)
+	}
+
+	if payload.Enabled {
+		t.Fatalf("expected review mode disabled, got %#v", payload)
+	}
+	if payload.AcceptingFeedback {
+		t.Fatalf("expected acceptingFeedback false, got %#v", payload)
+	}
+	if payload.Reason != "disabled" {
+		t.Fatalf("expected reason disabled, got %#v", payload)
+	}
+}
+
+func TestHandleReviewStateReflectsSubmittedFeedback(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestAppWithReview(t, repoRoot, ".", true)
+
+	submitRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/feedback",
+		bytes.NewBufferString(`{"approved":false,"feedback":"Follow up","annotations":[]}`),
+	)
+	submitRequest.Header.Set("Content-Type", "application/json")
+	submitRecorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(submitRecorder, submitRequest)
+	if submitRecorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", submitRecorder.Code, submitRecorder.Body.String())
+	}
+
+	stateRequest := httptest.NewRequest(http.MethodGet, "/api/review/state", nil)
+	stateRecorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(stateRecorder, stateRequest)
+
+	if stateRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", stateRecorder.Code, stateRecorder.Body.String())
+	}
+
+	var payload ReviewState
+	if err := json.Unmarshal(stateRecorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode review state: %v", err)
+	}
+
+	if !payload.Enabled {
+		t.Fatalf("expected review mode enabled, got %#v", payload)
+	}
+	if payload.AcceptingFeedback {
+		t.Fatalf("expected acceptingFeedback false after submit, got %#v", payload)
+	}
+	if !payload.Submitted {
+		t.Fatalf("expected submitted true, got %#v", payload)
+	}
+	if payload.Reason != "submitted" {
+		t.Fatalf("expected reason submitted, got %#v", payload)
 	}
 }
 
@@ -116,6 +267,33 @@ func TestHandleFilesDoesNotPublishRepoEvents(t *testing.T) {
 	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
 }
 
+func TestHandleFilesIncludesRepoName(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/files", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload struct {
+		RepoName string `json:"repoName"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode files response: %v", err)
+	}
+
+	if payload.RepoName != filepath.Base(repoRoot) {
+		t.Fatalf("expected repoName %q, got %q", filepath.Base(repoRoot), payload.RepoName)
+	}
+}
+
 func TestHandleBranchesDoesNotPublishRepoEvents(t *testing.T) {
 	t.Parallel()
 
@@ -183,11 +361,25 @@ func TestHandleCommitReturnsConflictForScopedHiddenStagedFiles(t *testing.T) {
 func newRepoBackedTestApp(t *testing.T, repoRoot string, scopePath string) *App {
 	t.Helper()
 
+	return newRepoBackedTestAppWithReview(t, repoRoot, scopePath, false)
+}
+
+func newRepoBackedTestAppWithReview(
+	t *testing.T,
+	repoRoot string,
+	scopePath string,
+	reviewEnabled bool,
+) *App {
+	t.Helper()
+
 	app, err := newWithAssets(
 		Config{
 			Workspace: gitstatus.WorkspaceTarget{
 				RepoRoot:  repoRoot,
 				ScopePath: scopePath,
+			},
+			Review: ReviewConfig{
+				Enabled: reviewEnabled,
 			},
 		},
 		testAssets(),

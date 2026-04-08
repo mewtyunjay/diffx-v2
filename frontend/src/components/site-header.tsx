@@ -1,7 +1,7 @@
-import { AlertCircle, Check, Copy, LoaderCircle } from "lucide-react"
+import { AlertCircle, Check, Copy, LoaderCircle, Send } from "lucide-react"
 
-import { BranchPicker } from "@/app/diff-viewer/BranchPicker"
-import type { BranchOption } from "@/app/changed-files/api"
+import { BranchPicker } from "@/diff-viewer/BranchPicker"
+import type { BranchOption } from "@/git/types"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
@@ -13,9 +13,13 @@ type SiteHeaderProps = {
   isBranchesLoading: boolean
   branchesError: string | null
   copyState: "idle" | "copying" | "success" | "error"
+  sendState: "idle" | "sending" | "success" | "error"
   canCopyAnnotations: boolean
+  canSendAnnotations: boolean
+  sendDisabledReason: string | null
   onSelectBaseRef: (baseRef: string) => void
   onCopyAnnotations: () => void
+  onSendAnnotations: () => void
 }
 
 function getCopyButtonContents(copyState: SiteHeaderProps["copyState"]) {
@@ -43,6 +47,31 @@ function getCopyButtonContents(copyState: SiteHeaderProps["copyState"]) {
   }
 }
 
+function getSendButtonContents(sendState: SiteHeaderProps["sendState"]) {
+  switch (sendState) {
+    case "sending":
+      return {
+        icon: <LoaderCircle className="animate-spin" />,
+        label: "Sending…",
+      }
+    case "success":
+      return {
+        icon: <Check />,
+        label: "Sent",
+      }
+    case "error":
+      return {
+        icon: <AlertCircle />,
+        label: "Send failed",
+      }
+    default:
+      return {
+        icon: <Send />,
+        label: "Send to agent",
+      }
+  }
+}
+
 export function SiteHeader({
   branches,
   currentRef,
@@ -50,11 +79,16 @@ export function SiteHeader({
   isBranchesLoading,
   branchesError,
   copyState,
+  sendState,
   canCopyAnnotations,
+  canSendAnnotations,
+  sendDisabledReason,
   onSelectBaseRef,
   onCopyAnnotations,
+  onSendAnnotations,
 }: SiteHeaderProps) {
   const copyButton = getCopyButtonContents(copyState)
+  const sendButton = getSendButtonContents(sendState)
 
   return (
     <header className="flex h-(--header-height) shrink-0 items-center border-b bg-background/80 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
@@ -75,6 +109,16 @@ export function SiteHeader({
           />
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onSendAnnotations}
+            disabled={!canSendAnnotations || sendState === "sending"}
+            title={!canSendAnnotations ? sendDisabledReason ?? undefined : undefined}
+          >
+            {sendButton.icon}
+            {sendButton.label}
+          </Button>
           <Button
             type="button"
             size="sm"

@@ -1,28 +1,21 @@
 import * as React from "react"
-import { FolderTree, LoaderCircle, Minus, Plus } from "lucide-react"
+import { FolderTree } from "lucide-react"
 
 import type {
   ChangedFileItem,
-  ChangedFileStatus,
   ComparisonMode,
-} from "@/app/changed-files/api"
-import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
-import {
-  buildSidebarTree,
-  collectFolderPaths,
-  getAncestorFolderPaths,
-} from "@/components/file-tree/tree-model"
-import { Button } from "@/components/ui/button"
+} from "@/git/types"
+import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
+import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import {
   Sidebar,
-  SidebarContent,
-  SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar"
-import { cn } from "@/lib/utils"
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
+  repoName: string
+  workspaceName: string
   scopePath: string
   comparisonMode: ComparisonMode
   selectedFilePath: string | null
@@ -41,15 +34,10 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   onPush: () => void
 }
 
-const statusClassNames: Record<ChangedFileStatus, string> = {
-  modified: "bg-amber-400",
-  added: "bg-emerald-400",
-  deleted: "bg-rose-400",
-  renamed: "bg-sky-400",
-}
-
 export function AppSidebar({
   files,
+  repoName,
+  workspaceName,
   scopePath,
   comparisonMode,
   selectedFilePath,
@@ -68,83 +56,6 @@ export function AppSidebar({
   onPush,
   ...props
 }: AppSidebarProps) {
-  const selectedFile = React.useMemo(
-    () => files.find((file) => file.path === selectedFilePath) ?? null,
-    [files, selectedFilePath]
-  )
-  const tree = React.useMemo(
-    () =>
-      buildSidebarTree(
-        files.map((file) => ({
-          path: file.displayPath,
-          data: file,
-        })),
-        {
-          rootName: "diffx",
-        }
-      ),
-    [files]
-  )
-  const folderPaths = React.useMemo(() => collectFolderPaths(tree), [tree])
-  const selectedAncestorPaths = React.useMemo(
-    () => (selectedFile ? getAncestorFolderPaths(selectedFile.displayPath) : [tree.path]),
-    [selectedFile, tree.path]
-  )
-  const [expandedPaths, setExpandedPaths] = React.useState<string[]>(folderPaths)
-  const hasInitializedExpandedState = React.useRef(false)
-  const stagePendingPathSet = React.useMemo(() => new Set(stagePendingPaths), [stagePendingPaths])
-
-  const stagedVisibleCount = React.useMemo(
-    () => files.filter((file) => file.hasStagedChanges).length,
-    [files]
-  )
-  const stageAllCount = React.useMemo(
-    () => files.filter((file) => file.hasUnstagedChanges).length,
-    [files]
-  )
-  const unstageAllCount = React.useMemo(
-    () => files.filter((file) => file.hasStagedChanges).length,
-    [files]
-  )
-  const totalStagedCount = stagedVisibleCount + hiddenStagedFileCount
-  const showBulkStageActions = scopePath === "."
-  const canUseGitActions = comparisonMode === "head"
-  const canCommit = canUseGitActions && stagedVisibleCount > 0 && hiddenStagedFileCount === 0
-  const showCommitArea = canCommit
-  const showPushButton = canUseGitActions && (canCommit || showPushAction)
-  const hasPendingStageAction = stagePendingPathSet.size > 0
-  const visibleFileCountLabel = `${files.length} changed ${files.length === 1 ? "file" : "files"}`
-  const showUnstageAll = stageAllCount === 0 && unstageAllCount > 0
-  const bulkActionLabel = showUnstageAll ? "Unstage All" : "Stage All"
-  const bulkActionDisabled =
-    !canUseGitActions ||
-    hasPendingStageAction ||
-    (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
-
-  React.useEffect(() => {
-    const folderPathSet = new Set(folderPaths)
-
-    setExpandedPaths((currentPaths) => {
-      const shouldInitializeAll =
-        !hasInitializedExpandedState.current && (files.length > 0 || folderPaths.length > 1)
-      const nextPaths = shouldInitializeAll
-        ? [...folderPaths]
-        : currentPaths.filter((path) => folderPathSet.has(path))
-
-      if (shouldInitializeAll) {
-        hasInitializedExpandedState.current = true
-      }
-
-      for (const path of selectedAncestorPaths) {
-        if (folderPathSet.has(path) && !nextPaths.includes(path)) {
-          nextPaths.push(path)
-        }
-      }
-
-      return [...nextPaths]
-    })
-  }, [files.length, folderPaths, selectedAncestorPaths])
-
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader className="relative h-(--header-height) justify-center gap-0 px-0 py-0">
@@ -154,169 +65,41 @@ export function AppSidebar({
               <FolderTree className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="type-title text-sidebar-foreground">diffx</p>
+              <p className="truncate type-title text-sidebar-foreground">
+                {repoName || workspaceName || "repository"}
+              </p>
             </div>
           </div>
         </div>
       </SidebarHeader>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <SidebarContent>
-          <div className="px-2 pb-2 pt-3">
-            <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <p className="type-meta font-medium text-sidebar-foreground/72">{visibleFileCountLabel}</p>
-              {showBulkStageActions ? (
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  className="border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  disabled={bulkActionDisabled}
-                  onClick={showUnstageAll ? onUnstageAll : onStageAll}
-                >
-                  {bulkActionLabel}
-                </Button>
-              ) : null}
-            </div>
-            <SidebarFileTree
-              root={tree}
-              expandedPaths={expandedPaths}
-              selectedPath={selectedFile?.displayPath ?? null}
-              showRoot={false}
-              indent={10}
-              density="comfortable"
-              getFileIndicatorClassName={(file) => statusClassNames[file.status]}
-              getFileLanguage={(file) => file.language}
-              renderFileAction={(file) => {
-                const isPending = stagePendingPathSet.has(file.path)
-                const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
-                const isDisabled = !canUseGitActions || !hasAction || isPending
-                const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
+        <FileTreePanel
+          files={files}
+          repoName={repoName}
+          workspaceName={workspaceName}
+          scopePath={scopePath}
+          comparisonMode={comparisonMode}
+          selectedFilePath={selectedFilePath}
+          onSelectFile={onSelectFile}
+          stagePendingPaths={stagePendingPaths}
+          onToggleStage={onToggleStage}
+          onStageAll={onStageAll}
+          onUnstageAll={onUnstageAll}
+        />
 
-                return (
-                  <button
-                    type="button"
-                    aria-label={`${actionLabel}: ${file.displayPath}`}
-                    title={
-                      !canUseGitActions
-                        ? "Switch comparison back to HEAD to stage files"
-                        : actionLabel
-                    }
-                    className={cn(
-                      "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
-                      isDisabled
-                        ? "cursor-not-allowed opacity-45"
-                        : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    )}
-                    disabled={isDisabled}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      if (!isDisabled) {
-                        onToggleStage(file)
-                      }
-                    }}
-                  >
-                    {isPending ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
-                    ) : file.hasStagedChanges ? (
-                      <Minus className="size-3.5" />
-                    ) : (
-                      <Plus className="size-3.5" />
-                    )}
-                  </button>
-                )
-              }}
-              onToggleFolder={(path) =>
-                setExpandedPaths((currentPaths) =>
-                  currentPaths.includes(path)
-                    ? currentPaths.filter((currentPath) => currentPath !== path)
-                    : [...currentPaths, path]
-                )
-              }
-              onSelectFile={(path, file) => {
-                if (file) {
-                  onSelectFile(file.path)
-                  return
-                }
-
-                onSelectFile(path)
-              }}
-            />
-          </div>
-        </SidebarContent>
-
-        <SidebarFooter className="border-t border-sidebar-border/70 bg-sidebar/95 p-3 backdrop-blur">
-          <div className="space-y-3">
-            <div>
-              <p className="type-overline text-sidebar-foreground/65">
-                Git actions
-              </p>
-              <p className="mt-1 type-meta font-medium text-sidebar-foreground type-data">
-                {totalStagedCount === 0
-                  ? "No staged changes"
-                  : `${totalStagedCount} staged ${totalStagedCount === 1 ? "file" : "files"}`}
-              </p>
-              {comparisonMode !== "head" ? (
-                <p className="measure-readable mt-1 type-meta text-sidebar-foreground/60">
-                  Switch to HEAD to commit or push.
-                </p>
-              ) : hiddenStagedFileCount > 0 ? (
-                <p className="measure-readable mt-1 type-meta text-amber-200">
-                  {hiddenStagedFileCount} staged {hiddenStagedFileCount === 1 ? "file is" : "files are"} outside
-                  this scope. Open the repo root to commit safely.
-                </p>
-              ) : null}
-            </div>
-
-            {showCommitArea ? (
-              <div className="space-y-3">
-                <textarea
-                  value={commitMessage}
-                  onChange={(event) => onCommitMessageChange(event.target.value)}
-                  placeholder="Commit message..."
-                  className="surface-sidebar-field focus-ring-default min-h-20 w-full resize-y px-2.5 py-2 type-meta text-sidebar-foreground placeholder:text-sidebar-foreground/40"
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="flex-1"
-                    disabled={isCommitPending || isPushPending || !commitMessage.trim() || !canCommit}
-                    onClick={onCommit}
-                  >
-                    {isCommitPending ? <LoaderCircle className="animate-spin" /> : null}
-                    Commit
-                  </Button>
-                  {showPushButton ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      disabled={isCommitPending || isPushPending}
-                      onClick={onPush}
-                    >
-                      {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
-                      Push
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ) : showPushButton ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full"
-                disabled={isCommitPending || isPushPending}
-                onClick={onPush}
-              >
-                {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
-                Push
-              </Button>
-            ) : null}
-          </div>
-        </SidebarFooter>
+        <GitActionsPanel
+          comparisonMode={comparisonMode}
+          files={files}
+          hiddenStagedFileCount={hiddenStagedFileCount}
+          commitMessage={commitMessage}
+          isCommitPending={isCommitPending}
+          onCommitMessageChange={onCommitMessageChange}
+          onCommit={onCommit}
+          isPushPending={isPushPending}
+          showPushAction={showPushAction}
+          onPush={onPush}
+        />
       </div>
     </Sidebar>
   )

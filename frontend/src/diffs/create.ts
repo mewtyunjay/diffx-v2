@@ -1,6 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs"
 
-import type { FileDiffResult } from "@/app/changed-files/api"
+import type { FileDiffResult } from "@/git/types"
 
 export const LARGE_DIFF_CHAR_THRESHOLD = 60_000
 

@@ -4,13 +4,13 @@ import {
   type SupportedLanguages,
 } from "@pierre/diffs"
 
-import type { FileDiffResult } from "@/app/changed-files/api"
+import type { FileDiffResult } from "@/git/types"
 
 import {
   finalizePreparedFileDiff,
   isPureRenameDiff,
   type PreparedFileDiffResult,
-} from "./prepareDiff"
+} from "@/diffs/create"
 
 const DIFF_CONTEXT_LINES = 3
 

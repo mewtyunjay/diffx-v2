@@ -22,10 +22,18 @@ func TestResolveRepoWatchRootsUsesScopeAndGitDir(t *testing.T) {
 		t.Fatalf("resolveRepoWatchRoots returned error: %v", err)
 	}
 
-	if got, want := roots.worktreeRoot, filepath.Join(repoRoot, "frontend"); got != want {
+	wantWorktreeRoot, err := resolveExistingDirectory(filepath.Join(repoRoot, "frontend"))
+	if err != nil {
+		t.Fatalf("resolve expected worktree root: %v", err)
+	}
+	if got, want := roots.worktreeRoot, wantWorktreeRoot; got != want {
 		t.Fatalf("expected worktree root %q, got %q", want, got)
 	}
-	if got, want := roots.gitDir, filepath.Join(repoRoot, ".git"); got != want {
+	wantGitDir, err := resolveExistingDirectory(filepath.Join(repoRoot, ".git"))
+	if err != nil {
+		t.Fatalf("resolve expected git dir: %v", err)
+	}
+	if got, want := roots.gitDir, wantGitDir; got != want {
 		t.Fatalf("expected git dir %q, got %q", want, got)
 	}
 }

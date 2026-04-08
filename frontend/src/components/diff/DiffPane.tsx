@@ -4,10 +4,10 @@ import {
   createDiffAnnotationIdentityKey,
   type DraftDiffAnnotation,
   type SavedDiffAnnotation,
-} from "@/app/diff-viewer/annotations"
+} from "@/diff-viewer/annotations"
 import { DiffPlaceholder } from "@/components/diff/DiffPlaceholder"
 import DiffPaneRenderer from "@/components/diff/DiffPaneRenderer"
-import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
+import type { PreparedFileDiffResult } from "@/diffs/create"
 
 type DiffPaneProps = {
   diff: PreparedFileDiffResult | null

@@ -1,10 +1,10 @@
 import {
   subscribeRepoEvents,
-  type RepoChangedEvent,
-} from "@/app/changed-files/api"
+} from "@/git/api"
+import type { RepoChangedEvent } from "@/git/types"
 import { useEffect, useRef } from "react"
 
-type RefreshFn = (signal?: AbortSignal) => Promise<void>
+type RefreshFn = (signal?: AbortSignal) => Promise<unknown>
 type RefreshPhase = "files" | "branches"
 
 type UseRepoEventsRefreshOptions = {

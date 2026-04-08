@@ -1,6 +1,6 @@
 import { ChevronsUpDown, Columns2, Rows3 } from "lucide-react"
 
-import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
+import type { PreparedFileDiffResult } from "@/diffs/create"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
