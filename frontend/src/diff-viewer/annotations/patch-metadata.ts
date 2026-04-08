@@ -52,8 +52,8 @@ export function findPatchMetadataForAnnotation(
 
   const hunkIndex = hunks.findIndex((hunk) =>
     target.side === "additions"
-      ? isLineWithinRange(target.lineNumber, hunk.additionStart, hunk.additionLines)
-      : isLineWithinRange(target.lineNumber, hunk.deletionStart, hunk.deletionLines)
+      ? isLineWithinRange(target.lineNumber, hunk.additionStart, hunk.additionCount)
+      : isLineWithinRange(target.lineNumber, hunk.deletionStart, hunk.deletionCount)
   )
 
   if (hunkIndex < 0) {
