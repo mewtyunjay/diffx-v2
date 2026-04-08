@@ -34,6 +34,8 @@ func (a *App) handleReviewFeedback(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrReviewFeedbackAlreadySubmitted):
 			http.Error(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, ErrReviewFeedbackClosed):
+			http.Error(w, err.Error(), http.StatusConflict)
 		case errors.Is(err, ErrReviewFeedbackDisabled):
 			http.Error(w, err.Error(), http.StatusNotFound)
 		default:

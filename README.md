@@ -8,9 +8,44 @@
 
 Prerequisites:
 
-- Go `1.26+`
+- Go `1.25+`
 - Node.js `20+`
 - npm
+
+### One-command agent setup (Claude + Codex, macOS/Linux)
+
+If you want seamless agent integration (Claude `/diffx`, Codex `$diffx`) with source build setup:
+
+```sh
+git clone https://github.com/mewtyunjay/diffx-v2.git
+cd diffx-v2
+bash ./scripts/setup-agent-integrations.sh
+```
+
+If you're already in the repository root, the setup is a single command:
+
+```sh
+bash ./scripts/setup-agent-integrations.sh
+```
+
+This installer will:
+
+- build `diffx` from source and install it at `~/.local/bin/diffx`
+- install Claude command at `~/.claude/commands/diffx.md`
+- install Codex skill at `~/.codex/skills/diffx/SKILL.md`
+
+On first run, it may download Go modules and npm dependencies.
+
+Then use:
+
+- Claude Code: `/diffx [optional diffx review args]`
+- Codex: `$diffx` and include optional review args in the prompt text
+
+The browser window launched by `diffx review` is ephemeral — it opens for the duration of the review and closes once the agent finishes reading your feedback. A persistent UI mode is planned for the next version.
+
+The installer does not edit your shell startup files. If `~/.local/bin` is not on your `PATH`, it prints exact copy-paste commands.
+
+Note: this repository currently ships source-based setup only. When prebuilt binaries are published, setup becomes a shorter two-command flow.
 
 ### macOS
 
@@ -136,6 +171,9 @@ diffx review
 
 This starts the same diff UI but enables `/api/feedback` for plannotator-style handoff.  
 Use **Send to agent** in the header after annotating. `diffx` prints the submitted feedback to stdout and exits so the calling agent can continue in chat.
+
+By default, `diffx` opens the review URL in your browser automatically.  
+Use `--no-browser` to disable browser launch and `--review-timeout 30m` (or another duration) to limit how long review mode waits for feedback.
 
 ### Production build
 

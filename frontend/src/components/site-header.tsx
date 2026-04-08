@@ -16,6 +16,7 @@ type SiteHeaderProps = {
   sendState: "idle" | "sending" | "success" | "error"
   canCopyAnnotations: boolean
   canSendAnnotations: boolean
+  sendDisabledReason: string | null
   onSelectBaseRef: (baseRef: string) => void
   onCopyAnnotations: () => void
   onSendAnnotations: () => void
@@ -81,6 +82,7 @@ export function SiteHeader({
   sendState,
   canCopyAnnotations,
   canSendAnnotations,
+  sendDisabledReason,
   onSelectBaseRef,
   onCopyAnnotations,
   onSendAnnotations,
@@ -112,6 +114,7 @@ export function SiteHeader({
             size="sm"
             onClick={onSendAnnotations}
             disabled={!canSendAnnotations || sendState === "sending"}
+            title={!canSendAnnotations ? sendDisabledReason ?? undefined : undefined}
           >
             {sendButton.icon}
             {sendButton.label}

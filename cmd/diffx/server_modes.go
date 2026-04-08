@@ -36,7 +36,14 @@ func runReviewSession(
 
 	select {
 	case <-ctx.Done():
-		return shutdownHTTPServer(app, httpServer, serverErrCh)
+		if err := shutdownHTTPServer(app, httpServer, serverErrCh); err != nil {
+			return err
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			fmt.Fprintln(stdout, "Code review session timed out before feedback was submitted.")
+			return nil
+		}
+		return nil
 	case result := <-feedbackCh:
 		if result.err != nil {
 			return result.err
@@ -57,7 +64,9 @@ func runReviewSession(
 
 		fmt.Fprintln(stdout, result.feedback.Feedback)
 		fmt.Fprintln(stdout)
-		fmt.Fprintln(stdout, "The reviewer has identified issues above. You must address all of them.")
+		fmt.Fprintln(stdout, "Intent routing:")
+		fmt.Fprintln(stdout, "- If the user is asking a question or asking why something changed, answer directly and do not edit files.")
+		fmt.Fprintln(stdout, "- Only make code edits when the user explicitly asks for an edit or implementation.")
 		return nil
 	case err := <-serverErrCh:
 		if errors.Is(err, http.ErrServerClosed) {

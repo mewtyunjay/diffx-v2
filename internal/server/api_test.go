@@ -113,6 +113,84 @@ func TestHandleReviewFeedbackReturnsNotFoundWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestHandleReviewStateReturnsDisabledWhenReviewModeOff(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestAppWithReview(t, repoRoot, ".", false)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/review/state", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload ReviewState
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode review state: %v", err)
+	}
+
+	if payload.Enabled {
+		t.Fatalf("expected review mode disabled, got %#v", payload)
+	}
+	if payload.AcceptingFeedback {
+		t.Fatalf("expected acceptingFeedback false, got %#v", payload)
+	}
+	if payload.Reason != "disabled" {
+		t.Fatalf("expected reason disabled, got %#v", payload)
+	}
+}
+
+func TestHandleReviewStateReflectsSubmittedFeedback(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestAppWithReview(t, repoRoot, ".", true)
+
+	submitRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/feedback",
+		bytes.NewBufferString(`{"approved":false,"feedback":"Follow up","annotations":[]}`),
+	)
+	submitRequest.Header.Set("Content-Type", "application/json")
+	submitRecorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(submitRecorder, submitRequest)
+	if submitRecorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", submitRecorder.Code, submitRecorder.Body.String())
+	}
+
+	stateRequest := httptest.NewRequest(http.MethodGet, "/api/review/state", nil)
+	stateRecorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(stateRecorder, stateRequest)
+
+	if stateRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", stateRecorder.Code, stateRecorder.Body.String())
+	}
+
+	var payload ReviewState
+	if err := json.Unmarshal(stateRecorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode review state: %v", err)
+	}
+
+	if !payload.Enabled {
+		t.Fatalf("expected review mode enabled, got %#v", payload)
+	}
+	if payload.AcceptingFeedback {
+		t.Fatalf("expected acceptingFeedback false after submit, got %#v", payload)
+	}
+	if !payload.Submitted {
+		t.Fatalf("expected submitted true, got %#v", payload)
+	}
+	if payload.Reason != "submitted" {
+		t.Fatalf("expected reason submitted, got %#v", payload)
+	}
+}
+
 func TestHandleStageFileRejectsUnknownFields(t *testing.T) {
 	t.Parallel()
 

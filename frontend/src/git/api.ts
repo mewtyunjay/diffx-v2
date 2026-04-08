@@ -5,6 +5,7 @@ import type {
   CommitResult,
   FileDiffResult,
   PushResult,
+  ReviewStateResult,
   RepoChangedEvent,
   SubmitReviewFeedbackInput,
 } from "@/git/types"
@@ -128,6 +129,15 @@ export async function submitReviewFeedback(
   signal?: AbortSignal
 ) {
   return postJSON<{ ok: boolean }>("/api/feedback", input, signal)
+}
+
+export async function fetchReviewState(signal?: AbortSignal) {
+  const response = await fetch("/api/review/state", { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as ReviewStateResult
 }
 
 export function subscribeRepoEvents(

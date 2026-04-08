@@ -13,59 +13,62 @@ function sortAnnotations(a: SavedDiffAnnotation, b: SavedDiffAnnotation) {
   return a.updatedAt.localeCompare(b.updatedAt)
 }
 
-export function formatSavedAnnotationsForCopy(annotations: SavedDiffAnnotation[]) {
-  const sorted = [...annotations].sort(sortAnnotations)
-  const groups = new Map<string, SavedDiffAnnotation[]>()
+function toSingleLine(value: string) {
+  return value.replace(/\s+/g, " ").trim()
+}
 
-  for (const annotation of sorted) {
-    const key = [annotation.path, annotation.previousPath ?? "", annotation.status].join("::")
-    const group = groups.get(key)
-    if (group) {
-      group.push(annotation)
-    } else {
-      groups.set(key, [annotation])
-    }
+function formatMessage(comment: string) {
+  const normalized = toSingleLine(comment)
+  if (normalized.length === 0) {
+    return "(no message provided)"
   }
 
-  return Array.from(groups.values())
-    .map((group) => {
-      const [first] = group
-      const headerParts = [`File: ${first.path}`, `[${first.status}]`]
-      if (first.previousPath) {
-        headerParts.push(`from ${first.previousPath}`)
-      }
+  return normalized
+}
 
-      const lines = group.map((annotation) => {
-        const annotationLines = annotation.comment.split(/\r?\n/)
-        const formattedAnnotationLines = annotationLines.map((line, index) =>
-          index === 0 ? `  annotation: ${line}` : `    ${line}`
-        )
-        const patchMetadataLines = annotation.patchMetadata
-          ? [
-              `  patch metadata:`,
-              `    hunk index: ${annotation.patchMetadata.hunkIndex}`,
-              annotation.patchMetadata.hunkSpecs
-                ? `    hunk specs: ${annotation.patchMetadata.hunkSpecs}`
-                : null,
-              annotation.patchMetadata.hunkContext
-                ? `    hunk context: ${annotation.patchMetadata.hunkContext}`
-                : null,
-              `    additions: start=${annotation.patchMetadata.additionStart} count=${annotation.patchMetadata.additionCount} lines=${annotation.patchMetadata.additionLines}`,
-              `    deletions: start=${annotation.patchMetadata.deletionStart} count=${annotation.patchMetadata.deletionCount} lines=${annotation.patchMetadata.deletionLines}`,
-              `    split lines: start=${annotation.patchMetadata.splitLineStart} count=${annotation.patchMetadata.splitLineCount}`,
-              `    unified lines: start=${annotation.patchMetadata.unifiedLineStart} count=${annotation.patchMetadata.unifiedLineCount}`,
-            ].filter((line): line is string => line != null)
-          : [`  patch metadata: none`]
+function formatLocation(annotation: SavedDiffAnnotation) {
+  const sidePrefix = annotation.side === "additions" ? "+" : "-"
+  return `${sidePrefix}${annotation.lineNumber}`
+}
 
-        return [
-          `- ${annotation.side} line ${annotation.lineNumber}`,
-          ...formattedAnnotationLines,
-          `  file metadata: base=${annotation.baseRef}@${annotation.baseCommit} status=${annotation.status} before=${annotation.beforeCacheKey} after=${annotation.afterCacheKey}`,
-          ...patchMetadataLines,
-        ].join("\n")
-      })
+function formatPatch(annotation: SavedDiffAnnotation) {
+  const patch = annotation.patchMetadata?.hunkPatch?.trim()
+  if (patch && patch.length > 0) {
+    return patch
+  }
 
-      return [headerParts.join(" "), ...lines].join("\n")
-    })
-    .join("\n\n")
+  const specs = annotation.patchMetadata?.hunkSpecs
+  if (!specs) {
+    return "none"
+  }
+
+  return toSingleLine(specs)
+}
+
+export function formatSavedAnnotationsForCopy(annotations: SavedDiffAnnotation[]) {
+  const sorted = [...annotations].sort(sortAnnotations)
+  const issueBlocks = sorted.map((annotation, index) => {
+    const patch = formatPatch(annotation)
+    const patchLines =
+      patch === "none"
+        ? ["patch: none"]
+        : [
+            "patch:",
+            "```diff",
+            patch,
+            "```",
+          ]
+
+    return [
+      `ISSUE ${index + 1}`,
+      `file: ${annotation.path}`,
+      `status: ${annotation.status}`,
+      `from: ${annotation.previousPath ?? "none"}`,
+      `line: ${formatLocation(annotation)}`,
+      ...patchLines,
+      `message: ${formatMessage(annotation.comment)}`,
+    ].join("\n")
+  })
+
+  return issueBlocks.join("\n\n")
 }

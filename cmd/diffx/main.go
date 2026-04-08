@@ -89,9 +89,19 @@ func run(args []string, stdout, stderr io.Writer) error {
 		workspace.RepoRoot,
 		workspace.ScopePath,
 	)
+	if cfg.openBrowser {
+		go tryOpenBrowser(serverURL(listener.Addr()), stderr)
+	}
 
 	if cfg.reviewMode {
-		return runReviewSession(ctx, stdout, app, httpServer, serverErrCh)
+		reviewCtx := ctx
+		var cancel context.CancelFunc
+		if cfg.reviewTimeout > 0 {
+			reviewCtx, cancel = context.WithTimeout(ctx, cfg.reviewTimeout)
+			defer cancel()
+		}
+
+		return runReviewSession(reviewCtx, stdout, app, httpServer, serverErrCh)
 	}
 
 	return runServerUntilShutdown(ctx, app, httpServer, serverErrCh)

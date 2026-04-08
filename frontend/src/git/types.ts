@@ -56,6 +56,16 @@ export type SubmitReviewFeedbackInput = {
   annotations: unknown[]
 }
 
+export type ReviewStateReason = "active" | "closed" | "disabled" | "inactive" | "submitted"
+
+export type ReviewStateResult = {
+  enabled: boolean
+  acceptingFeedback: boolean
+  submitted: boolean
+  closed: boolean
+  reason: ReviewStateReason
+}
+
 export type RepoChangedEvent = {
   kind: "worktree" | "git"
 }

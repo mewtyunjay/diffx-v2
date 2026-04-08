@@ -29,6 +29,7 @@ export type SavedDiffPatchMetadata = {
   hunkIndex: number
   hunkContext?: string
   hunkSpecs?: string
+  hunkPatch?: string
   additionStart: number
   additionCount: number
   additionLines: number

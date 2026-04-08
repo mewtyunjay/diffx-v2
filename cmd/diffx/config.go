@@ -5,29 +5,35 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 const (
-	defaultAddress     = "127.0.0.1"
-	defaultPort        = 8080
-	defaultFrontendURL = "http://127.0.0.1:5173"
-	portFallbackWindow = 100
+	defaultAddress       = "127.0.0.1"
+	defaultPort          = 8080
+	defaultFrontendURL   = "http://127.0.0.1:5173"
+	portFallbackWindow   = 100
+	defaultReviewTimeout = 30 * time.Minute
 )
 
 type config struct {
-	address      string
-	port         int
-	explicitPort bool
-	dev          bool
-	reviewMode   bool
-	targetPath   string
+	address       string
+	port          int
+	explicitPort  bool
+	openBrowser   bool
+	reviewTimeout time.Duration
+	dev           bool
+	reviewMode    bool
+	targetPath    string
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
 	cfg := config{
-		address:    defaultAddress,
-		port:       defaultPort,
-		targetPath: ".",
+		address:       defaultAddress,
+		port:          defaultPort,
+		openBrowser:   true,
+		reviewTimeout: defaultReviewTimeout,
+		targetPath:    ".",
 	}
 
 	if len(args) > 0 && args[0] == "review" {
@@ -41,9 +47,13 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	flagSet.StringVar(&cfg.address, "address", cfg.address, "HTTP address to bind")
 	flagSet.IntVar(&cfg.port, "p", cfg.port, "HTTP port to bind")
 	flagSet.IntVar(&cfg.port, "port", cfg.port, "HTTP port to bind")
+	flagSet.BoolVar(&cfg.openBrowser, "open-browser", cfg.openBrowser, "Open the app URL in your browser on startup")
+	noBrowser := false
+	flagSet.BoolVar(&noBrowser, "no-browser", false, "Do not open the app URL in your browser")
 	flagSet.BoolVar(&cfg.dev, "dev", cfg.dev, "Start the Vite dev server for frontend development")
+	flagSet.DurationVar(&cfg.reviewTimeout, "review-timeout", cfg.reviewTimeout, "Max time to keep `diffx review` waiting for feedback (0 disables timeout)")
 	flagSet.Usage = func() {
-		fmt.Fprintln(flagSet.Output(), "Usage: diffx [review] [path] [-a 127.0.0.1] [-p 8080] [--dev]")
+		fmt.Fprintln(flagSet.Output(), "Usage: diffx [review] [path] [-a 127.0.0.1] [-p 8080] [--dev] [--no-browser] [--review-timeout 30m]")
 		flagSet.PrintDefaults()
 	}
 
@@ -59,6 +69,9 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 
 	if cfg.port < 0 || cfg.port > 65535 {
 		return config{}, fmt.Errorf("invalid port %d", cfg.port)
+	}
+	if noBrowser {
+		cfg.openBrowser = false
 	}
 
 	remainingArgs := flagSet.Args()

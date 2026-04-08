@@ -14,5 +14,6 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/git/commit", a.handleCommit)
 	mux.HandleFunc("/api/git/push", a.handlePush)
 	mux.HandleFunc("/api/feedback", a.handleReviewFeedback)
+	mux.HandleFunc("/api/review/state", a.handleReviewState)
 	mux.Handle("/", a.frontend())
 }

@@ -66,6 +66,7 @@ export function DiffViewerPage() {
   const {
     canCopyAnnotations,
     canSendAnnotations,
+    sendDisabledReason,
     clearDraftToken,
     copyAnnotations,
     copyState,
@@ -211,6 +212,7 @@ export function DiffViewerPage() {
           sendState={sendState}
           canCopyAnnotations={canCopyAnnotations}
           canSendAnnotations={canSendAnnotations}
+          sendDisabledReason={sendDisabledReason}
           onSelectBaseRef={handleSelectBaseRef}
           onCopyAnnotations={copyAnnotations}
           onSendAnnotations={sendAnnotations}

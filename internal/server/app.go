@@ -30,6 +30,14 @@ type ReviewConfig struct {
 	Enabled bool
 }
 
+type ReviewState struct {
+	Enabled           bool   `json:"enabled"`
+	AcceptingFeedback bool   `json:"acceptingFeedback"`
+	Submitted         bool   `json:"submitted"`
+	Closed            bool   `json:"closed"`
+	Reason            string `json:"reason"`
+}
+
 type App struct {
 	service         *gitstatus.Service
 	repoEvents      *repoEventHub
@@ -181,6 +189,39 @@ func (a *App) WaitForReviewFeedback(ctx context.Context) (ReviewFeedback, error)
 	}
 
 	return a.reviewFeedback.Wait(ctx)
+}
+
+func (a *App) ReviewState() ReviewState {
+	if a.reviewFeedback == nil {
+		return ReviewState{
+			Enabled:           false,
+			AcceptingFeedback: false,
+			Submitted:         false,
+			Closed:            false,
+			Reason:            "disabled",
+		}
+	}
+
+	state := a.reviewFeedback.State()
+	reason := "inactive"
+	switch {
+	case !state.Enabled:
+		reason = "disabled"
+	case state.AcceptingFeedback:
+		reason = "active"
+	case state.Submitted:
+		reason = "submitted"
+	case state.Closed:
+		reason = "closed"
+	}
+
+	return ReviewState{
+		Enabled:           state.Enabled,
+		AcceptingFeedback: state.AcceptingFeedback,
+		Submitted:         state.Submitted,
+		Closed:            state.Closed,
+		Reason:            reason,
+	}
 }
 
 func (a *App) frontend() http.Handler {

@@ -20,10 +20,12 @@ type ReviewFeedback struct {
 }
 
 type reviewFeedbackCoordinator struct {
-	enabled bool
-	once    sync.Once
-	mu      sync.Mutex
-	ch      chan ReviewFeedback
+	enabled   bool
+	once      sync.Once
+	mu        sync.Mutex
+	ch        chan ReviewFeedback
+	submitted bool
+	closed    bool
 }
 
 func newReviewFeedbackCoordinator(enabled bool) *reviewFeedbackCoordinator {
@@ -46,11 +48,19 @@ func (c *reviewFeedbackCoordinator) Submit(feedback ReviewFeedback) error {
 
 	submitted := false
 	c.once.Do(func() {
+		c.mu.Lock()
+		c.submitted = true
+		c.closed = true
+		c.mu.Unlock()
+
 		submitted = true
 		c.ch <- feedback
 		close(c.ch)
 	})
 	if !submitted {
+		if c.isClosed() {
+			return ErrReviewFeedbackClosed
+		}
 		return ErrReviewFeedbackAlreadySubmitted
 	}
 
@@ -79,6 +89,44 @@ func (c *reviewFeedbackCoordinator) Close() {
 	}
 
 	c.once.Do(func() {
+		c.mu.Lock()
+		c.closed = true
+		c.mu.Unlock()
+
 		close(c.ch)
 	})
+}
+
+type ReviewFeedbackState struct {
+	Enabled           bool `json:"enabled"`
+	AcceptingFeedback bool `json:"acceptingFeedback"`
+	Submitted         bool `json:"submitted"`
+	Closed            bool `json:"closed"`
+}
+
+func (c *reviewFeedbackCoordinator) State() ReviewFeedbackState {
+	if c == nil {
+		return ReviewFeedbackState{}
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return ReviewFeedbackState{
+		Enabled:           c.enabled,
+		AcceptingFeedback: c.enabled && !c.submitted && !c.closed,
+		Submitted:         c.submitted,
+		Closed:            c.closed,
+	}
+}
+
+func (c *reviewFeedbackCoordinator) isClosed() bool {
+	if c == nil {
+		return true
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.closed
 }
