@@ -49,6 +49,7 @@ type ChangedFilesResult struct {
 	CurrentRef            string            `json:"currentRef"`
 	CurrentCommit         string            `json:"currentCommit"`
 	UpstreamRef           string            `json:"upstreamRef,omitempty"`
+	RepoName              string            `json:"repoName"`
 	WorkspaceName         string            `json:"workspaceName"`
 	ScopePath             string            `json:"scopePath"`
 	HiddenStagedFileCount int               `json:"hiddenStagedFileCount"`
@@ -240,6 +241,7 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		CurrentRef:            comparison.CurrentRef,
 		CurrentCommit:         comparison.CurrentCommit,
 		UpstreamRef:           upstreamRef,
+		RepoName:              filepath.Base(s.repoRoot),
 		WorkspaceName:         workspaceNameForScope(s.repoRoot, s.scopePath),
 		ScopePath:             s.scopePath,
 		HiddenStagedFileCount: hiddenStagedFileCount,

@@ -244,6 +244,9 @@ func TestListChangedFilesAgainstBaseIncludesBranchAndUntrackedChanges(t *testing
 	if result.CurrentRef != "feature" {
 		t.Fatalf("expected current ref feature, got %q", result.CurrentRef)
 	}
+	if result.RepoName != filepath.Base(repoRoot) {
+		t.Fatalf("expected repo name %q, got %q", filepath.Base(repoRoot), result.RepoName)
+	}
 	if len(result.Files) != 5 {
 		t.Fatalf("expected 5 files, got %#v", result.Files)
 	}

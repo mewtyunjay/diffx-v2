@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   files: ChangedFileItem[]
+  repoName: string
   workspaceName: string
   scopePath: string
   comparisonMode: ComparisonMode
@@ -51,6 +52,7 @@ const statusClassNames: Record<ChangedFileStatus, string> = {
 
 export function AppSidebar({
   files,
+  repoName,
   workspaceName,
   scopePath,
   comparisonMode,
@@ -82,10 +84,10 @@ export function AppSidebar({
           data: file,
         })),
         {
-          rootName: workspaceName || "diffx",
+          rootName: workspaceName || repoName || "repository",
         }
       ),
-    [files]
+    [files, repoName, workspaceName]
   )
   const folderPaths = React.useMemo(() => collectFolderPaths(tree), [tree])
   const selectedAncestorPaths = React.useMemo(
@@ -156,10 +158,9 @@ export function AppSidebar({
               <FolderTree className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="type-title text-sidebar-foreground">diffx</p>
-              {workspaceName ? (
-                <p className="truncate type-meta text-sidebar-foreground/50">{workspaceName}</p>
-              ) : null}
+              <p className="truncate type-title text-sidebar-foreground">
+                {repoName || workspaceName || "repository"}
+              </p>
             </div>
           </div>
         </div>
