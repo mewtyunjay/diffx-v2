@@ -64,6 +64,7 @@ export function DiffViewerPage() {
   const [files, setFiles] = useState<ChangedFileItem[]>([])
   const [filesError, setFilesError] = useState<string | null>(null)
   const [isFilesLoading, setIsFilesLoading] = useState(true)
+  const [repoName, setRepoName] = useState("")
   const [workspaceName, setWorkspaceName] = useState("")
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"unified" | "split">("split")
@@ -103,6 +104,10 @@ export function DiffViewerPage() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    document.title = repoName ? `DiffX - ${repoName}` : "DiffX"
+  }, [repoName])
 
   const readCachedDiff = useCallback((cacheKey: string) => {
     const cachedDiff = diffCacheRef.current.get(cacheKey)
@@ -203,6 +208,7 @@ export function DiffViewerPage() {
       setComparisonMode(result.mode)
       setBaseCommit(result.baseCommit)
       setCurrentRef(result.currentRef)
+      setRepoName(result.repoName)
       setScopePath(result.scopePath)
       setWorkspaceName(result.workspaceName)
       setHiddenStagedFileCount(result.hiddenStagedFileCount)
@@ -605,6 +611,7 @@ export function DiffViewerPage() {
     >
       <AppSidebar
         files={files}
+        repoName={repoName}
         workspaceName={workspaceName}
         scopePath={scopePath}
         comparisonMode={comparisonMode}
