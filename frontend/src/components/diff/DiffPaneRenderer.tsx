@@ -11,10 +11,10 @@ import {
   createDraftDiffAnnotation,
   type DraftDiffAnnotation,
   type SavedDiffAnnotation,
-} from "@/app/diff-viewer/annotations"
+} from "@/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
-import type { PreparedFileDiffResult } from "@/components/diff/prepareDiff"
+import type { PreparedFileDiffResult } from "@/diffs/create"
 import "@/components/diff/diff-pane-theme.css"
 
 const DIFF_EXPANSION_LINE_COUNT = 20

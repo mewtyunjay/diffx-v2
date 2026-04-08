@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"io"
 	"io/fs"
@@ -22,12 +23,18 @@ type FrontendConfig struct {
 type Config struct {
 	Workspace gitstatus.WorkspaceTarget
 	Frontend  FrontendConfig
+	Review    ReviewConfig
+}
+
+type ReviewConfig struct {
+	Enabled bool
 }
 
 type App struct {
 	service         *gitstatus.Service
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
+	reviewFeedback  *reviewFeedbackCoordinator
 	assets          fs.FS
 	indexHTML       []byte
 	fileSrv         http.Handler
@@ -104,17 +111,7 @@ func newWithAssetFS(cfg Config, assets fs.FS) (*App, error) {
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/branches", a.handleBranches)
-	mux.HandleFunc("/api/files", a.handleFiles)
-	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
-	mux.HandleFunc("/api/events", a.handleEvents)
-	mux.HandleFunc("/api/git/stage", a.handleStageFile)
-	mux.HandleFunc("/api/git/stage-all", a.handleStageAll)
-	mux.HandleFunc("/api/git/unstage", a.handleUnstageFile)
-	mux.HandleFunc("/api/git/unstage-all", a.handleUnstageAll)
-	mux.HandleFunc("/api/git/commit", a.handleCommit)
-	mux.HandleFunc("/api/git/push", a.handlePush)
-	mux.Handle("/", a.frontend())
+	a.registerRoutes(mux)
 	handler := a.suppressRepoWatcherGitEventsMiddleware(mux)
 	if a.apiLogger != nil {
 		return a.logAPIMiddleware(handler)
@@ -135,6 +132,9 @@ func (a *App) Close() error {
 		if a.frontendCloser != nil {
 			errs = append(errs, a.frontendCloser())
 		}
+		if a.reviewFeedback != nil {
+			a.reviewFeedback.Close()
+		}
 
 		a.closeErr = errors.Join(errs...)
 	})
@@ -153,7 +153,34 @@ func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
 		service:     gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
 		repoEvents:  repoEvents,
 		repoWatcher: watcher,
+		reviewFeedback: newReviewFeedbackCoordinator(
+			cfg.Review.Enabled,
+		),
 	}, nil
+}
+
+func (a *App) ReviewModeEnabled() bool {
+	if a.reviewFeedback == nil {
+		return false
+	}
+
+	return a.reviewFeedback.Enabled()
+}
+
+func (a *App) SubmitReviewFeedback(feedback ReviewFeedback) error {
+	if a.reviewFeedback == nil {
+		return ErrReviewFeedbackDisabled
+	}
+
+	return a.reviewFeedback.Submit(feedback)
+}
+
+func (a *App) WaitForReviewFeedback(ctx context.Context) (ReviewFeedback, error) {
+	if a.reviewFeedback == nil {
+		return ReviewFeedback{}, ErrReviewFeedbackDisabled
+	}
+
+	return a.reviewFeedback.Wait(ctx)
 }
 
 func (a *App) frontend() http.Handler {

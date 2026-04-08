@@ -1,10 +1,10 @@
-import type { FileDiffResult } from "@/app/changed-files/api"
+import type { FileDiffResult } from "@/git/types"
 
-import PrepareDiffWorker from "./prepareDiff.worker.ts?worker"
+import PrepareDiffWorker from "@/diffs/create.worker.ts?worker"
 import {
   type PreparedFileDiffResult,
   type PrepareDiffWorkerResponse,
-} from "./prepareDiff"
+} from "@/diffs/create"
 
 type PendingRequest = {
   resolve: (diff: PreparedFileDiffResult) => void
@@ -66,7 +66,7 @@ function getWorker() {
 }
 
 async function prepareFileDiffFallback(diff: FileDiffResult) {
-  const { prepareFileDiff } = await import("./prepareDiff.parser")
+  const { prepareFileDiff } = await import("@/diffs/create.parser")
   return prepareFileDiff(diff)
 }
 

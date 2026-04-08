@@ -126,6 +126,17 @@ go run ./cmd/diffx --dev
 
 Starts the Go server and proxies frontend requests to a Vite dev server. Frontend changes reflect instantly via hot module reload without rebuilding.
 
+### Agent review mode (stdout handoff)
+
+```sh
+go run ./cmd/diffx review
+# or
+diffx review
+```
+
+This starts the same diff UI but enables `/api/feedback` for plannotator-style handoff.  
+Use **Send to agent** in the header after annotating. `diffx` prints the submitted feedback to stdout and exits so the calling agent can continue in chat.
+
 ### Production build
 
 ```sh

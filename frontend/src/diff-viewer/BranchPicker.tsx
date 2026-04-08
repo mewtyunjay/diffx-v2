@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Check, ChevronDown, GitBranch } from "lucide-react"
 
-import type { BranchOption } from "@/app/changed-files/api"
+import type { BranchOption } from "@/git/types"
 import {
   Command,
   CommandEmpty,

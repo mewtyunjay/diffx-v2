@@ -72,6 +72,30 @@ func TestParseConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "review mode",
+			args: []string{"review"},
+			want: config{
+				address:      defaultAddress,
+				port:         defaultPort,
+				explicitPort: false,
+				dev:          false,
+				reviewMode:   true,
+				targetPath:   ".",
+			},
+		},
+		{
+			name: "review mode with path",
+			args: []string{"review", "frontend"},
+			want: config{
+				address:      defaultAddress,
+				port:         defaultPort,
+				explicitPort: false,
+				dev:          false,
+				reviewMode:   true,
+				targetPath:   "frontend",
+			},
+		},
+		{
 			name:    "multiple paths",
 			args:    []string{"frontend", "internal"},
 			wantErr: true,

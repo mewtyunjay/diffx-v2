@@ -1,0 +1,178 @@
+import { useCallback, useMemo, useState } from "react"
+
+import {
+  commitStaged,
+  pushCurrentBranch,
+  stageAll,
+  stageFile,
+  unstageAll,
+  unstageFile,
+} from "@/git/api"
+import type { ChangedFileItem } from "@/git/types"
+import { toast } from "@/components/ui/sonner"
+import { getToastErrorDescription } from "@/lib/toast-errors"
+
+type UseGitActionCommandsOptions = {
+  files: ChangedFileItem[]
+  refreshBranches: (signal?: AbortSignal) => Promise<unknown>
+  refreshChangedFiles: (signal?: AbortSignal) => Promise<unknown>
+}
+
+export function useGitActionCommands({
+  files,
+  refreshBranches,
+  refreshChangedFiles,
+}: UseGitActionCommandsOptions) {
+  const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
+  const [commitMessage, setCommitMessage] = useState("")
+  const [isCommitPending, setIsCommitPending] = useState(false)
+  const [isPushPending, setIsPushPending] = useState(false)
+  const [showPushAction, setShowPushAction] = useState(false)
+
+  const handleToggleStage = useCallback(
+    async (file: ChangedFileItem) => {
+      setStagePendingPaths((current) => [...current, file.path])
+
+      try {
+        if (file.hasStagedChanges) {
+          await unstageFile(file)
+        } else {
+          await stageFile(file)
+        }
+
+        await refreshChangedFiles()
+      } catch (error) {
+        toast.error("Couldn’t stage file.", {
+          description: getToastErrorDescription(error, `Unable to update ${file.displayPath}.`),
+        })
+      } finally {
+        setStagePendingPaths((current) => current.filter((path) => path !== file.path))
+      }
+    },
+    [refreshChangedFiles]
+  )
+
+  const handleBulkStage = useCallback(
+    async (nextFiles: ChangedFileItem[], mode: "stage" | "unstage") => {
+      if (nextFiles.length === 0) {
+        return
+      }
+
+      const targetPaths = nextFiles.map((file) => file.path)
+      setStagePendingPaths((current) => [...new Set([...current, ...targetPaths])])
+
+      try {
+        if (mode === "unstage") {
+          await unstageAll()
+        } else {
+          await stageAll()
+        }
+
+        await refreshChangedFiles()
+      } catch (error) {
+        toast.error(`Couldn’t ${mode} files.`, {
+          description: getToastErrorDescription(
+            error,
+            mode === "unstage"
+              ? "Unable to update the staged files."
+              : "Unable to stage the changed files."
+          ),
+        })
+      } finally {
+        setStagePendingPaths((current) => current.filter((path) => !targetPaths.includes(path)))
+      }
+    },
+    [refreshChangedFiles]
+  )
+
+  const handleStageAll = useCallback(() => {
+    void handleBulkStage(
+      files.filter((file) => file.hasUnstagedChanges),
+      "stage"
+    )
+  }, [files, handleBulkStage])
+
+  const handleUnstageAll = useCallback(() => {
+    void handleBulkStage(
+      files.filter((file) => file.hasStagedChanges),
+      "unstage"
+    )
+  }, [files, handleBulkStage])
+
+  const handleCommit = useCallback(async () => {
+    setIsCommitPending(true)
+    const commitToastId = toast.warning("Creating commit...", {
+      duration: Infinity,
+      dismissible: false,
+    })
+
+    try {
+      const result = await commitStaged(commitMessage)
+      setCommitMessage("")
+      setShowPushAction(true)
+      toast.success(`Created commit ${result.commit.slice(0, 7)}.`, {
+        id: commitToastId,
+      })
+      await Promise.all([refreshChangedFiles(), refreshBranches()])
+    } catch (error) {
+      toast.error("Commit failed.", {
+        id: commitToastId,
+        description: getToastErrorDescription(error, "Unable to create the commit."),
+      })
+    } finally {
+      setIsCommitPending(false)
+    }
+  }, [commitMessage, refreshBranches, refreshChangedFiles])
+
+  const handlePush = useCallback(async () => {
+    setIsPushPending(true)
+    const pushToastId = toast.warning("Pushing branch...", {
+      duration: Infinity,
+      dismissible: false,
+    })
+
+    try {
+      const result = await pushCurrentBranch()
+      setShowPushAction(false)
+      toast.success(`Pushed ${result.remoteRef}.`, {
+        id: pushToastId,
+      })
+      await Promise.all([refreshChangedFiles(), refreshBranches()])
+    } catch (error) {
+      toast.error("Push failed.", {
+        id: pushToastId,
+        description: getToastErrorDescription(error, "Unable to push the current branch."),
+      })
+    } finally {
+      setIsPushPending(false)
+    }
+  }, [refreshBranches, refreshChangedFiles])
+
+  return useMemo(
+    () => ({
+      commitMessage,
+      handleCommit,
+      handlePush,
+      handleStageAll,
+      handleToggleStage,
+      handleUnstageAll,
+      isCommitPending,
+      isPushPending,
+      setCommitMessage,
+      showPushAction,
+      stagePendingPaths,
+    }),
+    [
+      commitMessage,
+      handleCommit,
+      handlePush,
+      handleStageAll,
+      handleToggleStage,
+      handleUnstageAll,
+      isCommitPending,
+      isPushPending,
+      showPushAction,
+      stagePendingPaths,
+    ]
+  )
+}
