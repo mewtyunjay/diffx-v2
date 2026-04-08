@@ -146,6 +146,39 @@ func TestRepoWatcherIgnoresOtherGitLockChanges(t *testing.T) {
 	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
 }
 
+func TestRepoWatcherSkipsGitIgnoredTree(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	nodeModulesBinDir := filepath.Join(repoRoot, "frontend", "node_modules", ".bin")
+	if err := os.MkdirAll(nodeModulesBinDir, 0o755); err != nil {
+		t.Fatalf("mkdir node_modules/.bin: %v", err)
+	}
+	writeServerTestFile(t, filepath.Join(repoRoot, ".gitignore"), "frontend/node_modules/\n")
+	if err := os.Symlink("jiti 2", filepath.Join(nodeModulesBinDir, "jiti")); err != nil {
+		t.Fatalf("symlink broken bin entry: %v", err)
+	}
+
+	hub := newRepoEventHub()
+	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
+		RepoRoot:  repoRoot,
+		ScopePath: ".",
+	}, hub)
+	if err != nil {
+		t.Fatalf("newRepoWatcher returned error: %v", err)
+	}
+	defer watcher.Close()
+	defer hub.Close()
+
+	nodeModulesDir := filepath.Join(repoRoot, "frontend", "node_modules")
+	if _, ok := watcher.watched[nodeModulesDir]; ok {
+		t.Fatalf("expected %q to be skipped", nodeModulesDir)
+	}
+	if _, ok := watcher.watched[nodeModulesBinDir]; ok {
+		t.Fatalf("expected %q to be skipped", nodeModulesBinDir)
+	}
+}
+
 func waitForRepoChangedEvent(t *testing.T, events <-chan repoChangedEvent) repoChangedEvent {
 	t.Helper()
 

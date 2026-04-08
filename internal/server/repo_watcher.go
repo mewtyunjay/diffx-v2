@@ -27,6 +27,7 @@ type repoWatcher struct {
 	debounce     time.Duration
 	worktreeRoot string
 	gitDir       string
+	ignoredPaths *repoIgnoreMatcher
 	watched      map[string]repoChangeKind
 	suppressMu   sync.Mutex
 	suppressGit  int
@@ -36,6 +37,11 @@ type repoWatcher struct {
 
 func newRepoWatcher(workspace gitstatus.WorkspaceTarget, repoEvents *repoEventHub) (*repoWatcher, error) {
 	roots, err := resolveRepoWatchRoots(workspace)
+	if err != nil {
+		return nil, err
+	}
+
+	ignoredPaths, err := newRepoIgnoreMatcher(workspace.RepoRoot, roots.worktreeRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -51,6 +57,7 @@ func newRepoWatcher(workspace gitstatus.WorkspaceTarget, repoEvents *repoEventHu
 		debounce:     repoWatchDebounce,
 		worktreeRoot: roots.worktreeRoot,
 		gitDir:       roots.gitDir,
+		ignoredPaths: ignoredPaths,
 		watched:      make(map[string]repoChangeKind),
 		done:         make(chan struct{}),
 	}
@@ -104,6 +111,10 @@ func (w *repoWatcher) addTree(root string, kind repoChangeKind) error {
 }
 
 func (w *repoWatcher) shouldSkipWorktreePath(path string) bool {
+	if path != w.worktreeRoot && w.ignoredPaths != nil && w.ignoredPaths.matchesKnownPath(path) {
+		return true
+	}
+
 	if w.gitDir == "" || !pathWithinRoot(w.gitDir, w.worktreeRoot) {
 		return false
 	}
@@ -178,10 +189,18 @@ func (w *repoWatcher) handleEvent(event fsnotify.Event) (repoChangeKind, bool) {
 	if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
 		w.removeWatchSubtree(cleanPath)
 	}
+	if w.shouldRefreshIgnoredPaths(cleanPath) {
+		w.refreshIgnoredPaths()
+	}
 
 	kind, ok := w.classifyPath(cleanPath)
 	if !ok {
 		return "", false
+	}
+	if kind == repoChangeWorktree {
+		if ignored := w.shouldIgnoreWorktreePath(cleanPath); ignored {
+			return "", false
+		}
 	}
 
 	if event.Op&fsnotify.Create != 0 {
@@ -205,6 +224,47 @@ func (w *repoWatcher) shouldIgnoreGitPath(path string) bool {
 	}
 
 	return strings.HasSuffix(filepath.Base(path), ".lock")
+}
+
+func (w *repoWatcher) shouldIgnoreWorktreePath(path string) bool {
+	if w.ignoredPaths == nil {
+		return false
+	}
+
+	ignored, err := w.ignoredPaths.isIgnoredPath(path)
+	return err == nil && ignored
+}
+
+func (w *repoWatcher) shouldRefreshIgnoredPaths(path string) bool {
+	if filepath.Base(path) == ".gitignore" {
+		return true
+	}
+
+	return filepath.Clean(path) == filepath.Join(w.gitDir, "info", "exclude")
+}
+
+func (w *repoWatcher) refreshIgnoredPaths() {
+	if w.ignoredPaths == nil {
+		return
+	}
+
+	if err := w.ignoredPaths.reload(); err != nil {
+		return
+	}
+
+	for watchedPath, kind := range w.watched {
+		if kind != repoChangeWorktree || watchedPath == w.worktreeRoot {
+			continue
+		}
+		if !w.shouldSkipWorktreePath(watchedPath) {
+			continue
+		}
+
+		_ = w.watcher.Remove(watchedPath)
+		delete(w.watched, watchedPath)
+	}
+
+	_ = w.addTree(w.worktreeRoot, repoChangeWorktree)
 }
 
 func (w *repoWatcher) suppressGitEvents() func() {
