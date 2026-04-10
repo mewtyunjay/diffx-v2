@@ -48,6 +48,7 @@ export function SidebarFileTree<T>({
     <SidebarMenu>
       {rows.map((row) => {
         const isFile = row.kind === "file"
+        const isSelected = isFile && row.path === selectedPath
         const indicatorClassName =
           isFile && row.data && getFileIndicatorClassName
             ? getFileIndicatorClassName(row.data)
@@ -61,11 +62,12 @@ export function SidebarFileTree<T>({
             <SidebarMenuButton
               type="button"
               size={density === "compact" ? "sm" : "default"}
-              isActive={isFile && row.path === selectedPath}
+              isActive={isSelected}
               onClick={() => (isFile ? onSelectFile(row.path, row.data) : onToggleFolder(row.path))}
               className={cn(
                 "justify-start gap-2 rounded-lg font-normal transition-colors",
-                row.depth === 0 && "font-semibold",
+                isSelected &&
+                  "data-active:bg-transparent data-active:text-sidebar-foreground data-active:font-normal",
               )}
               style={{
                 paddingLeft: `${2 + row.depth * indent}px`,

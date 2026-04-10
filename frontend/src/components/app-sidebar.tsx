@@ -22,6 +22,7 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   onSelectFile: (path: string) => void
   hiddenStagedFileCount: number
   stagePendingPaths: string[]
+  isBulkStagePending: boolean
   onToggleStage: (file: ChangedFileItem) => void
   onStageAll: () => void
   onUnstageAll: () => void
@@ -44,6 +45,7 @@ export function AppSidebar({
   onSelectFile,
   hiddenStagedFileCount,
   stagePendingPaths,
+  isBulkStagePending,
   onToggleStage,
   onStageAll,
   onUnstageAll,
@@ -83,6 +85,7 @@ export function AppSidebar({
           selectedFilePath={selectedFilePath}
           onSelectFile={onSelectFile}
           stagePendingPaths={stagePendingPaths}
+          isBulkStagePending={isBulkStagePending}
           onToggleStage={onToggleStage}
           onStageAll={onStageAll}
           onUnstageAll={onUnstageAll}

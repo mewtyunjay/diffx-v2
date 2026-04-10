@@ -9,6 +9,7 @@ import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
 import type { ChangedFilesResult } from "@/git/types"
 import { AppSidebar } from "@/components/app-sidebar"
+import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -168,6 +169,8 @@ export function DiffViewerPage() {
         : selectedFile && diffError && !isDiffLoading
           ? diffError
           : null
+  const isSelectedFileStagePending =
+    selectedFile != null && gitActions.stagePendingPaths.includes(selectedFile.path)
 
   return (
     <SidebarProvider
@@ -189,6 +192,7 @@ export function DiffViewerPage() {
         onSelectFile={setSelectedFilePath}
         hiddenStagedFileCount={hiddenStagedFileCount}
         stagePendingPaths={gitActions.stagePendingPaths}
+        isBulkStagePending={gitActions.isBulkStagePending}
         onToggleStage={gitActions.handleToggleStage}
         onStageAll={gitActions.handleStageAll}
         onUnstageAll={gitActions.handleUnstageAll}
@@ -227,14 +231,29 @@ export function DiffViewerPage() {
 
             <div className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
               {selectedFile ? (
-                <DiffViewerToolbar
-                  path={selectedFile.path}
-                  diff={currentDisplayedDiff}
-                  viewMode={viewMode}
-                  isExpanded={isCurrentFileExpanded}
-                  onToggleExpandAll={handleToggleCurrentFileExpanded}
-                  onViewModeChange={setViewMode}
-                />
+                <div className="sticky top-0 z-20">
+                  <div className="relative z-20">
+                    <DiffViewerToolbar
+                      diff={currentDisplayedDiff}
+                      comparisonMode={comparisonMode}
+                      selectedFile={selectedFile}
+                      isStagePending={isSelectedFileStagePending}
+                      viewMode={viewMode}
+                      isExpanded={isCurrentFileExpanded}
+                      onToggleExpandAll={handleToggleCurrentFileExpanded}
+                      onToggleStage={gitActions.handleToggleStage}
+                      onViewModeChange={setViewMode}
+                    />
+                  </div>
+                  <div className="relative z-10">
+                    <DiffFileHeader
+                      file={selectedFile}
+                      diff={currentDisplayedDiff}
+                      isDiffLoading={isDiffLoading}
+                      scopePath={scopePath}
+                    />
+                  </div>
+                </div>
               ) : null}
 
               <DiffPane

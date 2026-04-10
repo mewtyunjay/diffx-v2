@@ -166,6 +166,10 @@
   --danger-soft: color-mix(in oklab, var(--destructive) 12%, transparent);
   --diff-add: #b8bb26;
   --diff-delete: #fb4934;
+  --toggle-staged-text: var(--diff-add);
+  --toggle-staged-bg: color-mix(in oklab, var(--diff-add) 14%, transparent);
+  --toggle-staged-bg-hover: color-mix(in oklab, var(--diff-add) 20%, transparent);
+  --toggle-staged-border: color-mix(in oklab, var(--diff-add) 35%, transparent);
   --focus-ring-soft: color-mix(in oklab, var(--ring) 50%, transparent);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);

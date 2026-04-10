@@ -24,6 +24,7 @@ export function useGitActionCommands({
   refreshChangedFiles,
 }: UseGitActionCommandsOptions) {
   const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
+  const [isBulkStagePending, setIsBulkStagePending] = useState(false)
   const [commitMessage, setCommitMessage] = useState("")
   const [isCommitPending, setIsCommitPending] = useState(false)
   const [isPushPending, setIsPushPending] = useState(false)
@@ -59,6 +60,7 @@ export function useGitActionCommands({
       }
 
       const targetPaths = nextFiles.map((file) => file.path)
+      setIsBulkStagePending(true)
       setStagePendingPaths((current) => [...new Set([...current, ...targetPaths])])
 
       try {
@@ -80,6 +82,7 @@ export function useGitActionCommands({
         })
       } finally {
         setStagePendingPaths((current) => current.filter((path) => !targetPaths.includes(path)))
+        setIsBulkStagePending(false)
       }
     },
     [refreshChangedFiles]
@@ -156,6 +159,7 @@ export function useGitActionCommands({
       handleStageAll,
       handleToggleStage,
       handleUnstageAll,
+      isBulkStagePending,
       isCommitPending,
       isPushPending,
       setCommitMessage,
@@ -169,6 +173,7 @@ export function useGitActionCommands({
       handleStageAll,
       handleToggleStage,
       handleUnstageAll,
+      isBulkStagePending,
       isCommitPending,
       isPushPending,
       showPushAction,

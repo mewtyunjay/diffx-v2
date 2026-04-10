@@ -16,7 +16,10 @@ function trimTrailingLineBreak(value: string) {
   return value.replace(/\r?\n$/, "")
 }
 
-function renderHunkPatch(hunk: ParsedHunk) {
+function renderHunkPatch(
+  hunk: ParsedHunk,
+  linesBySide: { additions: string[]; deletions: string[] }
+) {
   const lines: string[] = []
   if (hunk.hunkSpecs) {
     lines.push(hunk.hunkSpecs)
@@ -24,16 +27,22 @@ function renderHunkPatch(hunk: ParsedHunk) {
 
   for (const chunk of hunk.hunkContent) {
     if (chunk.type === "context") {
-      for (const line of chunk.lines) {
+      for (let index = 0; index < chunk.lines; index += 1) {
+        const line =
+          linesBySide.additions[chunk.additionLineIndex + index] ??
+          linesBySide.deletions[chunk.deletionLineIndex + index] ??
+          ""
         lines.push(` ${trimTrailingLineBreak(line)}`)
       }
       continue
     }
 
-    for (const line of chunk.deletions) {
+    for (let index = 0; index < chunk.deletions; index += 1) {
+      const line = linesBySide.deletions[chunk.deletionLineIndex + index] ?? ""
       lines.push(`-${trimTrailingLineBreak(line)}`)
     }
-    for (const line of chunk.additions) {
+    for (let index = 0; index < chunk.additions; index += 1) {
+      const line = linesBySide.additions[chunk.additionLineIndex + index] ?? ""
       lines.push(`+${trimTrailingLineBreak(line)}`)
     }
   }
@@ -65,7 +74,10 @@ export function findPatchMetadataForAnnotation(
     hunkIndex,
     hunkContext: hunk.hunkContext,
     hunkSpecs: hunk.hunkSpecs,
-    hunkPatch: renderHunkPatch(hunk),
+    hunkPatch: renderHunkPatch(hunk, {
+      additions: diff.parsedDiff?.additionLines ?? [],
+      deletions: diff.parsedDiff?.deletionLines ?? [],
+    }),
     additionStart: hunk.additionStart,
     additionCount: hunk.additionCount,
     additionLines: hunk.additionLines,

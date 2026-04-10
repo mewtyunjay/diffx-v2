@@ -1,12 +1,12 @@
-import { LoaderCircle, Minus, Plus } from "lucide-react"
+import { Minus, Plus } from "lucide-react"
 import * as React from "react"
 
 import type {
   ChangedFileItem,
-  ChangedFileStatus,
   ComparisonMode,
 } from "@/git/types"
 import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
+import { fileStatusIndicatorClassNames } from "@/components/file-tree/status-indicator"
 import {
   buildSidebarTree,
   collectFolderPaths,
@@ -25,16 +25,10 @@ type FileTreePanelProps = {
   selectedFilePath: string | null
   onSelectFile: (path: string) => void
   stagePendingPaths: string[]
+  isBulkStagePending: boolean
   onToggleStage: (file: ChangedFileItem) => void
   onStageAll: () => void
   onUnstageAll: () => void
-}
-
-const statusClassNames: Record<ChangedFileStatus, string> = {
-  modified: "bg-amber-400",
-  added: "bg-emerald-400",
-  deleted: "bg-rose-400",
-  renamed: "bg-sky-400",
 }
 
 export function FileTreePanel({
@@ -46,6 +40,7 @@ export function FileTreePanel({
   selectedFilePath,
   onSelectFile,
   stagePendingPaths,
+  isBulkStagePending,
   onToggleStage,
   onStageAll,
   onUnstageAll,
@@ -79,7 +74,6 @@ export function FileTreePanel({
   const stagePendingPathSet = React.useMemo(() => new Set(stagePendingPaths), [stagePendingPaths])
 
   const canUseGitActions = comparisonMode === "head"
-  const hasPendingStageAction = stagePendingPathSet.size > 0
   const showBulkStageActions = scopePath === "."
   const visibleFileCountLabel = `${files.length} changed ${files.length === 1 ? "file" : "files"}`
   const stageAllCount = React.useMemo(
@@ -94,7 +88,7 @@ export function FileTreePanel({
   const bulkActionLabel = showUnstageAll ? "Unstage All" : "Stage All"
   const bulkActionDisabled =
     !canUseGitActions ||
-    hasPendingStageAction ||
+    isBulkStagePending ||
     (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
 
   React.useEffect(() => {
@@ -131,7 +125,10 @@ export function FileTreePanel({
               type="button"
               size="xs"
               variant="outline"
-              className="border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              className={cn(
+                "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                isBulkStagePending && "disabled:opacity-100"
+              )}
               disabled={bulkActionDisabled}
               onClick={showUnstageAll ? onUnstageAll : onStageAll}
             >
@@ -146,7 +143,7 @@ export function FileTreePanel({
           showRoot={false}
           indent={10}
           density="comfortable"
-          getFileIndicatorClassName={(file) => statusClassNames[file.status]}
+          getFileIndicatorClassName={(file) => fileStatusIndicatorClassNames[file.status]}
           getFileLanguage={(file) => file.language}
           renderFileAction={(file) => {
             const isPending = stagePendingPathSet.has(file.path)
@@ -169,21 +166,15 @@ export function FileTreePanel({
                     ? "cursor-not-allowed opacity-45"
                     : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 )}
-                disabled={isDisabled}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  if (!isDisabled) {
-                    onToggleStage(file)
-                  }
-                }}
-              >
-                {isPending ? (
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                ) : file.hasStagedChanges ? (
-                  <Minus className="size-3.5" />
-                ) : (
-                  <Plus className="size-3.5" />
-                )}
+              disabled={isDisabled}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (!isDisabled) {
+                  onToggleStage(file)
+                }
+              }}
+            >
+                {file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
               </button>
             )
           }}
