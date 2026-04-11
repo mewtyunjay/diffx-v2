@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { FolderTree } from "lucide-react"
 
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
@@ -8,14 +9,13 @@ import { useChangedFilesState } from "@/diff-viewer/hooks/useChangedFilesState"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
 import type { ChangedFilesResult } from "@/git/types"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppShell } from "@/components/app-shell"
 import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
 import { DiffPane } from "@/components/diff/DiffPane"
+import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
+import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import { SiteHeader } from "@/components/site-header"
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
+import { SidebarHeader } from "@/components/ui/sidebar"
 
 export function DiffViewerPage() {
   const [latestChangedFilesResult, setLatestChangedFilesResult] =
@@ -173,39 +173,56 @@ export function DiffViewerPage() {
     selectedFile != null && gitActions.stagePendingPaths.includes(selectedFile.path)
 
   return (
-    <SidebarProvider
-      className="bg-sidebar"
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as CSSProperties
+    <AppShell
+      sidebarContent={
+        <>
+          <SidebarHeader className="relative h-(--header-height) justify-center gap-0 px-0 py-0">
+            <div className="flex h-full items-center px-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
+                  <FolderTree className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate type-title text-sidebar-foreground">
+                    {repoName || workspaceName || "repository"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </SidebarHeader>
+
+          <div className="flex min-h-0 flex-1 flex-col">
+            <FileTreePanel
+              files={files}
+              repoName={repoName}
+              workspaceName={workspaceName}
+              scopePath={scopePath}
+              comparisonMode={comparisonMode}
+              selectedFilePath={selectedFilePath}
+              onSelectFile={setSelectedFilePath}
+              stagePendingPaths={gitActions.stagePendingPaths}
+              isBulkStagePending={gitActions.isBulkStagePending}
+              onToggleStage={gitActions.handleToggleStage}
+              onStageAll={gitActions.handleStageAll}
+              onUnstageAll={gitActions.handleUnstageAll}
+            />
+
+            <GitActionsPanel
+              comparisonMode={comparisonMode}
+              files={files}
+              hiddenStagedFileCount={hiddenStagedFileCount}
+              commitMessage={gitActions.commitMessage}
+              isCommitPending={gitActions.isCommitPending}
+              onCommitMessageChange={gitActions.setCommitMessage}
+              onCommit={gitActions.handleCommit}
+              isPushPending={gitActions.isPushPending}
+              showPushAction={gitActions.showPushAction}
+              onPush={gitActions.handlePush}
+            />
+          </div>
+        </>
       }
-    >
-      <AppSidebar
-        files={files}
-        repoName={repoName}
-        workspaceName={workspaceName}
-        scopePath={scopePath}
-        comparisonMode={comparisonMode}
-        selectedFilePath={selectedFilePath}
-        onSelectFile={setSelectedFilePath}
-        hiddenStagedFileCount={hiddenStagedFileCount}
-        stagePendingPaths={gitActions.stagePendingPaths}
-        isBulkStagePending={gitActions.isBulkStagePending}
-        onToggleStage={gitActions.handleToggleStage}
-        onStageAll={gitActions.handleStageAll}
-        onUnstageAll={gitActions.handleUnstageAll}
-        commitMessage={gitActions.commitMessage}
-        isCommitPending={gitActions.isCommitPending}
-        onCommitMessageChange={gitActions.setCommitMessage}
-        onCommit={gitActions.handleCommit}
-        isPushPending={gitActions.isPushPending}
-        showPushAction={gitActions.showPushAction}
-        onPush={gitActions.handlePush}
-        variant="inset"
-      />
-      <SidebarInset>
+      header={
         <SiteHeader
           branches={branches}
           currentRef={currentRef}
@@ -221,55 +238,54 @@ export function DiffViewerPage() {
           onCopyAnnotations={copyAnnotations}
           onSendAnnotations={sendAnnotations}
         />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {headerError ? (
-              <div className="border-b border-border/60 px-4 py-2">
-                <p className="measure-readable type-meta text-destructive">{headerError}</p>
+      }
+    >
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {headerError ? (
+          <div className="border-b border-border/60 px-4 py-2">
+            <p className="measure-readable type-meta text-destructive">{headerError}</p>
+          </div>
+        ) : null}
+
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
+          {selectedFile ? (
+            <div className="sticky top-0 z-20">
+              <div className="relative z-20">
+                <DiffViewerToolbar
+                  diff={currentDisplayedDiff}
+                  comparisonMode={comparisonMode}
+                  selectedFile={selectedFile}
+                  isStagePending={isSelectedFileStagePending}
+                  viewMode={viewMode}
+                  isExpanded={isCurrentFileExpanded}
+                  onToggleExpandAll={handleToggleCurrentFileExpanded}
+                  onToggleStage={gitActions.handleToggleStage}
+                  onViewModeChange={setViewMode}
+                />
               </div>
-            ) : null}
-
-            <div className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
-              {selectedFile ? (
-                <div className="sticky top-0 z-20">
-                  <div className="relative z-20">
-                    <DiffViewerToolbar
-                      diff={currentDisplayedDiff}
-                      comparisonMode={comparisonMode}
-                      selectedFile={selectedFile}
-                      isStagePending={isSelectedFileStagePending}
-                      viewMode={viewMode}
-                      isExpanded={isCurrentFileExpanded}
-                      onToggleExpandAll={handleToggleCurrentFileExpanded}
-                      onToggleStage={gitActions.handleToggleStage}
-                      onViewModeChange={setViewMode}
-                    />
-                  </div>
-                  <div className="relative z-10">
-                    <DiffFileHeader
-                      file={selectedFile}
-                      diff={currentDisplayedDiff}
-                      isDiffLoading={isDiffLoading}
-                      scopePath={scopePath}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <DiffPane
-                diff={selectedFile ? currentDisplayedDiff : null}
-                hasSelectedFile={!!selectedFile}
-                viewMode={viewMode}
-                expandAll={isCurrentFileExpanded}
-                savedAnnotations={visibleSavedAnnotations}
-                clearDraftToken={clearDraftToken}
-                onSaveAnnotation={saveAnnotation}
-                onDeleteAnnotation={deleteAnnotation}
-              />
+              <div className="relative z-10">
+                <DiffFileHeader
+                  file={selectedFile}
+                  diff={currentDisplayedDiff}
+                  isDiffLoading={isDiffLoading}
+                  scopePath={scopePath}
+                />
+              </div>
             </div>
-          </section>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+          ) : null}
+
+          <DiffPane
+            diff={selectedFile ? currentDisplayedDiff : null}
+            hasSelectedFile={!!selectedFile}
+            viewMode={viewMode}
+            expandAll={isCurrentFileExpanded}
+            savedAnnotations={visibleSavedAnnotations}
+            clearDraftToken={clearDraftToken}
+            onSaveAnnotation={saveAnnotation}
+            onDeleteAnnotation={deleteAnnotation}
+          />
+        </div>
+      </section>
+    </AppShell>
   )
 }

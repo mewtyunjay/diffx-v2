@@ -38,7 +38,7 @@ export function GitActionsPanel({
   const showPushButton = canUseGitActions && (canCommit || showPushAction)
 
   return (
-    <SidebarFooter className="border-t border-sidebar-border/70 bg-sidebar/95 p-3 backdrop-blur">
+    <SidebarFooter className="border-t border-sidebar-border/70 p-3">
       <div className="space-y-3">
         <div>
           <p className="type-overline text-sidebar-foreground/65">
