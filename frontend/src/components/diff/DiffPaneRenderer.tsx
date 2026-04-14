@@ -117,6 +117,7 @@ function DiffPaneRendererContent({
     () => ({
       diffStyle: viewMode,
       diffIndicators: "bars" as const,
+      enableGutterUtility: true,
       disableFileHeader: true,
       overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
