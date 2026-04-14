@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 DIFFX_BIN_PATH="${LOCAL_BIN_DIR}/diffx"
+DEFAULT_GOCACHE_DIR="/tmp/diffx-go-build-cache"
 
 log() {
   echo "[setup] $1"
@@ -59,11 +60,37 @@ TXT
   fi
 }
 
+usage() {
+  cat <<'TXT'
+Local source installer for development.
+
+Builds diffx from the current repo and installs it into ~/.local/bin/diffx,
+then runs:
+  diffx setup [args...]
+
+Usage:
+  bash ./scripts/setup-agent-integrations.sh [diffx setup args]
+
+Examples:
+  bash ./scripts/setup-agent-integrations.sh
+  bash ./scripts/setup-agent-integrations.sh --list-agents
+  bash ./scripts/setup-agent-integrations.sh --yes --agents universal,claude,codex
+TXT
+}
+
 main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
   ensure_repo_root
   ensure_command go
   ensure_command node
   ensure_command npm
+
+  export GOCACHE="${GOCACHE:-${DEFAULT_GOCACHE_DIR}}"
+  mkdir -p "${GOCACHE}"
 
   mkdir -p "${LOCAL_BIN_DIR}"
 
