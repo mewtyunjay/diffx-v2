@@ -112,6 +112,7 @@ func (model setupTUIModel) View() string {
 	for index := range model.targets {
 		if model.targets[index].ID == "universal" || model.targets[index].ID == "claude" {
 			builder.WriteString(model.renderRow(index))
+			builder.WriteString("\n")
 		}
 	}
 	builder.WriteString("\n")
@@ -120,6 +121,7 @@ func (model setupTUIModel) View() string {
 	for index := range model.targets {
 		if model.targets[index].ID != "universal" && model.targets[index].ID != "claude" {
 			builder.WriteString(model.renderRow(index))
+			builder.WriteString("\n")
 		}
 	}
 
@@ -154,7 +156,7 @@ func (model setupTUIModel) renderRow(index int) string {
 		status = existsStyle.Render("exists")
 	}
 
-	line := fmt.Sprintf("%s %2d) [%s] %-36s (%s)\n", cursor, index+1, checked, target.Label, status)
+	line := fmt.Sprintf("%s %2d) [%s] %s (%s)", cursor, index+1, checked, target.Label, status)
 	return rowStyle.Render(line)
 }
 

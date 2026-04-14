@@ -130,7 +130,7 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
     const onKeyDown = (event: KeyboardEvent) => {
       const isEditableTarget = isEditableElement(event.target)
 
-      for (const shortcut of Object.values(SHORTCUTS)) {
+      for (const shortcut of Object.values(SHORTCUTS) as ShortcutDefinition[]) {
         if (isEditableTarget && !shortcut.allowInEditable) {
           continue
         }
