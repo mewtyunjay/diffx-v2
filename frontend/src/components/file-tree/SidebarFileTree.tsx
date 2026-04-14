@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useCallback, useRef, type ReactNode } from "react"
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
 
 import {
@@ -44,6 +44,16 @@ export function SidebarFileTree<T>({
     ? flattenVisibleTree(root, expandedPathSet)
     : root.children.flatMap((child) => flattenVisibleTree(child, expandedPathSet, 0))
 
+  const prevSelectedPath = useRef(selectedPath)
+  const scrollRef = useCallback(
+    (el: HTMLLIElement | null) => {
+      if (!el || selectedPath === prevSelectedPath.current) return
+      prevSelectedPath.current = selectedPath
+      el.scrollIntoView({ block: "nearest" })
+    },
+    [selectedPath]
+  )
+
   return (
     <SidebarMenu>
       {rows.map((row) => {
@@ -58,17 +68,13 @@ export function SidebarFileTree<T>({
         const fileAction = isFile && row.data && renderFileAction ? renderFileAction(row.data) : null
 
         return (
-          <SidebarMenuItem key={row.path}>
+          <SidebarMenuItem key={row.path} ref={isSelected ? scrollRef : undefined}>
             <SidebarMenuButton
               type="button"
               size={density === "compact" ? "sm" : "default"}
               isActive={isSelected}
               onClick={() => (isFile ? onSelectFile(row.path, row.data) : onToggleFolder(row.path))}
-              className={cn(
-                "justify-start gap-2 rounded-lg font-normal transition-colors",
-                isSelected &&
-                  "data-active:bg-transparent data-active:text-sidebar-foreground data-active:font-normal",
-              )}
+              className="justify-start gap-2 rounded-lg font-normal transition-colors"
               style={{
                 paddingLeft: `${2 + row.depth * indent}px`,
               }}
