@@ -29,6 +29,7 @@ type ShortcutDefinition = {
   label: string
   scope: ShortcutScope
   group: string
+  allowInEditable?: boolean
 }
 
 export const SHORTCUTS = {
@@ -80,6 +81,7 @@ export const SHORTCUTS = {
     label: "Toggle sidebar",
     scope: "global",
     group: "Workspace",
+    allowInEditable: true,
   },
   showHelp: {
     id: "showHelp",
@@ -126,9 +128,13 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableElement(event.target)) return
+      const isEditableTarget = isEditableElement(event.target)
 
       for (const shortcut of Object.values(SHORTCUTS)) {
+        if (isEditableTarget && !shortcut.allowInEditable) {
+          continue
+        }
+
         if (shortcut.scope !== "global" && shortcut.scope !== activeModeScope) {
           continue
         }
