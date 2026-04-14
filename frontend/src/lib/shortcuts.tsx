@@ -53,6 +53,20 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff actions",
   },
+  focusCommitMessage: {
+    id: "focusCommitMessage",
+    keys: ["shift", "c"],
+    label: "Focus commit message",
+    scope: "diff",
+    group: "Git actions",
+  },
+  pushBranch: {
+    id: "pushBranch",
+    keys: ["shift", "p"],
+    label: "Push current branch",
+    scope: "diff",
+    group: "Git actions",
+  },
   sendToAgent: {
     id: "sendToAgent",
     keys: ["meta", "."],
