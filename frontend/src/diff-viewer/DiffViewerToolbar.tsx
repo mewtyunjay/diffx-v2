@@ -1,9 +1,11 @@
-import { Check, ChevronsUpDown, Columns2, Rows3 } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, Columns2, Rows3 } from "lucide-react"
 
 import type { PreparedFileDiffResult } from "@/diffs/create"
 import type { ChangedFileItem, ComparisonMode } from "@/git/types"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { SHORTCUTS } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
 type DiffViewerToolbarProps = {
@@ -13,9 +15,15 @@ type DiffViewerToolbarProps = {
   isStagePending: boolean
   viewMode: "split" | "unified"
   isExpanded: boolean
+  canGoPrev: boolean
+  canGoNext: boolean
+  fileIndex: number
+  totalFiles: number
   onToggleExpandAll: () => void
   onToggleStage: (file: ChangedFileItem) => void
   onViewModeChange: (mode: "split" | "unified") => void
+  onGoPrev: () => void
+  onGoNext: () => void
 }
 
 const VIEW_MODES = [
@@ -72,10 +80,18 @@ export function DiffViewerToolbar({
   isStagePending,
   viewMode,
   isExpanded,
+  canGoPrev,
+  canGoNext,
+  fileIndex,
+  totalFiles,
   onToggleExpandAll,
   onToggleStage,
   onViewModeChange,
+  onGoPrev,
+  onGoNext,
 }: DiffViewerToolbarProps) {
+  const showFileNav = totalFiles > 0 && selectedFile != null
+  const counterLabel = showFileNav ? `${fileIndex + 1} / ${totalFiles}` : null
   const showExpandToggle = canExpandEntireFile(diff) || isExpanded
   const expandLabel = isExpanded ? "Collapse to diff view" : "Expand full file"
   const showStageToggle = comparisonMode === "head" && selectedFile != null
@@ -148,33 +164,90 @@ export function DiffViewerToolbar({
         ) : null}
       </div>
 
-      {showStageToggle && selectedFile ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              aria-label={stageAriaLabel}
-              aria-pressed={stageIsActive}
-              className={cn(
-                "surface-field shrink-0 gap-1.5 px-2 shadow-none",
-                stageIsActive
-                  ? "border-[var(--toggle-staged-border)] bg-[var(--toggle-staged-bg)] text-[var(--toggle-staged-text)] hover:bg-[var(--toggle-staged-bg-hover)] hover:text-[var(--toggle-staged-text)]"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              disabled={stageIsDisabled}
-              onClick={() => onToggleStage(selectedFile)}
+      <div className="flex items-center gap-2">
+        {showFileNav ? (
+          <div
+            className="flex items-center gap-0.5"
+            role="group"
+            aria-label="File navigation"
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Previous file"
+                  disabled={!canGoPrev}
+                  onClick={onGoPrev}
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Previous file
+                <Kbd keys={SHORTCUTS.prevFile.keys} />
+              </TooltipContent>
+            </Tooltip>
+
+            <span
+              className="min-w-10 px-1 text-center type-meta tabular-nums text-muted-foreground"
+              aria-live="polite"
+              aria-label={`File ${fileIndex + 1} of ${totalFiles}`}
             >
-              {stageIsActive ? <Check className="size-3" /> : null}
-              <span>{stageIsActive ? "Staged" : "Stage"}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {stageTooltipDescription}
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
+              {counterLabel}
+            </span>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="Next file"
+                  disabled={!canGoNext}
+                  onClick={onGoNext}
+                >
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Next file
+                <Kbd keys={SHORTCUTS.nextFile.keys} />
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        ) : null}
+
+        {showStageToggle && selectedFile ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                aria-label={stageAriaLabel}
+                aria-pressed={stageIsActive}
+                className={cn(
+                  "surface-field shrink-0 gap-1.5 px-2 shadow-none",
+                  stageIsActive
+                    ? "border-[var(--toggle-staged-border)] bg-[var(--toggle-staged-bg)] text-[var(--toggle-staged-text)] hover:bg-[var(--toggle-staged-bg-hover)] hover:text-[var(--toggle-staged-text)]"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                disabled={stageIsDisabled}
+                onClick={() => onToggleStage(selectedFile)}
+              >
+                {stageIsActive ? <Check className="size-3" /> : null}
+                <span>{stageIsActive ? "Staged" : "Stage"}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {stageTooltipDescription}
+              <Kbd keys={SHORTCUTS.toggleStage.keys} />
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+      </div>
     </div>
   )
 }

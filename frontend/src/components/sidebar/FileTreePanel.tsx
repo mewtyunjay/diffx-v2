@@ -7,22 +7,19 @@ import type {
 } from "@/git/types"
 import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
 import { fileStatusIndicatorClassNames } from "@/components/file-tree/status-indicator"
-import {
-  buildSidebarTree,
-  collectFolderPaths,
-  getAncestorFolderPaths,
-} from "@/components/file-tree/tree-model"
+import type { SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
 import { Button } from "@/components/ui/button"
 import { SidebarContent } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 
 type FileTreePanelProps = {
   files: ChangedFileItem[]
-  repoName: string
-  workspaceName: string
+  tree: SidebarTreeFolderNode<ChangedFileItem>
+  expandedPaths: string[]
+  onToggleFolder: (path: string) => void
+  selectedFile: ChangedFileItem | null
   scopePath: string
   comparisonMode: ComparisonMode
-  selectedFilePath: string | null
   onSelectFile: (path: string) => void
   stagePendingPaths: string[]
   isBulkStagePending: boolean
@@ -33,11 +30,12 @@ type FileTreePanelProps = {
 
 export function FileTreePanel({
   files,
-  repoName,
-  workspaceName,
+  tree,
+  expandedPaths,
+  onToggleFolder,
+  selectedFile,
   scopePath,
   comparisonMode,
-  selectedFilePath,
   onSelectFile,
   stagePendingPaths,
   isBulkStagePending,
@@ -45,32 +43,6 @@ export function FileTreePanel({
   onStageAll,
   onUnstageAll,
 }: FileTreePanelProps) {
-  const selectedFile = React.useMemo(
-    () => files.find((file) => file.path === selectedFilePath) ?? null,
-    [files, selectedFilePath]
-  )
-
-  const tree = React.useMemo(
-    () =>
-      buildSidebarTree(
-        files.map((file) => ({
-          path: file.displayPath,
-          data: file,
-        })),
-        {
-          rootName: workspaceName || repoName || "repository",
-        }
-      ),
-    [files, repoName, workspaceName]
-  )
-
-  const folderPaths = React.useMemo(() => collectFolderPaths(tree), [tree])
-  const selectedAncestorPaths = React.useMemo(
-    () => (selectedFile ? getAncestorFolderPaths(selectedFile.displayPath) : [tree.path]),
-    [selectedFile, tree.path]
-  )
-  const [expandedPaths, setExpandedPaths] = React.useState<string[]>(folderPaths)
-  const hasInitializedExpandedState = React.useRef(false)
   const stagePendingPathSet = React.useMemo(() => new Set(stagePendingPaths), [stagePendingPaths])
 
   const canUseGitActions = comparisonMode === "head"
@@ -90,30 +62,6 @@ export function FileTreePanel({
     !canUseGitActions ||
     isBulkStagePending ||
     (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
-
-  React.useEffect(() => {
-    const folderPathSet = new Set(folderPaths)
-
-    setExpandedPaths((currentPaths) => {
-      const shouldInitializeAll =
-        !hasInitializedExpandedState.current && (files.length > 0 || folderPaths.length > 1)
-      const nextPaths = shouldInitializeAll
-        ? [...folderPaths]
-        : currentPaths.filter((path) => folderPathSet.has(path))
-
-      if (shouldInitializeAll) {
-        hasInitializedExpandedState.current = true
-      }
-
-      for (const path of selectedAncestorPaths) {
-        if (folderPathSet.has(path) && !nextPaths.includes(path)) {
-          nextPaths.push(path)
-        }
-      }
-
-      return [...nextPaths]
-    })
-  }, [files.length, folderPaths, selectedAncestorPaths])
 
   return (
     <SidebarContent>
@@ -178,13 +126,7 @@ export function FileTreePanel({
               </button>
             )
           }}
-          onToggleFolder={(path) =>
-            setExpandedPaths((currentPaths) =>
-              currentPaths.includes(path)
-                ? currentPaths.filter((currentPath) => currentPath !== path)
-                : [...currentPaths, path]
-            )
-          }
+          onToggleFolder={onToggleFolder}
           onSelectFile={(path, file) => {
             if (file) {
               onSelectFile(file.path)

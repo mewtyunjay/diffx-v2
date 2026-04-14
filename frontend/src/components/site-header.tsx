@@ -3,8 +3,11 @@ import { AlertCircle, Check, Copy, LoaderCircle, Send } from "lucide-react"
 import { BranchPicker } from "@/diff-viewer/BranchPicker"
 import type { BranchOption } from "@/git/types"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { SHORTCUTS } from "@/lib/shortcuts"
 
 type SiteHeaderProps = {
   branches: BranchOption[]
@@ -16,7 +19,6 @@ type SiteHeaderProps = {
   sendState: "idle" | "sending" | "success" | "error"
   canCopyAnnotations: boolean
   canSendAnnotations: boolean
-  sendDisabledReason: string | null
   onSelectBaseRef: (baseRef: string) => void
   onCopyAnnotations: () => void
   onSendAnnotations: () => void
@@ -82,7 +84,6 @@ export function SiteHeader({
   sendState,
   canCopyAnnotations,
   canSendAnnotations,
-  sendDisabledReason,
   onSelectBaseRef,
   onCopyAnnotations,
   onSendAnnotations,
@@ -94,7 +95,15 @@ export function SiteHeader({
     <header className="flex h-(--header-height) shrink-0 items-center border-b bg-background/80 backdrop-blur transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
       <div className="flex w-full items-center justify-between gap-4 px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <SidebarTrigger className="-ml-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarTrigger className="-ml-1" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              Toggle sidebar
+              <Kbd keys={SHORTCUTS.toggleSidebar.keys} />
+            </TooltipContent>
+          </Tooltip>
           <Separator
             orientation="vertical"
             className="mx-1 data-[orientation=vertical]:h-6"
@@ -109,16 +118,23 @@ export function SiteHeader({
           />
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <Button
-            type="button"
-            size="sm"
-            onClick={onSendAnnotations}
-            disabled={!canSendAnnotations || sendState === "sending"}
-            title={!canSendAnnotations ? sendDisabledReason ?? undefined : undefined}
-          >
-            {sendButton.icon}
-            {sendButton.label}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onSendAnnotations}
+                disabled={!canSendAnnotations || sendState === "sending"}
+              >
+                {sendButton.icon}
+                {sendButton.label}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {sendButton.label}
+              <Kbd keys={SHORTCUTS.sendToAgent.keys} />
+            </TooltipContent>
+          </Tooltip>
           <Button
             type="button"
             size="sm"

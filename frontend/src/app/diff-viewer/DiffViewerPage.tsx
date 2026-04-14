@@ -6,6 +6,7 @@ import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
 import { useBranchesState } from "@/diff-viewer/hooks/useBranchesState"
 import { useChangedFilesState } from "@/diff-viewer/hooks/useChangedFilesState"
+import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
 import type { ChangedFilesResult } from "@/git/types"
@@ -16,6 +17,7 @@ import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
 import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarHeader } from "@/components/ui/sidebar"
+import { useScope, useShortcut } from "@/lib/shortcuts"
 
 export function DiffViewerPage() {
   const [latestChangedFilesResult, setLatestChangedFilesResult] =
@@ -54,6 +56,30 @@ export function DiffViewerPage() {
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
 
   const {
+    tree,
+    expandedPaths,
+    handleToggleFolder,
+    prevFile,
+    nextFile,
+    indexOfSelected,
+    totalVisible,
+  } = useFileTreeNav({
+    files,
+    selectedFilePath: selectedFile?.path ?? null,
+    repoName,
+    workspaceName,
+  })
+
+  useScope("diff")
+
+  useShortcut("prevFile", () => {
+    if (prevFile) setSelectedFilePath(prevFile.path)
+  })
+  useShortcut("nextFile", () => {
+    if (nextFile) setSelectedFilePath(nextFile.path)
+  })
+
+  const {
     currentDisplayedDiff,
     diffError,
     isDiffLoading,
@@ -67,7 +93,6 @@ export function DiffViewerPage() {
   const {
     canCopyAnnotations,
     canSendAnnotations,
-    sendDisabledReason,
     clearDraftToken,
     copyAnnotations,
     copyState,
@@ -118,6 +143,13 @@ export function DiffViewerPage() {
     files,
     refreshBranches,
     refreshChangedFiles,
+  })
+
+  useShortcut("toggleStage", () => {
+    if (selectedFile) gitActions.handleToggleStage(selectedFile)
+  })
+  useShortcut("sendToAgent", () => {
+    if (canSendAnnotations) sendAnnotations()
   })
 
   const [viewMode, setViewMode] = useState<"unified" | "split">("split")
@@ -194,11 +226,12 @@ export function DiffViewerPage() {
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
               files={files}
-              repoName={repoName}
-              workspaceName={workspaceName}
+              tree={tree}
+              expandedPaths={expandedPaths}
+              onToggleFolder={handleToggleFolder}
+              selectedFile={selectedFile}
               scopePath={scopePath}
               comparisonMode={comparisonMode}
-              selectedFilePath={selectedFilePath}
               onSelectFile={setSelectedFilePath}
               stagePendingPaths={gitActions.stagePendingPaths}
               isBulkStagePending={gitActions.isBulkStagePending}
@@ -233,7 +266,6 @@ export function DiffViewerPage() {
           sendState={sendState}
           canCopyAnnotations={canCopyAnnotations}
           canSendAnnotations={canSendAnnotations}
-          sendDisabledReason={sendDisabledReason}
           onSelectBaseRef={handleSelectBaseRef}
           onCopyAnnotations={copyAnnotations}
           onSendAnnotations={sendAnnotations}
@@ -258,9 +290,15 @@ export function DiffViewerPage() {
                   isStagePending={isSelectedFileStagePending}
                   viewMode={viewMode}
                   isExpanded={isCurrentFileExpanded}
+                  canGoPrev={prevFile != null}
+                  canGoNext={nextFile != null}
+                  fileIndex={indexOfSelected}
+                  totalFiles={totalVisible}
                   onToggleExpandAll={handleToggleCurrentFileExpanded}
                   onToggleStage={gitActions.handleToggleStage}
                   onViewModeChange={setViewMode}
+                  onGoPrev={() => prevFile && setSelectedFilePath(prevFile.path)}
+                  onGoNext={() => nextFile && setSelectedFilePath(nextFile.path)}
                 />
               </div>
               <div className="relative z-10">

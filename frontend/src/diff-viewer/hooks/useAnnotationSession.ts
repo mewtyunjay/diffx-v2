@@ -14,7 +14,7 @@ import {
   type SavedDiffAnnotation,
 } from "@/diff-viewer/annotations"
 import { fetchReviewState, submitReviewFeedback } from "@/git/api"
-import type { ChangedFileItem, ReviewStateReason, ReviewStateResult } from "@/git/types"
+import type { ChangedFileItem } from "@/git/types"
 import type { PreparedFileDiffResult } from "@/diffs/create"
 import { toast } from "@/components/ui/sonner"
 import { getToastErrorDescription } from "@/lib/toast-errors"
@@ -26,15 +26,7 @@ type UseAnnotationSessionOptions = {
   selectedFile: Pick<ChangedFileItem, "contentKey"> | null
 }
 
-const defaultReviewState: ReviewStateResult = {
-  enabled: false,
-  acceptingFeedback: false,
-  submitted: false,
-  closed: false,
-  reason: "inactive",
-}
-
-function getSendDisabledReason(reason: ReviewStateReason) {
+function getReviewStateError(reason: string) {
   switch (reason) {
     case "disabled":
       return "Send to agent is available only in review mode. Run `diffx review` from your agent."
@@ -43,7 +35,7 @@ function getSendDisabledReason(reason: ReviewStateReason) {
     case "closed":
       return "The review session is closed."
     default:
-      return "Waiting for an active review session."
+      return "No active review session."
   }
 }
 
@@ -53,12 +45,8 @@ export function useAnnotationSession({ currentDiff, selectedFile }: UseAnnotatio
   )
   const [copyState, setCopyState] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [sendState, setSendState] = useState<"idle" | "sending" | "success" | "error">("idle")
-  const [reviewState, setReviewState] = useState<ReviewStateResult>(defaultReviewState)
   const [clearDraftToken, setClearDraftToken] = useState(0)
   const hasSavedAnnotations = savedAnnotations.length > 0
-  const canSendAnnotations = hasSavedAnnotations && reviewState.acceptingFeedback
-  const sendDisabledReason =
-    hasSavedAnnotations && !canSendAnnotations ? getSendDisabledReason(reviewState.reason) : null
 
   const copyStateTimeoutRef = useRef<number | null>(null)
   const sendStateTimeoutRef = useRef<number | null>(null)
@@ -78,44 +66,6 @@ export function useAnnotationSession({ currentDiff, selectedFile }: UseAnnotatio
     }
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    let controller = new AbortController()
-
-    const refreshReviewState = async () => {
-      controller.abort()
-      controller = new AbortController()
-
-      try {
-        const nextState = await fetchReviewState(controller.signal)
-        if (cancelled) {
-          return
-        }
-
-        setReviewState(nextState)
-      } catch (error) {
-        if (cancelled) {
-          return
-        }
-        if (error instanceof DOMException && error.name === "AbortError") {
-          return
-        }
-
-        setReviewState(defaultReviewState)
-      }
-    }
-
-    void refreshReviewState()
-    const interval = window.setInterval(() => {
-      void refreshReviewState()
-    }, 5000)
-
-    return () => {
-      cancelled = true
-      controller.abort()
-      window.clearInterval(interval)
-    }
-  }, [])
 
   const resetCopyState = useCallback((nextState: "success" | "error") => {
     setCopyState(nextState)
@@ -232,16 +182,19 @@ export function useAnnotationSession({ currentDiff, selectedFile }: UseAnnotatio
     if (savedAnnotations.length === 0) {
       return
     }
-    if (!canSendAnnotations) {
-      toast.error("Couldn’t send feedback to agent.", {
-        description: sendDisabledReason ?? "Waiting for an active review session.",
-      })
-      return
-    }
 
     setSendState("sending")
 
     try {
+      const reviewState = await fetchReviewState()
+      if (!reviewState.acceptingFeedback) {
+        toast.error("Couldn’t send feedback to agent.", {
+          description: getReviewStateError(reviewState.reason),
+        })
+        resetSendState("error")
+        return
+      }
+
       const feedback = formatSavedAnnotationsForCopy(savedAnnotations)
       await submitReviewFeedback({
         approved: false,
@@ -249,13 +202,6 @@ export function useAnnotationSession({ currentDiff, selectedFile }: UseAnnotatio
         annotations: savedAnnotations,
       })
       setSavedAnnotations([])
-      setReviewState((current) => ({
-        ...current,
-        acceptingFeedback: false,
-        submitted: true,
-        closed: true,
-        reason: "submitted",
-      }))
       setClearDraftToken((current) => current + 1)
       resetSendState("success")
     } catch (error) {
@@ -264,7 +210,7 @@ export function useAnnotationSession({ currentDiff, selectedFile }: UseAnnotatio
       })
       resetSendState("error")
     }
-  }, [canSendAnnotations, resetSendState, savedAnnotations, sendDisabledReason])
+  }, [resetSendState, savedAnnotations])
 
   const visibleSavedAnnotations = currentDiff
     ? getSavedAnnotationsForDiff(savedAnnotations, currentDiff)
@@ -272,8 +218,7 @@ export function useAnnotationSession({ currentDiff, selectedFile }: UseAnnotatio
 
   return {
     canCopyAnnotations: hasSavedAnnotations,
-    canSendAnnotations,
-    sendDisabledReason,
+    canSendAnnotations: hasSavedAnnotations,
     clearDraftToken,
     copyAnnotations,
     copyState,
