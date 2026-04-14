@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/in
 The installer:
 
 - downloads the latest prebuilt `diffx` binary into `~/.local/bin/diffx`
-- opens an interactive TUI to choose skill install targets
+- runs `diffx setup` with an interactive Bubble Tea TUI to choose skill install targets
 - installs `diffx` skill into a canonical location and symlinks it into selected agent directories
 - defaults to `Universal (.agents/skills)` and `Claude Code (.claude/skills)` preselected
 - installs Claude command support at `~/.claude/commands/diffx.md` when Claude is selected
@@ -38,6 +38,14 @@ Useful flags:
 - `--agents universal,claude,cursor` to choose targets explicitly
 - `--copy` to copy skill files instead of symlinking
 - `--version <tag>` to pin a release instead of `latest`
+
+You can re-run setup at any time:
+
+```sh
+diffx setup
+diffx setup --list-agents
+diffx setup --yes --agents universal,claude,codex
+```
 
 ### Install from Source
 
