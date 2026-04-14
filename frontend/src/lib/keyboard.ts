@@ -68,7 +68,16 @@ export function matchesShortcut(
   const literal = keys.find((key) => !isModifier(key))
   if (!literal) return true
 
-  return event.key === literal || event.key.toLowerCase() === literal.toLowerCase()
+  if (event.key === literal || event.key.toLowerCase() === literal.toLowerCase()) {
+    return true
+  }
+
+  // `Shift + /` may report as `?` on some keyboard layouts while keeping `code` as `Slash`.
+  if (event.code === "Slash" && (literal === "/" || literal === "?")) {
+    return true
+  }
+
+  return false
 }
 
 export function formatKeyForDisplay(key: ShortcutKey): string {

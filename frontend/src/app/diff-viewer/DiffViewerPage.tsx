@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { FolderTree } from "lucide-react"
 
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
@@ -20,6 +20,7 @@ import { SidebarHeader } from "@/components/ui/sidebar"
 import { useScope, useShortcut } from "@/lib/shortcuts"
 
 export function DiffViewerPage() {
+  const fileWindowScrollRef = useRef<HTMLDivElement | null>(null)
   const [latestChangedFilesResult, setLatestChangedFilesResult] =
     useState<ChangedFilesResult | null>(null)
 
@@ -74,11 +75,28 @@ export function DiffViewerPage() {
 
   useScope("diff")
 
-  useShortcut("prevFile", () => {
+  const goPrevFile = useCallback(() => {
     if (prevFile) setSelectedFilePath(prevFile.path)
-  })
-  useShortcut("nextFile", () => {
+  }, [prevFile, setSelectedFilePath])
+
+  const goNextFile = useCallback(() => {
     if (nextFile) setSelectedFilePath(nextFile.path)
+  }, [nextFile, setSelectedFilePath])
+
+  useShortcut("prevFile", goPrevFile)
+  useShortcut("prevFileAlt", goPrevFile)
+  useShortcut("nextFile", goNextFile)
+  useShortcut("nextFileAlt", goNextFile)
+
+  const scrollFileWindowBy = useCallback((offset: number) => {
+    fileWindowScrollRef.current?.scrollBy({ top: offset, behavior: "auto" })
+  }, [])
+
+  useShortcut("scrollFileUp", () => {
+    scrollFileWindowBy(-120)
+  })
+  useShortcut("scrollFileDown", () => {
+    scrollFileWindowBy(120)
   })
 
   const {
@@ -194,6 +212,7 @@ export function DiffViewerPage() {
 
     setExpandedDiffKey((current) => (current === selectedDiffKey ? null : selectedDiffKey))
   }, [selectedDiffKey])
+  useShortcut("toggleExpandFile", handleToggleCurrentFileExpanded)
 
   const headerError =
     filesError && !isFilesLoading
@@ -282,7 +301,7 @@ export function DiffViewerPage() {
           </div>
         ) : null}
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
+        <div ref={fileWindowScrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
           {selectedFile ? (
             <div className="sticky top-0 z-20">
               <div className="relative z-20">
@@ -300,8 +319,8 @@ export function DiffViewerPage() {
                   onToggleExpandAll={handleToggleCurrentFileExpanded}
                   onToggleStage={gitActions.handleToggleStage}
                   onViewModeChange={setViewMode}
-                  onGoPrev={() => prevFile && setSelectedFilePath(prevFile.path)}
-                  onGoNext={() => nextFile && setSelectedFilePath(nextFile.path)}
+                  onGoPrev={goPrevFile}
+                  onGoNext={goNextFile}
                 />
               </div>
               <div className="relative z-10">

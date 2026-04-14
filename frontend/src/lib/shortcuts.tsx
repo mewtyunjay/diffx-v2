@@ -40,12 +40,47 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff navigation",
   },
+  prevFileAlt: {
+    id: "prevFileAlt",
+    keys: ["h"],
+    label: "Previous file",
+    scope: "diff",
+    group: "Diff navigation",
+  },
   nextFile: {
     id: "nextFile",
     keys: ["]"],
     label: "Next file",
     scope: "diff",
     group: "Diff navigation",
+  },
+  nextFileAlt: {
+    id: "nextFileAlt",
+    keys: ["l"],
+    label: "Next file",
+    scope: "diff",
+    group: "Diff navigation",
+  },
+  scrollFileUp: {
+    id: "scrollFileUp",
+    keys: ["k"],
+    label: "Scroll file up",
+    scope: "diff",
+    group: "Diff navigation",
+  },
+  scrollFileDown: {
+    id: "scrollFileDown",
+    keys: ["j"],
+    label: "Scroll file down",
+    scope: "diff",
+    group: "Diff navigation",
+  },
+  toggleExpandFile: {
+    id: "toggleExpandFile",
+    keys: ["f"],
+    label: "Expand / collapse file",
+    scope: "diff",
+    group: "Diff actions",
   },
   toggleStage: {
     id: "toggleStage",
@@ -85,7 +120,7 @@ export const SHORTCUTS = {
   },
   showHelp: {
     id: "showHelp",
-    keys: ["?"],
+    keys: ["shift", "/"],
     label: "Show keyboard shortcuts",
     scope: "global",
     group: "Workspace",
@@ -99,7 +134,7 @@ type ShortcutsContextValue = {
   setActiveModeScope: Dispatch<SetStateAction<ShortcutScope | null>>
   registerHandler: (id: ShortcutId, handler: () => void) => () => void
   helpOpen: boolean
-  setHelpOpen: (open: boolean) => void
+  setHelpOpen: Dispatch<SetStateAction<boolean>>
 }
 
 const ShortcutsContext = createContext<ShortcutsContextValue | null>(null)
@@ -195,7 +230,7 @@ export function useScope(scope: Exclude<ShortcutScope, "global">): void {
 function ShortcutsHelpOverlay() {
   const { helpOpen, setHelpOpen, activeModeScope } = useShortcutsContext()
 
-  useShortcut("showHelp", () => setHelpOpen(true))
+  useShortcut("showHelp", () => setHelpOpen((open) => !open))
 
   const grouped = useMemo(() => {
     const byGroup = new Map<string, ShortcutDefinition[]>()
