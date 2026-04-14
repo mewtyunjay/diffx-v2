@@ -34,12 +34,25 @@ type ChangedFilesResult struct {
 	CurrentRef            string            `json:"currentRef"`
 	CurrentCommit         string            `json:"currentCommit"`
 	UpstreamRef           string            `json:"upstreamRef,omitempty"`
+	BranchSync            BranchSyncStatus  `json:"branchSync"`
 	RepoName              string            `json:"repoName"`
 	WorkspaceName         string            `json:"workspaceName"`
 	ScopePath             string            `json:"scopePath"`
 	HiddenStagedFileCount int               `json:"hiddenStagedFileCount"`
 	Files                 []ChangedFileItem `json:"files"`
 	InitialDiff           *FileDiffResult   `json:"initialDiff,omitempty"`
+}
+
+type BranchSyncStatus struct {
+	HasUpstream bool   `json:"hasUpstream"`
+	UpstreamRef string `json:"upstreamRef,omitempty"`
+	AheadCount  int    `json:"aheadCount"`
+	BehindCount int    `json:"behindCount"`
+}
+
+type PushResult struct {
+	RemoteRef       string `json:"remoteRef"`
+	CreatedUpstream bool   `json:"createdUpstream"`
 }
 
 type FileVersion struct {

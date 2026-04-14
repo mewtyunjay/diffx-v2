@@ -33,6 +33,7 @@ export function DiffViewerPage() {
 
   const {
     baseCommit,
+    branchSync,
     comparisonMode,
     currentRef,
     files,
@@ -54,6 +55,7 @@ export function DiffViewerPage() {
 
   const selectedFile =
     files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
+  const repoLabel = repoName || workspaceName || "repository"
 
   const {
     tree,
@@ -216,7 +218,7 @@ export function DiffViewerPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate type-title text-sidebar-foreground">
-                    {repoName || workspaceName || "repository"}
+                    {repoLabel}
                   </p>
                 </div>
               </div>
@@ -241,15 +243,16 @@ export function DiffViewerPage() {
             />
 
             <GitActionsPanel
+              branchName={currentRef || "HEAD"}
               comparisonMode={comparisonMode}
               files={files}
+              aheadCount={branchSync.aheadCount}
               hiddenStagedFileCount={hiddenStagedFileCount}
               commitMessage={gitActions.commitMessage}
               isCommitPending={gitActions.isCommitPending}
               onCommitMessageChange={gitActions.setCommitMessage}
               onCommit={gitActions.handleCommit}
               isPushPending={gitActions.isPushPending}
-              showPushAction={gitActions.showPushAction}
               onPush={gitActions.handlePush}
             />
           </div>

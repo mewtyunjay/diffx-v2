@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { fetchChangedFiles } from "@/git/api"
 import type {
+  BranchSyncState,
   ChangedFileItem,
   ChangedFilesResult,
   ComparisonMode,
@@ -11,11 +12,18 @@ type UseChangedFilesStateOptions = {
   onApplyResult?: (result: ChangedFilesResult) => void
 }
 
+const defaultBranchSync: BranchSyncState = {
+  hasUpstream: false,
+  aheadCount: 0,
+  behindCount: 0,
+}
+
 export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOptions = {}) {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
   const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
   const [baseCommit, setBaseCommit] = useState("")
   const [currentRef, setCurrentRef] = useState("HEAD")
+  const [branchSync, setBranchSync] = useState<BranchSyncState>(defaultBranchSync)
   const [scopePath, setScopePath] = useState(".")
   const [hiddenStagedFileCount, setHiddenStagedFileCount] = useState(0)
   const [files, setFiles] = useState<ChangedFileItem[]>([])
@@ -41,6 +49,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
       setComparisonMode(result.mode)
       setBaseCommit(result.baseCommit)
       setCurrentRef(result.currentRef)
+      setBranchSync(result.branchSync)
       setRepoName(result.repoName)
       setScopePath(result.scopePath)
       setWorkspaceName(result.workspaceName)
@@ -82,6 +91,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
         setComparisonMode("head")
         setBaseCommit("")
         setCurrentRef("HEAD")
+        setBranchSync(defaultBranchSync)
         setScopePath(".")
         setHiddenStagedFileCount(0)
         setFiles([])
@@ -104,6 +114,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
   return {
     applyChangedFilesResult,
     baseCommit,
+    branchSync,
     comparisonMode,
     currentRef,
     files,

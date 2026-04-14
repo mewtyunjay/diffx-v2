@@ -28,7 +28,6 @@ export function useGitActionCommands({
   const [commitMessage, setCommitMessage] = useState("")
   const [isCommitPending, setIsCommitPending] = useState(false)
   const [isPushPending, setIsPushPending] = useState(false)
-  const [showPushAction, setShowPushAction] = useState(false)
 
   const handleToggleStage = useCallback(
     async (file: ChangedFileItem) => {
@@ -112,7 +111,6 @@ export function useGitActionCommands({
     try {
       const result = await commitStaged(commitMessage)
       setCommitMessage("")
-      setShowPushAction(true)
       toast.success(`Created commit ${result.commit.slice(0, 7)}.`, {
         id: commitToastId,
       })
@@ -136,10 +134,14 @@ export function useGitActionCommands({
 
     try {
       const result = await pushCurrentBranch()
-      setShowPushAction(false)
-      toast.success(`Pushed ${result.remoteRef}.`, {
-        id: pushToastId,
-      })
+      toast.success(
+        result.createdUpstream
+          ? `Created upstream ${result.remoteRef} and pushed.`
+          : `Pushed ${result.remoteRef}.`,
+        {
+          id: pushToastId,
+        }
+      )
       await Promise.all([refreshChangedFiles(), refreshBranches()])
     } catch (error) {
       toast.error("Push failed.", {
@@ -163,7 +165,6 @@ export function useGitActionCommands({
       isCommitPending,
       isPushPending,
       setCommitMessage,
-      showPushAction,
       stagePendingPaths,
     }),
     [
@@ -176,7 +177,6 @@ export function useGitActionCommands({
       isBulkStagePending,
       isCommitPending,
       isPushPending,
-      showPushAction,
       stagePendingPaths,
     ]
   )

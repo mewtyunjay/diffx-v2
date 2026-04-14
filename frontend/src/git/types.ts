@@ -34,6 +34,7 @@ export type ChangedFilesResult = {
   currentRef: string
   currentCommit: string
   upstreamRef?: string
+  branchSync: BranchSyncState
   repoName: string
   workspaceName: string
   scopePath: string
@@ -42,12 +43,20 @@ export type ChangedFilesResult = {
   initialDiff?: FileDiffResult
 }
 
+export type BranchSyncState = {
+  hasUpstream: boolean
+  upstreamRef?: string
+  aheadCount: number
+  behindCount: number
+}
+
 export type CommitResult = {
   commit: string
 }
 
 export type PushResult = {
   remoteRef: string
+  createdUpstream: boolean
 }
 
 export type SubmitReviewFeedbackInput = {

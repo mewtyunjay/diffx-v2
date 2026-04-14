@@ -10,6 +10,52 @@ import (
 	"testing"
 )
 
+func TestParseAheadBehindCounts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		output      string
+		wantAhead   int
+		wantBehind  int
+		expectError bool
+	}{
+		{name: "tab separated", output: "2\t3\n", wantAhead: 2, wantBehind: 3},
+		{name: "space separated", output: "4 1", wantAhead: 4, wantBehind: 1},
+		{name: "invalid format", output: "4", expectError: true},
+		{name: "invalid number", output: "x 1", expectError: true},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			aheadCount, behindCount, err := parseAheadBehindCounts(tt.output)
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected error for output %q", tt.output)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error for output %q: %v", tt.output, err)
+			}
+			if aheadCount != tt.wantAhead || behindCount != tt.wantBehind {
+				t.Fatalf(
+					"parseAheadBehindCounts(%q) = (%d, %d), want (%d, %d)",
+					tt.output,
+					aheadCount,
+					behindCount,
+					tt.wantAhead,
+					tt.wantBehind,
+				)
+			}
+		})
+	}
+}
+
 func TestStageAndUnstageFile(t *testing.T) {
 	t.Parallel()
 
@@ -222,17 +268,123 @@ func TestPushCurrentBranchFallsBackToOriginWhenUpstreamIsMissing(t *testing.T) {
 		t.Fatalf("CommitStaged returned error: %v", err)
 	}
 
-	remoteRef, err := service.PushCurrentBranch(context.Background())
+	pushResult, err := service.PushCurrentBranch(context.Background())
 	if err != nil {
 		t.Fatalf("PushCurrentBranch returned error: %v", err)
 	}
-	if remoteRef != "origin/main" {
-		t.Fatalf("expected remote ref origin/main, got %q", remoteRef)
+	if pushResult.RemoteRef != "origin/main" {
+		t.Fatalf("expected remote ref origin/main, got %q", pushResult.RemoteRef)
+	}
+	if !pushResult.CreatedUpstream {
+		t.Fatalf("expected CreatedUpstream true, got %#v", pushResult)
 	}
 
 	upstream := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"))
 	if upstream != "origin/main" {
 		t.Fatalf("expected upstream origin/main, got %q", upstream)
+	}
+}
+
+func TestPushCurrentBranchWithExistingUpstreamDoesNotCreateUpstream(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	remoteRoot := filepath.Join(t.TempDir(), "remote.git")
+	runGit(t, filepath.Dir(remoteRoot), "init", "--bare", remoteRoot)
+	runGit(t, repoRoot, "remote", "add", "origin", remoteRoot)
+	runGit(t, repoRoot, "push", "-u", "origin", "main")
+
+	service := NewService(repoRoot, ".")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	if _, err := service.CommitStaged(context.Background(), "push me"); err != nil {
+		t.Fatalf("CommitStaged returned error: %v", err)
+	}
+
+	pushResult, err := service.PushCurrentBranch(context.Background())
+	if err != nil {
+		t.Fatalf("PushCurrentBranch returned error: %v", err)
+	}
+	if pushResult.RemoteRef != "origin/main" {
+		t.Fatalf("expected remote ref origin/main, got %q", pushResult.RemoteRef)
+	}
+	if pushResult.CreatedUpstream {
+		t.Fatalf("expected CreatedUpstream false, got %#v", pushResult)
+	}
+}
+
+func TestBranchSyncStatusWithoutUpstream(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	syncStatus, err := service.BranchSyncStatus(context.Background())
+	if err != nil {
+		t.Fatalf("BranchSyncStatus returned error: %v", err)
+	}
+	if syncStatus.HasUpstream {
+		t.Fatalf("expected no upstream, got %#v", syncStatus)
+	}
+	if syncStatus.UpstreamRef != "" {
+		t.Fatalf("expected empty upstream ref, got %#v", syncStatus)
+	}
+	if syncStatus.AheadCount != 0 || syncStatus.BehindCount != 0 {
+		t.Fatalf("expected ahead=0 behind=0, got %#v", syncStatus)
+	}
+}
+
+func TestBranchSyncStatusTracksAheadAndBehindCounts(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	remoteRoot := filepath.Join(t.TempDir(), "remote.git")
+	runGit(t, filepath.Dir(remoteRoot), "init", "--bare", remoteRoot)
+	runGit(t, repoRoot, "remote", "add", "origin", remoteRoot)
+	runGit(t, repoRoot, "push", "-u", "origin", "main")
+
+	service := NewService(repoRoot, ".")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated locally\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	if _, err := service.CommitStaged(context.Background(), "local ahead"); err != nil {
+		t.Fatalf("CommitStaged returned error: %v", err)
+	}
+
+	syncStatus, err := service.BranchSyncStatus(context.Background())
+	if err != nil {
+		t.Fatalf("BranchSyncStatus returned error: %v", err)
+	}
+	if !syncStatus.HasUpstream {
+		t.Fatalf("expected upstream to exist, got %#v", syncStatus)
+	}
+	if syncStatus.UpstreamRef != "origin/main" {
+		t.Fatalf("expected origin/main upstream, got %#v", syncStatus)
+	}
+	if syncStatus.AheadCount != 1 || syncStatus.BehindCount != 0 {
+		t.Fatalf("expected ahead=1 behind=0, got %#v", syncStatus)
+	}
+}
+
+func TestBranchSyncStatusWithoutUpstreamCanReportNoLocalCommits(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	remoteRoot := filepath.Join(t.TempDir(), "remote.git")
+	runGit(t, filepath.Dir(remoteRoot), "init", "--bare", remoteRoot)
+	runGit(t, repoRoot, "remote", "add", "origin", remoteRoot)
+	runGit(t, repoRoot, "push", "-u", "origin", "main")
+	runGit(t, repoRoot, "checkout", "-b", "feature")
+
+	service := NewService(repoRoot, ".")
+	syncStatus, err := service.BranchSyncStatus(context.Background())
+	if err != nil {
+		t.Fatalf("BranchSyncStatus returned error: %v", err)
+	}
+	if syncStatus.HasUpstream {
+		t.Fatalf("expected no upstream for feature, got %#v", syncStatus)
+	}
+	if syncStatus.AheadCount != 0 || syncStatus.BehindCount != 0 {
+		t.Fatalf("expected ahead=0 behind=0, got %#v", syncStatus)
 	}
 }
 

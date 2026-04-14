@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -145,29 +146,70 @@ func (s *Service) CommitStaged(ctx context.Context, message string) (string, err
 	return s.HeadCommit(ctx)
 }
 
-func (s *Service) PushCurrentBranch(ctx context.Context) (string, error) {
+func (s *Service) PushCurrentBranch(ctx context.Context) (PushResult, error) {
 	currentBranch, err := s.CurrentBranch(ctx)
 	if err != nil {
-		return "", err
+		return PushResult{}, err
 	}
 
 	upstreamRef, err := s.CurrentUpstreamRef(ctx)
 	if err != nil {
-		return "", err
+		return PushResult{}, err
 	}
 
 	if upstreamRef != "" {
 		_, err := s.runGitCombined(ctx, "", "push")
-		return upstreamRef, err
+		if err != nil {
+			return PushResult{}, err
+		}
+
+		return PushResult{RemoteRef: upstreamRef, CreatedUpstream: false}, nil
 	}
 
 	remoteRef := fmt.Sprintf("origin/%s", currentBranch)
 	_, err = s.runGitCombined(ctx, "", "push", "-u", "origin", currentBranch)
 	if err != nil {
-		return "", err
+		return PushResult{}, err
 	}
 
-	return remoteRef, nil
+	return PushResult{RemoteRef: remoteRef, CreatedUpstream: true}, nil
+}
+
+func (s *Service) BranchSyncStatus(ctx context.Context) (BranchSyncStatus, error) {
+	upstreamRef, err := s.CurrentUpstreamRef(ctx)
+	if err != nil {
+		return BranchSyncStatus{}, err
+	}
+
+	if upstreamRef == "" {
+		aheadCount, err := s.localAheadCountWithoutUpstream(ctx)
+		if err != nil {
+			return BranchSyncStatus{}, err
+		}
+
+		return BranchSyncStatus{
+			HasUpstream: false,
+			AheadCount:  aheadCount,
+			BehindCount: 0,
+		}, nil
+	}
+
+	output, err := s.runGitOutput(ctx, "rev-list", "--left-right", "--count", "HEAD...@{u}")
+	if err != nil {
+		return BranchSyncStatus{}, fmt.Errorf("git rev-list --left-right --count HEAD...@{u}: %w", err)
+	}
+
+	aheadCount, behindCount, err := parseAheadBehindCounts(string(output))
+	if err != nil {
+		return BranchSyncStatus{}, err
+	}
+
+	return BranchSyncStatus{
+		HasUpstream: true,
+		UpstreamRef: upstreamRef,
+		AheadCount:  aheadCount,
+		BehindCount: behindCount,
+	}, nil
 }
 
 func (s *Service) CurrentBranch(ctx context.Context) (string, error) {
@@ -271,4 +313,46 @@ func formatGitCombinedError(args []string, output []byte, err error) error {
 	}
 
 	return fmt.Errorf("%s: %s", commandName, message)
+}
+
+func parseAheadBehindCounts(output string) (ahead int, behind int, err error) {
+	parts := strings.Fields(strings.TrimSpace(output))
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("parse ahead/behind: invalid output %q", strings.TrimSpace(output))
+	}
+
+	aheadCount, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse ahead count %q: %w", parts[0], err)
+	}
+
+	behindCount, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse behind count %q: %w", parts[1], err)
+	}
+
+	return aheadCount, behindCount, nil
+}
+
+func (s *Service) localAheadCountWithoutUpstream(ctx context.Context) (int, error) {
+	output, err := s.runGitOutput(ctx, "rev-list", "--count", "--not", "--remotes", "HEAD")
+	if err != nil {
+		return 0, fmt.Errorf("git rev-list --count --not --remotes HEAD: %w", err)
+	}
+
+	count, err := parseCount(strings.TrimSpace(string(output)))
+	if err != nil {
+		return 0, fmt.Errorf("parse local ahead count: %w", err)
+	}
+
+	return count, nil
+}
+
+func parseCount(raw string) (int, error) {
+	count, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, fmt.Errorf("invalid count %q: %w", strings.TrimSpace(raw), err)
+	}
+
+	return count, nil
 }

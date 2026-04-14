@@ -16,7 +16,8 @@ type commitResponse struct {
 }
 
 type pushResponse struct {
-	RemoteRef string `json:"remoteRef"`
+	RemoteRef       string `json:"remoteRef"`
+	CreatedUpstream bool   `json:"createdUpstream"`
 }
 
 func (a *App) handleStageFile(w http.ResponseWriter, r *http.Request) {
@@ -108,11 +109,14 @@ func (a *App) handlePush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	remoteRef, err := a.service.PushCurrentBranch(r.Context())
+	result, err := a.service.PushCurrentBranch(r.Context())
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, pushResponse{RemoteRef: remoteRef})
+	writeJSON(w, http.StatusOK, pushResponse{
+		RemoteRef:       result.RemoteRef,
+		CreatedUpstream: result.CreatedUpstream,
+	})
 }

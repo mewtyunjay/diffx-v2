@@ -36,7 +36,7 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		return ChangedFilesResult{}, err
 	}
 
-	upstreamRef, err := s.CurrentUpstreamRef(ctx)
+	branchSync, err := s.BranchSyncStatus(ctx)
 	if err != nil {
 		return ChangedFilesResult{}, err
 	}
@@ -89,7 +89,8 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		BaseCommit:            comparison.BaseCommit,
 		CurrentRef:            comparison.CurrentRef,
 		CurrentCommit:         comparison.CurrentCommit,
-		UpstreamRef:           upstreamRef,
+		UpstreamRef:           branchSync.UpstreamRef,
+		BranchSync:            branchSync,
 		RepoName:              filepath.Base(s.repoRoot),
 		WorkspaceName:         workspaceNameForScope(s.repoRoot, s.scopePath),
 		ScopePath:             s.scopePath,
