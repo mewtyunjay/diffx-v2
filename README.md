@@ -4,7 +4,42 @@
 
 ## Install
 
-`diffx` runs as a single local binary, but building it from source also needs the frontend bundle.
+### Quick Install (macOS/Linux)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash
+```
+
+The installer:
+
+- downloads the latest prebuilt `diffx` binary into `~/.local/bin/diffx`
+- opens an interactive TUI to choose skill install targets
+- installs `diffx` skill into a canonical location and symlinks it into selected agent directories
+- defaults to `Universal (.agents/skills)` and `Claude Code (.claude/skills)` preselected
+- installs Claude command support at `~/.claude/commands/diffx.md` when Claude is selected
+
+After install:
+
+```sh
+diffx
+diffx review
+```
+
+If `~/.local/bin` is not on your `PATH`, the installer prints exact copy-paste commands for your shell.
+
+### Non-Interactive Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash -s -- --yes --agents universal,claude,codex
+```
+
+Useful flags:
+
+- `--agents universal,claude,cursor` to choose targets explicitly
+- `--copy` to copy skill files instead of symlinking
+- `--version <tag>` to pin a release instead of `latest`
+
+### Install from Source
 
 Prerequisites:
 
@@ -12,127 +47,67 @@ Prerequisites:
 - Node.js `20+`
 - npm
 
-### One-command agent setup (Claude + Codex, macOS/Linux)
-
-If you want seamless agent integration (Claude `/diffx`, Codex `$diffx`) with source build setup:
-
-```sh
-git clone https://github.com/mewtyunjay/diffx-v2.git
-cd diffx-v2
-bash ./scripts/setup-agent-integrations.sh
-```
-
-If you're already in the repository root, the setup is a single command:
-
-```sh
-bash ./scripts/setup-agent-integrations.sh
-```
-
-This installer will:
-
-- build `diffx` from source and install it at `~/.local/bin/diffx`
-- install Claude command at `~/.claude/commands/diffx.md`
-- install Codex skill at `~/.codex/skills/diffx/SKILL.md`
-
-On first run, it may download Go modules and npm dependencies.
-
-Then use:
-
-- Claude Code: `/diffx [optional diffx review args]`
-- Codex: `$diffx` and include optional review args in the prompt text
-
-The browser window launched by `diffx review` is ephemeral — it opens for the duration of the review and closes once the agent finishes reading your feedback. A persistent UI mode is planned for the next version.
-
-The installer does not edit your shell startup files. If `~/.local/bin` is not on your `PATH`, it prints exact copy-paste commands.
-
-Note: this repository currently ships source-based setup only. When prebuilt binaries are published, setup becomes a shorter two-command flow.
-
-### macOS
-
-Build `diffx`, install it into `/usr/local/bin`, and run it from any git repo:
+Build and install the binary:
 
 ```sh
 git clone https://github.com/mewtyunjay/diffx-v2.git
 cd diffx-v2
 go generate ./frontend
 go build -o diffx ./cmd/diffx
-sudo mv diffx /usr/local/bin/diffx
-```
-
-Then from your git repo:
-
-```
-diffx
-```
-
-If you prefer a user-local install instead of `sudo`:
-
-```sh
 mkdir -p "$HOME/.local/bin"
 mv diffx "$HOME/.local/bin/diffx"
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-source "$HOME/.zshrc"
 ```
 
-### Linux
-
-Build `diffx`, install it into `/usr/local/bin`, and run it from any git repo:
+If needed, add local bin to PATH:
 
 ```sh
-git clone https://github.com/mewtyunjay/diffx-v2.git
-cd diffx-v2
-go generate ./frontend
-go build -o diffx ./cmd/diffx
-sudo mv diffx /usr/local/bin/diffx
-```
-
-Then from your repo of choice:
-
-```
-diffx
-```
-
-If you prefer a user-local install instead of `sudo`:
-
-```sh
-mkdir -p "$HOME/.local/bin"
-mv diffx "$HOME/.local/bin/diffx"
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-source "$HOME/.bashrc"
-```
-
-### Windows
-
-Build `diffx.exe`, place it in a user bin directory, add that directory to `Path`, and run it from any git repo:
-
-```sh
-git clone https://github.com/mewtyunjay/diffx-v2.git
-cd diffx-v2
-go generate ./frontend
-go build -o diffx.exe ./cmd/diffx
-New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
-Move-Item .\diffx.exe "$HOME\bin\diffx.exe"
-[Environment]::SetEnvironmentVariable("Path", $env:Path + ";$HOME\bin", "User")
-$env:Path = [Environment]::GetEnvironmentVariable("Path", "User")
-cd C:\path\to\your\git\repo
-diffx.exe
-```
-
-Open the URL printed by `diffx`. By default it starts on `http://127.0.0.1:8080`, and if `8080` is already occupied it will automatically move to the next free port.
-
-### Optional shell alias
-
-If you want a shorter command on macOS or Linux:
-
-```sh
-echo 'alias dx="diffx"' >> ~/.zshrc
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-Then run:
+### Install Skill Manually (Custom Agent Targets)
+
+Create a canonical skill location:
 
 ```sh
-dx
+mkdir -p "$HOME/.local/share/diffx/skills/diffx"
+cat > "$HOME/.local/share/diffx/skills/diffx/SKILL.md" <<'MD'
+---
+name: diffx
+description: Launch Diffx interactive review, receive annotation feedback via stdout, and continue implementation in the same Codex thread.
+allowed-tools: Bash(diffx:*)
+---
+
+# Diffx Review
+
+Use this skill when the user wants interactive annotation-based code review with Diffx and expects feedback to return into the current thread.
+
+## Workflow
+
+1. Run `diffx review` with any explicit arguments provided by the user.
+2. Wait for the UI review to be submitted via "Send to agent".
+3. Read stdout from the command. Diffx exits after feedback is submitted.
+4. Route by user intent:
+   - If the user is asking a question or asking why something changed, answer directly and do not edit files.
+   - Only make code edits when the user explicitly asks for an edit or implementation.
+5. If the user explicitly asked for edits and stdout includes requested fixes, implement them now.
+6. If stdout says no changes were requested, acknowledge and continue.
+MD
+```
+
+Link it into agent skill directories:
+
+```sh
+mkdir -p "$HOME/.agents/skills" "$HOME/.claude/skills"
+ln -sfn "$HOME/.local/share/diffx/skills/diffx" "$HOME/.agents/skills/diffx"
+ln -sfn "$HOME/.local/share/diffx/skills/diffx" "$HOME/.claude/skills/diffx"
+```
+
+Example custom target:
+
+```sh
+mkdir -p "$HOME/.cursor/skills"
+ln -sfn "$HOME/.local/share/diffx/skills/diffx" "$HOME/.cursor/skills/diffx"
 ```
 
 ## Quick Start

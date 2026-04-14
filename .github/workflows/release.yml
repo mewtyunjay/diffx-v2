@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend bundle
+        run: go generate ./frontend
+
+      - name: Build release archives
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          build_one() {
+            local goos="$1"
+            local label_arch="$2"
+            local goarch="$3"
+            local out_dir="dist/diffx_${goos}_${label_arch}"
+
+            mkdir -p "${out_dir}"
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build -o "${out_dir}/diffx" ./cmd/diffx
+            tar -C "${out_dir}" -czf "dist/diffx_${goos}_${label_arch}.tar.gz" diffx
+          }
+
+          build_one linux x86_64 amd64
+          build_one linux arm64 arm64
+          build_one darwin x86_64 amd64
+          build_one darwin arm64 arm64
+
+          sha256sum dist/*.tar.gz > dist/SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
