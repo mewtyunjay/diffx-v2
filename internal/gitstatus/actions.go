@@ -15,6 +15,7 @@ var (
 	ErrBulkActionNotAtRoot = errors.New("bulk stage actions require opening the repo root")
 	ErrEmptyCommitMessage  = errors.New("commit message is required")
 	ErrNoStagedChanges     = errors.New("no staged changes to commit")
+	ErrUncommittedChanges  = errors.New("you have unsaved changes")
 	ErrPathIgnored         = errors.New("path is ignored by git")
 	ErrPathOutsideScope    = errors.New("path is outside the current workspace scope")
 )
@@ -175,6 +176,65 @@ func (s *Service) PushCurrentBranch(ctx context.Context) (PushResult, error) {
 	return PushResult{RemoteRef: remoteRef, CreatedUpstream: true}, nil
 }
 
+func (s *Service) FetchRemote(ctx context.Context) error {
+	if err := s.ensureRepoRootScope(); err != nil {
+		return err
+	}
+
+	_, err := s.runGitCombined(ctx, "", "fetch", "--prune")
+	return err
+}
+
+func (s *Service) PullCurrentBranch(ctx context.Context) error {
+	if err := s.ensureRepoRootScope(); err != nil {
+		return err
+	}
+
+	_, err := s.runGitCombined(ctx, "", "pull", "--ff-only")
+	return err
+}
+
+func (s *Service) CheckoutBranch(ctx context.Context, branch string) error {
+	if err := s.ensureRepoRootScope(); err != nil {
+		return err
+	}
+
+	targetBranch := strings.TrimSpace(branch)
+	if targetBranch == "" {
+		return fmt.Errorf("branch is required")
+	}
+
+	statusFiles, err := s.listStatusFiles(ctx)
+	if err != nil {
+		return err
+	}
+	if len(statusFiles) > 0 {
+		return ErrUncommittedChanges
+	}
+
+	if strings.HasPrefix(targetBranch, "origin/") {
+		localBranch := strings.TrimPrefix(targetBranch, "origin/")
+		if localBranch == "" {
+			return fmt.Errorf("branch is required")
+		}
+
+		exists, err := s.localBranchExists(ctx, localBranch)
+		if err != nil {
+			return err
+		}
+		if exists {
+			_, err = s.runGitCombined(ctx, "", "checkout", localBranch)
+			return err
+		}
+
+		_, err = s.runGitCombined(ctx, "", "checkout", "-b", localBranch, "--track", targetBranch)
+		return err
+	}
+
+	_, err = s.runGitCombined(ctx, "", "checkout", targetBranch)
+	return err
+}
+
 func (s *Service) BranchSyncStatus(ctx context.Context) (BranchSyncStatus, error) {
 	upstreamRef, err := s.CurrentUpstreamRef(ctx)
 	if err != nil {
@@ -296,6 +356,21 @@ func (s *Service) isIgnoredPath(ctx context.Context, path string) (bool, error) 
 		}
 
 		return false, fmt.Errorf("git check-ignore -- %s: %w", path, err)
+	}
+
+	return true, nil
+}
+
+func (s *Service) localBranchExists(ctx context.Context, name string) (bool, error) {
+	commandArgs := []string{"-C", s.repoRoot, "show-ref", "--verify", "--quiet", "refs/heads/" + name}
+	cmd := exec.CommandContext(ctx, "git", commandArgs...)
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("git show-ref --verify --quiet refs/heads/%s: %w", name, err)
 	}
 
 	return true, nil

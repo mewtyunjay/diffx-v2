@@ -62,19 +62,14 @@ TXT
 
 usage() {
   cat <<'TXT'
-Local source installer for development.
+Local source builder for development.
 
-Builds diffx from the current repo and installs it into ~/.local/bin/diffx,
-then runs:
-  diffx setup [args...]
+Builds diffx from the current repo and installs the binary into
+~/.local/bin/diffx. Does not run `diffx setup` or configure agent
+integrations.
 
 Usage:
-  bash ./scripts/setup-agent-integrations.sh [diffx setup args]
-
-Examples:
   bash ./scripts/setup-agent-integrations.sh
-  bash ./scripts/setup-agent-integrations.sh --list-agents
-  bash ./scripts/setup-agent-integrations.sh --yes --agents universal,claude,codex
 TXT
 }
 
@@ -106,9 +101,6 @@ main() {
     go build -o "${DIFFX_BIN_PATH}" ./cmd/diffx
   )
   chmod +x "${DIFFX_BIN_PATH}"
-
-  log "Running local setup UI..."
-  "${DIFFX_BIN_PATH}" setup "$@"
 
   cat <<TXT
 [setup] Done.

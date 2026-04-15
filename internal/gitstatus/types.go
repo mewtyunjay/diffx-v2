@@ -5,10 +5,11 @@ import "sync"
 type ChangedFileStatus string
 
 const (
-	StatusAdded    ChangedFileStatus = "added"
-	StatusModified ChangedFileStatus = "modified"
-	StatusDeleted  ChangedFileStatus = "deleted"
-	StatusRenamed  ChangedFileStatus = "renamed"
+	StatusAdded      ChangedFileStatus = "added"
+	StatusModified   ChangedFileStatus = "modified"
+	StatusDeleted    ChangedFileStatus = "deleted"
+	StatusRenamed    ChangedFileStatus = "renamed"
+	StatusConflicted ChangedFileStatus = "conflicted"
 
 	maxDiffFileBytes  = 256 * 1024
 	versionCacheLimit = 256
@@ -35,12 +36,18 @@ type ChangedFilesResult struct {
 	CurrentCommit         string            `json:"currentCommit"`
 	UpstreamRef           string            `json:"upstreamRef,omitempty"`
 	BranchSync            BranchSyncStatus  `json:"branchSync"`
+	MergeState            MergeState        `json:"mergeState"`
 	RepoName              string            `json:"repoName"`
 	WorkspaceName         string            `json:"workspaceName"`
 	ScopePath             string            `json:"scopePath"`
 	HiddenStagedFileCount int               `json:"hiddenStagedFileCount"`
 	Files                 []ChangedFileItem `json:"files"`
 	InitialDiff           *FileDiffResult   `json:"initialDiff,omitempty"`
+}
+
+type MergeState struct {
+	InProgress      bool `json:"inProgress"`
+	UnresolvedCount int  `json:"unresolvedCount"`
 }
 
 type BranchSyncStatus struct {
@@ -75,6 +82,21 @@ type FileDiffResult struct {
 	After         FileVersion       `json:"after"`
 	Binary        bool              `json:"binary,omitempty"`
 	TooLarge      bool              `json:"tooLarge,omitempty"`
+}
+
+type ConflictFileResult struct {
+	Path       string `json:"path"`
+	Exists     bool   `json:"exists"`
+	Language   string `json:"language,omitempty"`
+	Contents   string `json:"contents"`
+	ContentKey string `json:"contentKey"`
+	Binary     bool   `json:"binary,omitempty"`
+	TooLarge   bool   `json:"tooLarge,omitempty"`
+}
+
+type ConflictResolveResult struct {
+	Path       string `json:"path"`
+	ContentKey string `json:"contentKey"`
 }
 
 type Service struct {

@@ -3,6 +3,8 @@ import type {
   ChangedFileItem,
   ChangedFilesResult,
   CommitResult,
+  ConflictFileResult,
+  ConflictResolveResult,
   FileDiffResult,
   PushResult,
   ReviewStateResult,
@@ -122,6 +124,38 @@ export async function commitStaged(message: string, signal?: AbortSignal) {
 
 export async function pushCurrentBranch(signal?: AbortSignal) {
   return postJSON<PushResult>("/api/git/push", undefined, signal)
+}
+
+export async function fetchRemote(signal?: AbortSignal) {
+  return postJSON<void>("/api/git/fetch", undefined, signal)
+}
+
+export async function pullCurrentBranch(signal?: AbortSignal) {
+  return postJSON<void>("/api/git/pull", undefined, signal)
+}
+
+export async function checkoutBranch(branch: string, signal?: AbortSignal) {
+  return postJSON<void>("/api/git/checkout", { branch }, signal)
+}
+
+export async function fetchConflictFile(path: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ path })
+  const response = await fetch(`/api/git/conflict-file?${params.toString()}`, {
+    signal,
+  })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as ConflictFileResult
+}
+
+export async function resolveConflictFile(path: string, contents: string, signal?: AbortSignal) {
+  return postJSON<ConflictResolveResult>(
+    "/api/git/conflict/resolve",
+    { path, contents },
+    signal
+  )
 }
 
 export async function submitReviewFeedback(

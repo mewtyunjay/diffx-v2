@@ -61,6 +61,80 @@ func (s *Service) ReadFileContent(relPath string) (string, string, error) {
 	return result.version.Contents, result.version.CacheKey, nil
 }
 
+func (s *Service) ReadConflictFile(relPath string) (ConflictFileResult, error) {
+	if strings.TrimSpace(relPath) == "" {
+		return ConflictFileResult{}, fmt.Errorf("path is required")
+	}
+
+	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
+	if err != nil {
+		return ConflictFileResult{}, err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ConflictFileResult{
+				Path:       relPath,
+				Exists:     false,
+				Language:   detectLanguage(relPath),
+				Contents:   "",
+				ContentKey: "missing",
+			}, nil
+		}
+
+		return ConflictFileResult{}, err
+	}
+	if info.IsDir() {
+		return ConflictFileResult{}, fmt.Errorf("path %q is not a file", relPath)
+	}
+
+	result, err := s.readWorkingTreeVersion(relPath)
+	if err != nil {
+		return ConflictFileResult{}, err
+	}
+
+	return ConflictFileResult{
+		Path:       relPath,
+		Exists:     true,
+		Language:   detectLanguage(relPath),
+		Contents:   result.version.Contents,
+		ContentKey: result.version.CacheKey,
+		Binary:     result.binary,
+		TooLarge:   result.tooLarge,
+	}, nil
+}
+
+func (s *Service) ResolveConflictFile(relPath string, contents string) (ConflictResolveResult, error) {
+	if strings.TrimSpace(relPath) == "" {
+		return ConflictResolveResult{}, fmt.Errorf("path is required")
+	}
+
+	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
+	if err != nil {
+		return ConflictResolveResult{}, err
+	}
+
+	parentDir := filepath.Dir(absPath)
+	if err := os.MkdirAll(parentDir, 0o755); err != nil {
+		return ConflictResolveResult{}, fmt.Errorf("create parent directory: %w", err)
+	}
+
+	if err := os.WriteFile(absPath, []byte(contents), 0o644); err != nil {
+		return ConflictResolveResult{}, err
+	}
+
+	contentKey, err := buildContentKey(s.repoRoot, relPath)
+	if err != nil {
+		return ConflictResolveResult{}, err
+	}
+
+	return ConflictResolveResult{
+		Path:       relPath,
+		ContentKey: contentKey,
+	}, nil
+}
+
 func (s *Service) ReadFileDiff(
 	ctx context.Context,
 	path string,
@@ -151,6 +225,18 @@ func (s *Service) readFileDiffWithComparison(
 
 		result.Before = beforeResult.version
 		result.After = afterResult.version
+	case StatusConflicted:
+		beforeResult, err = s.readOptionalGitVersion(ctx, comparison.BaseCommit, path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+		afterResult, err = s.readOptionalWorkingTreeVersion(path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+
+		result.Before = beforeResult.version
+		result.After = afterResult.version
 	default:
 		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, path)
 		if err != nil {
@@ -169,6 +255,18 @@ func (s *Service) readFileDiffWithComparison(
 	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
 
 	return result, nil
+}
+
+func (s *Service) readOptionalWorkingTreeVersion(relPath string) (cachedFileVersion, error) {
+	result, err := s.readWorkingTreeVersion(relPath)
+	if err == nil {
+		return result, nil
+	}
+	if os.IsNotExist(err) {
+		return cachedFileVersion{version: emptyFileVersion(relPath)}, nil
+	}
+
+	return cachedFileVersion{}, err
 }
 
 func (s *Service) readWorkingTreeVersion(relPath string) (cachedFileVersion, error) {
@@ -230,6 +328,30 @@ func (s *Service) readGitVersion(
 	s.versionCache.Set(cacheKey, result)
 
 	return result, nil
+}
+
+func (s *Service) readOptionalGitVersion(
+	ctx context.Context,
+	headCommit string,
+	relPath string,
+) (cachedFileVersion, error) {
+	result, err := s.readGitVersion(ctx, headCommit, relPath)
+	if err == nil {
+		return result, nil
+	}
+
+	if isGitPathMissingError(err) {
+		return cachedFileVersion{version: emptyFileVersion(relPath)}, nil
+	}
+
+	return cachedFileVersion{}, err
+}
+
+func isGitPathMissingError(err error) bool {
+	// `git show <commit>:<path>` emits one of these messages when the path is absent.
+	message := err.Error()
+	return strings.Contains(message, "exists on disk, but not in") ||
+		strings.Contains(message, "path does not exist in")
 }
 
 func buildCachedFileVersion(name string, contents []byte) cachedFileVersion {

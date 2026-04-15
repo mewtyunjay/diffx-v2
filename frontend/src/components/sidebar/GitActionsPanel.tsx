@@ -1,7 +1,8 @@
 import { useCallback, useRef, type KeyboardEvent } from "react"
-import { GitBranch, LoaderCircle } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 
-import type { ChangedFileItem, ComparisonMode } from "@/git/types"
+import type { BranchOption, ChangedFileItem, ComparisonMode } from "@/git/types"
+import { CheckoutBranchPicker } from "@/components/sidebar/CheckoutBranchPicker"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { SidebarFooter, useSidebar } from "@/components/ui/sidebar"
@@ -10,6 +11,8 @@ import { SHORTCUTS, useShortcut } from "@/lib/shortcuts"
 
 type GitActionsPanelProps = {
   branchName: string
+  branches: BranchOption[]
+  isBranchesLoading: boolean
   comparisonMode: ComparisonMode
   files: ChangedFileItem[]
   aheadCount: number
@@ -20,10 +23,18 @@ type GitActionsPanelProps = {
   onCommit: () => void
   isPushPending: boolean
   onPush: () => void
+  isFetchPending: boolean
+  onFetch: () => void
+  isPullPending: boolean
+  onPull: () => void
+  isCheckoutPending: boolean
+  onCheckoutBranch: (branch: string) => void
 }
 
 export function GitActionsPanel({
   branchName,
+  branches,
+  isBranchesLoading,
   comparisonMode,
   files,
   aheadCount,
@@ -34,6 +45,12 @@ export function GitActionsPanel({
   onCommit,
   isPushPending,
   onPush,
+  isFetchPending,
+  onFetch,
+  isPullPending,
+  onPull,
+  isCheckoutPending,
+  onCheckoutBranch,
 }: GitActionsPanelProps) {
   const { open, setOpen } = useSidebar()
   const commitMessageRef = useRef<HTMLTextAreaElement>(null)
@@ -50,6 +67,9 @@ export function GitActionsPanel({
   const canPush = canUseGitActions && aheadCount > 0
   const canTriggerCommit = !isCommitPending && !isPushPending && canCommit
   const canTriggerPush = !isCommitPending && !isPushPending && canPush
+  const canTriggerFetch = canUseGitActions && !isFetchPending && !isPullPending && !isCheckoutPending
+  const canTriggerPull = canUseGitActions && !isFetchPending && !isPullPending && !isCheckoutPending
+  const canTriggerBranchSwitch = canUseGitActions && !isCheckoutPending && !isPullPending
 
   const focusCommitMessage = useCallback(() => {
     if (open) {
@@ -112,10 +132,13 @@ export function GitActionsPanel({
         <div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              <GitBranch className="size-3.5 shrink-0 text-sidebar-foreground/60" />
-              <p className="truncate type-meta font-medium text-sidebar-foreground type-data">
-                {branchName}
-              </p>
+              <CheckoutBranchPicker
+                branchName={branchName}
+                branches={branches}
+                disabled={!canTriggerBranchSwitch || isBranchesLoading}
+                isSwitchPending={isCheckoutPending}
+                onSelectBranch={onCheckoutBranch}
+              />
             </div>
             <p className="shrink-0 type-meta font-medium text-sidebar-foreground type-data">
               {canUseGitActions ? `${totalStagedCount} staged` : "In comparison mode"}
@@ -177,6 +200,30 @@ export function GitActionsPanel({
                   <Kbd keys={SHORTCUTS.pushBranch.keys} />
                 </TooltipContent>
               </Tooltip>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                disabled={!canTriggerFetch}
+                onClick={onFetch}
+              >
+                {isFetchPending ? <LoaderCircle className="animate-spin" /> : null}
+                Fetch
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                disabled={!canTriggerPull}
+                onClick={onPull}
+              >
+                {isPullPending ? <LoaderCircle className="animate-spin" /> : null}
+                Pull
+              </Button>
             </div>
           </div>
         ) : null}

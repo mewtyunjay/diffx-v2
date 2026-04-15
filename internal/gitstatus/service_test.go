@@ -40,6 +40,114 @@ func TestParsePorcelainStatus(t *testing.T) {
 	}
 }
 
+func TestParsePorcelainStatusUnmergedFiles(t *testing.T) {
+	repoRoot := t.TempDir()
+	writeFile(t, filepath.Join(repoRoot, "conflicted.txt"), "content\n")
+
+	output := []byte("UU conflicted.txt\x00DU removed.txt\x00")
+	files, err := parsePorcelainStatus(output, repoRoot)
+	if err != nil {
+		t.Fatalf("parsePorcelainStatus returned error: %v", err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %#v", files)
+	}
+
+	for _, file := range files {
+		if file.Status != StatusConflicted {
+			t.Fatalf("expected conflicted status, got %#v", file)
+		}
+		if file.HasStagedChanges {
+			t.Fatalf("expected unmerged file to not report staged state, got %#v", file)
+		}
+		if !file.HasUnstagedChanges {
+			t.Fatalf("expected unmerged file to report unstaged state, got %#v", file)
+		}
+	}
+}
+
+func TestReadMergeState(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	service := NewService(repoRoot, ".")
+
+	files := []ChangedFileItem{
+		{Path: "conflicted.txt", Status: StatusConflicted},
+	}
+
+	mergeHeadPath, err := service.resolveGitPath(context.Background(), "MERGE_HEAD")
+	if err != nil {
+		t.Fatalf("resolveGitPath returned error: %v", err)
+	}
+	if err := os.WriteFile(mergeHeadPath, []byte("deadbeef\n"), 0o644); err != nil {
+		t.Fatalf("write merge head: %v", err)
+	}
+
+	state, err := service.ReadMergeState(context.Background(), files)
+	if err != nil {
+		t.Fatalf("ReadMergeState returned error: %v", err)
+	}
+	if !state.InProgress {
+		t.Fatalf("expected in-progress merge state, got %#v", state)
+	}
+	if state.UnresolvedCount != 1 {
+		t.Fatalf("expected unresolved count 1, got %#v", state)
+	}
+
+	if err := os.Remove(mergeHeadPath); err != nil {
+		t.Fatalf("remove merge head: %v", err)
+	}
+
+	state, err = service.ReadMergeState(context.Background(), files)
+	if err != nil {
+		t.Fatalf("ReadMergeState returned error: %v", err)
+	}
+	if state.InProgress {
+		t.Fatalf("expected merge state to be inactive, got %#v", state)
+	}
+	if state.UnresolvedCount != 0 {
+		t.Fatalf("expected unresolved count to reset, got %#v", state)
+	}
+}
+
+func TestConflictFileReadAndResolve(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	service := NewService(repoRoot, ".")
+
+	missing, err := service.ReadConflictFile("missing.txt")
+	if err != nil {
+		t.Fatalf("ReadConflictFile missing returned error: %v", err)
+	}
+	if missing.Exists {
+		t.Fatalf("expected missing file to report exists=false, got %#v", missing)
+	}
+	if missing.ContentKey != "missing" {
+		t.Fatalf("expected missing content key, got %#v", missing)
+	}
+
+	result, err := service.ResolveConflictFile("conflicted.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n")
+	if err != nil {
+		t.Fatalf("ResolveConflictFile returned error: %v", err)
+	}
+	if result.Path != "conflicted.txt" || result.ContentKey == "" {
+		t.Fatalf("unexpected resolve result %#v", result)
+	}
+
+	read, err := service.ReadConflictFile("conflicted.txt")
+	if err != nil {
+		t.Fatalf("ReadConflictFile returned error: %v", err)
+	}
+	if !read.Exists {
+		t.Fatalf("expected file to exist after resolve, got %#v", read)
+	}
+	if !strings.Contains(read.Contents, "<<<<<<< HEAD") {
+		t.Fatalf("expected written conflict contents, got %#v", read)
+	}
+}
+
 func TestResolveRepoPathRejectsEscape(t *testing.T) {
 	repoRoot := t.TempDir()
 

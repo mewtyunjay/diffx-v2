@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from "react"
 
 import {
+  checkoutBranch,
   commitStaged,
+  fetchRemote,
+  pullCurrentBranch,
   pushCurrentBranch,
   stageAll,
   stageFile,
@@ -13,12 +16,14 @@ import { toast } from "@/components/ui/sonner"
 import { getToastErrorDescription } from "@/lib/toast-errors"
 
 type UseGitActionCommandsOptions = {
+  currentBranch: string
   files: ChangedFileItem[]
   refreshBranches: (signal?: AbortSignal) => Promise<unknown>
   refreshChangedFiles: (signal?: AbortSignal) => Promise<unknown>
 }
 
 export function useGitActionCommands({
+  currentBranch,
   files,
   refreshBranches,
   refreshChangedFiles,
@@ -28,6 +33,9 @@ export function useGitActionCommands({
   const [commitMessage, setCommitMessage] = useState("")
   const [isCommitPending, setIsCommitPending] = useState(false)
   const [isPushPending, setIsPushPending] = useState(false)
+  const [isFetchPending, setIsFetchPending] = useState(false)
+  const [isPullPending, setIsPullPending] = useState(false)
+  const [isCheckoutPending, setIsCheckoutPending] = useState(false)
 
   const handleToggleStage = useCallback(
     async (file: ChangedFileItem) => {
@@ -153,29 +161,125 @@ export function useGitActionCommands({
     }
   }, [refreshBranches, refreshChangedFiles])
 
+  const handleFetch = useCallback(async () => {
+    setIsFetchPending(true)
+    const fetchToastId = toast.warning("Fetching remote...", {
+      duration: Infinity,
+      dismissible: false,
+    })
+
+    try {
+      await fetchRemote()
+      toast.success("Fetched remote updates.", {
+        id: fetchToastId,
+      })
+      await Promise.all([refreshChangedFiles(), refreshBranches()])
+    } catch (error) {
+      toast.error("Fetch failed.", {
+        id: fetchToastId,
+        description: getToastErrorDescription(error, "Unable to fetch from the remote."),
+      })
+    } finally {
+      setIsFetchPending(false)
+    }
+  }, [refreshBranches, refreshChangedFiles])
+
+  const handlePull = useCallback(async () => {
+    setIsPullPending(true)
+    const pullToastId = toast.warning("Pulling latest changes...", {
+      duration: Infinity,
+      dismissible: false,
+    })
+
+    try {
+      await pullCurrentBranch()
+      toast.success("Pulled latest changes.", {
+        id: pullToastId,
+      })
+      await Promise.all([refreshChangedFiles(), refreshBranches()])
+    } catch (error) {
+      toast.error("Pull failed.", {
+        id: pullToastId,
+        description: getToastErrorDescription(error, "Unable to pull from the remote."),
+      })
+    } finally {
+      setIsPullPending(false)
+    }
+  }, [refreshBranches, refreshChangedFiles])
+
+  const handleCheckoutBranch = useCallback(
+    async (nextBranch: string) => {
+      if (!nextBranch || nextBranch === currentBranch) {
+        return
+      }
+
+      if (files.length > 0) {
+        toast.error("Couldn’t switch branch.", {
+          description: "You have unsaved changes.",
+        })
+        return
+      }
+
+      setIsCheckoutPending(true)
+      const checkoutToastId = toast.warning(`Switching to ${nextBranch}...`, {
+        duration: Infinity,
+        dismissible: false,
+      })
+
+      try {
+        await checkoutBranch(nextBranch)
+        toast.success(`Switched to ${nextBranch}.`, {
+          id: checkoutToastId,
+        })
+        setCommitMessage("")
+        await Promise.all([refreshChangedFiles(), refreshBranches()])
+      } catch (error) {
+        toast.error("Branch switch failed.", {
+          id: checkoutToastId,
+          description: getToastErrorDescription(error, "Unable to switch branches."),
+        })
+      } finally {
+        setIsCheckoutPending(false)
+      }
+    },
+    [currentBranch, files.length, refreshBranches, refreshChangedFiles]
+  )
+
   return useMemo(
     () => ({
       commitMessage,
+      handleCheckoutBranch,
       handleCommit,
+      handleFetch,
+      handlePull,
       handlePush,
       handleStageAll,
       handleToggleStage,
       handleUnstageAll,
+      isCheckoutPending,
       isBulkStagePending,
       isCommitPending,
+      isFetchPending,
+      isPullPending,
       isPushPending,
       setCommitMessage,
       stagePendingPaths,
     }),
     [
       commitMessage,
+      handleCheckoutBranch,
       handleCommit,
+      handleFetch,
+      handlePull,
       handlePush,
       handleStageAll,
       handleToggleStage,
       handleUnstageAll,
+      isCheckoutPending,
       isBulkStagePending,
       isCommitPending,
+      isFetchPending,
+      isPullPending,
       isPushPending,
       stagePendingPaths,
     ]

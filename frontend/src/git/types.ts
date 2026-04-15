@@ -1,4 +1,4 @@
-export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed"
+export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed" | "conflicted"
 export type ComparisonMode = "head" | "branch"
 export type BranchKind = "local" | "remote"
 
@@ -35,12 +35,18 @@ export type ChangedFilesResult = {
   currentCommit: string
   upstreamRef?: string
   branchSync: BranchSyncState
+  mergeState: MergeState
   repoName: string
   workspaceName: string
   scopePath: string
   hiddenStagedFileCount: number
   files: ChangedFileItem[]
   initialDiff?: FileDiffResult
+}
+
+export type MergeState = {
+  inProgress: boolean
+  unresolvedCount: number
 }
 
 export type BranchSyncState = {
@@ -99,4 +105,19 @@ export type FileDiffResult = {
   after: FileVersionResult
   binary?: boolean
   tooLarge?: boolean
+}
+
+export type ConflictFileResult = {
+  path: string
+  exists: boolean
+  language?: string
+  contents: string
+  contentKey: string
+  binary?: boolean
+  tooLarge?: boolean
+}
+
+export type ConflictResolveResult = {
+  path: string
+  contentKey: string
 }

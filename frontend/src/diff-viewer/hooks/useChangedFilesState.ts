@@ -6,6 +6,7 @@ import type {
   ChangedFileItem,
   ChangedFilesResult,
   ComparisonMode,
+  MergeState,
 } from "@/git/types"
 
 type UseChangedFilesStateOptions = {
@@ -18,12 +19,18 @@ const defaultBranchSync: BranchSyncState = {
   behindCount: 0,
 }
 
+const defaultMergeState: MergeState = {
+  inProgress: false,
+  unresolvedCount: 0,
+}
+
 export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOptions = {}) {
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
   const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
   const [baseCommit, setBaseCommit] = useState("")
   const [currentRef, setCurrentRef] = useState("HEAD")
   const [branchSync, setBranchSync] = useState<BranchSyncState>(defaultBranchSync)
+  const [mergeState, setMergeState] = useState<MergeState>(defaultMergeState)
   const [scopePath, setScopePath] = useState(".")
   const [hiddenStagedFileCount, setHiddenStagedFileCount] = useState(0)
   const [files, setFiles] = useState<ChangedFileItem[]>([])
@@ -50,6 +57,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
       setBaseCommit(result.baseCommit)
       setCurrentRef(result.currentRef)
       setBranchSync(result.branchSync)
+      setMergeState(result.mergeState)
       setRepoName(result.repoName)
       setScopePath(result.scopePath)
       setWorkspaceName(result.workspaceName)
@@ -92,6 +100,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
         setBaseCommit("")
         setCurrentRef("HEAD")
         setBranchSync(defaultBranchSync)
+        setMergeState(defaultMergeState)
         setScopePath(".")
         setHiddenStagedFileCount(0)
         setFiles([])
@@ -115,6 +124,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
     applyChangedFilesResult,
     baseCommit,
     branchSync,
+    mergeState,
     comparisonMode,
     currentRef,
     files,

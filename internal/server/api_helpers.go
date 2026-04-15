@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"diffx/internal/gitstatus"
 )
@@ -51,7 +52,9 @@ func writeAPIError(w http.ResponseWriter, err error) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, gitstatus.ErrEmptyCommitMessage), errors.Is(err, gitstatus.ErrPathOutsideScope), errors.Is(err, gitstatus.ErrBulkActionNotAtRoot):
 		http.Error(w, err.Error(), http.StatusBadRequest)
-	case errors.Is(err, gitstatus.ErrNoStagedChanges), errors.Is(err, gitstatus.ErrDetachedHead):
+	case strings.Contains(err.Error(), "path is required"), strings.Contains(err.Error(), "branch is required"), strings.Contains(err.Error(), "absolute paths are not allowed"), strings.Contains(err.Error(), "escapes repo root"), strings.Contains(err.Error(), "is not a file"):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case errors.Is(err, gitstatus.ErrNoStagedChanges), errors.Is(err, gitstatus.ErrDetachedHead), errors.Is(err, gitstatus.ErrUncommittedChanges):
 		http.Error(w, err.Error(), http.StatusConflict)
 	default:
 		var scopedCommitErr *gitstatus.ScopedCommitBlockedError

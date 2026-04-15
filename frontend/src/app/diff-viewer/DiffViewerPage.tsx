@@ -8,14 +8,17 @@ import { useBranchesState } from "@/diff-viewer/hooks/useBranchesState"
 import { useChangedFilesState } from "@/diff-viewer/hooks/useChangedFilesState"
 import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
+import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
 import type { ChangedFilesResult } from "@/git/types"
 import { AppShell } from "@/components/app-shell"
 import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
 import { DiffPane } from "@/components/diff/DiffPane"
+import { MergeConflictPane } from "@/components/diff/MergeConflictPane"
 import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
 import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import { SiteHeader } from "@/components/site-header"
+import { Button } from "@/components/ui/button"
 import { SidebarHeader } from "@/components/ui/sidebar"
 import { useScope, useShortcut } from "@/lib/shortcuts"
 
@@ -42,6 +45,7 @@ export function DiffViewerPage() {
     handleSelectBaseRef,
     hiddenStagedFileCount,
     isFilesLoading,
+    mergeState,
     refreshChangedFiles,
     repoName,
     scopePath,
@@ -54,8 +58,27 @@ export function DiffViewerPage() {
     onApplyResult: setLatestChangedFilesResult,
   })
 
+  const {
+    conflictFile,
+    conflictFileError,
+    isConflictFileLoading,
+    isConflictMode,
+    isResolvePending,
+    resolveSelectedConflict,
+    selectedConflictPath,
+    showMergeResolvedState,
+    returnToNormalMode,
+    visibleFiles,
+  } = useMergeConflictState({
+    files,
+    mergeState,
+    selectedFilePath,
+    setSelectedFilePath,
+    refreshChangedFiles,
+  })
+
   const selectedFile =
-    files.find((file) => file.path === selectedFilePath) ?? files[0] ?? null
+    visibleFiles.find((file) => file.path === selectedFilePath) ?? visibleFiles[0] ?? null
   const repoLabel = repoName || workspaceName || "repository"
 
   const {
@@ -67,7 +90,7 @@ export function DiffViewerPage() {
     indexOfSelected,
     totalVisible,
   } = useFileTreeNav({
-    files,
+    files: visibleFiles,
     selectedFilePath: selectedFile?.path ?? null,
     repoName,
     workspaceName,
@@ -160,7 +183,8 @@ export function DiffViewerPage() {
   }, [latestChangedFilesResult, primePreparedDiff, pruneForFiles])
 
   const gitActions = useGitActionCommands({
-    files,
+    currentBranch: currentRef || "HEAD",
+    files: visibleFiles,
     refreshBranches,
     refreshChangedFiles,
   })
@@ -246,7 +270,7 @@ export function DiffViewerPage() {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
-              files={files}
+              files={visibleFiles}
               tree={tree}
               expandedPaths={expandedPaths}
               onToggleFolder={handleToggleFolder}
@@ -263,8 +287,10 @@ export function DiffViewerPage() {
 
             <GitActionsPanel
               branchName={currentRef || "HEAD"}
+              branches={branches}
+              isBranchesLoading={isBranchesLoading}
               comparisonMode={comparisonMode}
-              files={files}
+              files={visibleFiles}
               aheadCount={branchSync.aheadCount}
               hiddenStagedFileCount={hiddenStagedFileCount}
               commitMessage={gitActions.commitMessage}
@@ -273,6 +299,12 @@ export function DiffViewerPage() {
               onCommit={gitActions.handleCommit}
               isPushPending={gitActions.isPushPending}
               onPush={gitActions.handlePush}
+              isFetchPending={gitActions.isFetchPending}
+              onFetch={gitActions.handleFetch}
+              isPullPending={gitActions.isPullPending}
+              onPull={gitActions.handlePull}
+              isCheckoutPending={gitActions.isCheckoutPending}
+              onCheckoutBranch={gitActions.handleCheckoutBranch}
             />
           </div>
         </>
@@ -298,6 +330,18 @@ export function DiffViewerPage() {
         {headerError ? (
           <div className="border-b border-border/60 px-4 py-2">
             <p className="measure-readable type-meta text-destructive">{headerError}</p>
+          </div>
+        ) : null}
+        {showMergeResolvedState ? (
+          <div className="border-b border-border/60 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="measure-readable type-meta text-muted-foreground">
+                All merge conflicts are resolved. Stage and commit to finish the merge.
+              </p>
+              <Button type="button" size="sm" variant="outline" onClick={returnToNormalMode}>
+                Back to Normal Mode
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -334,16 +378,32 @@ export function DiffViewerPage() {
             </div>
           ) : null}
 
-          <DiffPane
-            diff={selectedFile ? currentDisplayedDiff : null}
-            hasSelectedFile={!!selectedFile}
-            viewMode={viewMode}
-            expandAll={isCurrentFileExpanded}
-            savedAnnotations={visibleSavedAnnotations}
-            clearDraftToken={clearDraftToken}
-            onSaveAnnotation={saveAnnotation}
-            onDeleteAnnotation={deleteAnnotation}
-          />
+          {isConflictMode ? (
+            <MergeConflictPane
+              selectedFilePath={selectedConflictPath}
+              conflictFile={conflictFile}
+              conflictFileError={conflictFileError}
+              isConflictFileLoading={isConflictFileLoading}
+              isResolvePending={isResolvePending}
+              currentDiff={selectedFile ? currentDisplayedDiff : null}
+              clearDraftToken={clearDraftToken}
+              savedAnnotations={visibleSavedAnnotations}
+              onSaveAnnotation={saveAnnotation}
+              onDeleteAnnotation={deleteAnnotation}
+              onResolveConflict={resolveSelectedConflict}
+            />
+          ) : (
+            <DiffPane
+              diff={selectedFile ? currentDisplayedDiff : null}
+              hasSelectedFile={!!selectedFile}
+              viewMode={viewMode}
+              expandAll={isCurrentFileExpanded}
+              savedAnnotations={visibleSavedAnnotations}
+              clearDraftToken={clearDraftToken}
+              onSaveAnnotation={saveAnnotation}
+              onDeleteAnnotation={deleteAnnotation}
+            />
+          )}
         </div>
       </section>
     </AppShell>

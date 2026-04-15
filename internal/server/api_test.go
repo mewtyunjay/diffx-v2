@@ -335,6 +335,67 @@ func TestHandleUnstageAllRejectsSubfolderScope(t *testing.T) {
 	}
 }
 
+func TestHandleConflictFileReturnsContent(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(
+		t,
+		filepath.Join(repoRoot, "notes.txt"),
+		"<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n",
+	)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/git/conflict-file?path=notes.txt", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload gitstatus.ConflictFileResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode conflict file response: %v", err)
+	}
+	if !payload.Exists {
+		t.Fatalf("expected conflict file to exist, got %#v", payload)
+	}
+	if !strings.Contains(payload.Contents, "<<<<<<< HEAD") {
+		t.Fatalf("expected conflict markers, got %#v", payload)
+	}
+}
+
+func TestHandleResolveConflictWritesFile(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/git/conflict/resolve",
+		bytes.NewBufferString(`{"path":"notes.txt","contents":"resolved\n"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	contents, err := os.ReadFile(filepath.Join(repoRoot, "notes.txt"))
+	if err != nil {
+		t.Fatalf("read notes.txt: %v", err)
+	}
+	if string(contents) != "resolved\n" {
+		t.Fatalf("expected resolved content, got %q", string(contents))
+	}
+}
+
 func TestHandleCommitReturnsConflictForScopedHiddenStagedFiles(t *testing.T) {
 	t.Parallel()
 
@@ -355,6 +416,61 @@ func TestHandleCommitReturnsConflictForScopedHiddenStagedFiles(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "outside the current workspace scope") {
 		t.Fatalf("expected scoped conflict message, got %q", recorder.Body.String())
+	}
+}
+
+func TestHandleCheckoutBranchSwitchesCurrentBranch(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	runServerGit(t, repoRoot, "checkout", "-b", "feature")
+	runServerGit(t, repoRoot, "checkout", "main")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/git/checkout",
+		bytes.NewBufferString(`{"branch":"feature"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	current := strings.TrimSpace(runServerGitOutput(t, repoRoot, "branch", "--show-current"))
+	if current != "feature" {
+		t.Fatalf("expected current branch feature, got %q", current)
+	}
+}
+
+func TestHandleCheckoutBranchRejectsWhenUncommittedChangesExist(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	runServerGit(t, repoRoot, "checkout", "-b", "feature")
+	runServerGit(t, repoRoot, "checkout", "main")
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/git/checkout",
+		bytes.NewBufferString(`{"branch":"feature"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "unsaved changes") {
+		t.Fatalf("expected unsaved changes error, got %q", recorder.Body.String())
 	}
 }
 
@@ -434,4 +550,17 @@ func runServerGit(t *testing.T, dir string, args ...string) {
 	if err != nil {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(output))
 	}
+}
+
+func runServerGitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v failed: %v\n%s", args, err, string(output))
+	}
+
+	return string(output)
 }

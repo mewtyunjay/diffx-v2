@@ -66,7 +66,7 @@ func displayPathForScope(path, previousPath, scopePath string) string {
 
 func (status ChangedFileStatus) IsValid() bool {
 	switch status {
-	case StatusAdded, StatusModified, StatusDeleted, StatusRenamed:
+	case StatusAdded, StatusModified, StatusDeleted, StatusRenamed, StatusConflicted:
 		return true
 	default:
 		return false

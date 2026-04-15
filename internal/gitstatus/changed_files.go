@@ -36,6 +36,11 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		return ChangedFilesResult{}, err
 	}
 
+	mergeState, err := s.ReadMergeState(ctx, statusFiles)
+	if err != nil {
+		return ChangedFilesResult{}, err
+	}
+
 	branchSync, err := s.BranchSyncStatus(ctx)
 	if err != nil {
 		return ChangedFilesResult{}, err
@@ -91,6 +96,7 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		CurrentCommit:         comparison.CurrentCommit,
 		UpstreamRef:           branchSync.UpstreamRef,
 		BranchSync:            branchSync,
+		MergeState:            mergeState,
 		RepoName:              filepath.Base(s.repoRoot),
 		WorkspaceName:         workspaceNameForScope(s.repoRoot, s.scopePath),
 		ScopePath:             s.scopePath,
@@ -142,6 +148,10 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 			ContentKey:         "missing",
 			Language:           detectLanguage(path),
 		}
+		if isUnmergedStatusCode(code) {
+			item.HasStagedChanges = false
+			item.HasUnstagedChanges = true
+		}
 
 		if key, err := buildContentKey(repoRoot, path); err == nil {
 			item.ContentKey = key
@@ -157,6 +167,8 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 
 func mapChangedStatus(code string) ChangedFileStatus {
 	switch {
+	case isUnmergedStatusCode(code):
+		return StatusConflicted
 	case code == "??":
 		return StatusAdded
 	case strings.Contains(code, "R"):
@@ -167,5 +179,14 @@ func mapChangedStatus(code string) ChangedFileStatus {
 		return StatusAdded
 	default:
 		return StatusModified
+	}
+}
+
+func isUnmergedStatusCode(code string) bool {
+	switch code {
+	case "DD", "AU", "UD", "UA", "DU", "AA", "UU":
+		return true
+	default:
+		return false
 	}
 }

@@ -313,6 +313,39 @@ func TestPushCurrentBranchWithExistingUpstreamDoesNotCreateUpstream(t *testing.T
 	}
 }
 
+func TestCheckoutBranchSwitchesToExistingLocalBranch(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	runGit(t, repoRoot, "checkout", "-b", "feature")
+	runGit(t, repoRoot, "checkout", "main")
+	service := NewService(repoRoot, ".")
+
+	if err := service.CheckoutBranch(context.Background(), "feature"); err != nil {
+		t.Fatalf("CheckoutBranch returned error: %v", err)
+	}
+
+	current := strings.TrimSpace(runGitOutput(t, repoRoot, "branch", "--show-current"))
+	if current != "feature" {
+		t.Fatalf("expected current branch feature, got %q", current)
+	}
+}
+
+func TestCheckoutBranchRejectsWhenUncommittedChangesExist(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	runGit(t, repoRoot, "checkout", "-b", "feature")
+	runGit(t, repoRoot, "checkout", "main")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nupdated\n")
+	service := NewService(repoRoot, ".")
+
+	err := service.CheckoutBranch(context.Background(), "feature")
+	if !errors.Is(err, ErrUncommittedChanges) {
+		t.Fatalf("expected ErrUncommittedChanges, got %v", err)
+	}
+}
+
 func TestBranchSyncStatusWithoutUpstream(t *testing.T) {
 	t.Parallel()
 

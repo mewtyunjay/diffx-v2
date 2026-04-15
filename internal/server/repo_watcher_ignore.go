@@ -159,7 +159,17 @@ func gitCheckIgnoredPath(repoRoot string, path string) (bool, error) {
 }
 
 func repoRelativePath(repoRoot string, path string) (string, error) {
-	relativePath, err := filepath.Rel(filepath.Clean(repoRoot), filepath.Clean(path))
+	cleanRepoRoot := filepath.Clean(repoRoot)
+	if resolvedRepoRoot, err := filepath.EvalSymlinks(cleanRepoRoot); err == nil {
+		cleanRepoRoot = resolvedRepoRoot
+	}
+
+	cleanPath := filepath.Clean(path)
+	if resolvedPath, err := filepath.EvalSymlinks(cleanPath); err == nil {
+		cleanPath = resolvedPath
+	}
+
+	relativePath, err := filepath.Rel(cleanRepoRoot, cleanPath)
 	if err != nil {
 		return "", fmt.Errorf("relative path from repo root: %w", err)
 	}

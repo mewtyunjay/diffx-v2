@@ -111,6 +111,14 @@ func (w *repoWatcher) addTree(root string, kind repoChangeKind) error {
 }
 
 func (w *repoWatcher) shouldSkipWorktreePath(path string) bool {
+	if path != w.worktreeRoot {
+		for _, segment := range strings.Split(filepath.ToSlash(path), "/") {
+			if segment == "node_modules" {
+				return true
+			}
+		}
+	}
+
 	if path != w.worktreeRoot && w.ignoredPaths != nil && w.ignoredPaths.matchesKnownPath(path) {
 		return true
 	}
@@ -128,6 +136,10 @@ func (w *repoWatcher) addWatch(path string, kind repoChangeKind) error {
 	}
 
 	if err := w.watcher.Add(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+
 		return fmt.Errorf("watch %s: %w", path, err)
 	}
 
