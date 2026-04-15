@@ -24,7 +24,7 @@ type UseFileTreeNavResult = {
   prevFile: ChangedFileItem | null
   nextFile: ChangedFileItem | null
   indexOfSelected: number
-  totalVisible: number
+  totalNavigable: number
 }
 
 export function useFileTreeNav({
@@ -94,19 +94,19 @@ export function useFileTreeNav({
     )
   }, [])
 
-  const visibleFiles = useMemo(() => {
-    const expandedSet = new Set(expandedPaths)
-    return flattenVisibleTree(tree, expandedSet)
+  const navigableFiles = useMemo(() => {
+    const fullyExpandedSet = new Set(folderPaths)
+    return flattenVisibleTree(tree, fullyExpandedSet)
       .filter((row) => row.kind === "file" && row.data)
       .map((row) => row.data as ChangedFileItem)
-  }, [expandedPaths, tree])
+  }, [folderPaths, tree])
 
   const { indexOfSelected, prevFile, nextFile } = useMemo(() => {
-    if (!selectedFile || visibleFiles.length === 0) {
+    if (!selectedFile || navigableFiles.length === 0) {
       return { indexOfSelected: -1, prevFile: null, nextFile: null }
     }
 
-    const index = visibleFiles.findIndex((file) => file.path === selectedFile.path)
+    const index = navigableFiles.findIndex((file) => file.path === selectedFile.path)
 
     if (index === -1) {
       return { indexOfSelected: -1, prevFile: null, nextFile: null }
@@ -114,10 +114,10 @@ export function useFileTreeNav({
 
     return {
       indexOfSelected: index,
-      prevFile: index > 0 ? visibleFiles[index - 1] : null,
-      nextFile: index < visibleFiles.length - 1 ? visibleFiles[index + 1] : null,
+      prevFile: index > 0 ? navigableFiles[index - 1] : null,
+      nextFile: index < navigableFiles.length - 1 ? navigableFiles[index + 1] : null,
     }
-  }, [selectedFile, visibleFiles])
+  }, [navigableFiles, selectedFile])
 
   return {
     tree,
@@ -127,6 +127,6 @@ export function useFileTreeNav({
     prevFile,
     nextFile,
     indexOfSelected,
-    totalVisible: visibleFiles.length,
+    totalNavigable: navigableFiles.length,
   }
 }

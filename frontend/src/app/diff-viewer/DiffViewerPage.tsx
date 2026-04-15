@@ -88,7 +88,7 @@ export function DiffViewerPage() {
     prevFile,
     nextFile,
     indexOfSelected,
-    totalVisible,
+    totalNavigable,
   } = useFileTreeNav({
     files: visibleFiles,
     selectedFilePath: selectedFile?.path ?? null,
@@ -359,7 +359,7 @@ export function DiffViewerPage() {
                   canGoPrev={prevFile != null}
                   canGoNext={nextFile != null}
                   fileIndex={indexOfSelected}
-                  totalFiles={totalVisible}
+                  totalFiles={totalNavigable}
                   onToggleExpandAll={handleToggleCurrentFileExpanded}
                   onToggleStage={gitActions.handleToggleStage}
                   onViewModeChange={setViewMode}
