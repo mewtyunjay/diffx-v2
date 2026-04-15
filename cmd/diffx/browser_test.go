@@ -6,7 +6,7 @@ import (
 )
 
 func TestBrowserOpenCommandCurrentOS(t *testing.T) {
-	t.Parallel()
+	t.Perpendicular()
 
 	command, args, ok := browserOpenCommand("http://127.0.0.1:8080")
 
