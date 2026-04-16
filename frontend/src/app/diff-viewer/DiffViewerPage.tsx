@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { FolderTree } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { FolderTree, LoaderCircle, Settings2 } from "lucide-react"
 
+import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
+import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
+import { useAISettings } from "@/app/ai/hooks/useAISettings"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
@@ -20,12 +23,14 @@ import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { SidebarHeader } from "@/components/ui/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useScope, useShortcut } from "@/lib/shortcuts"
 
 export function DiffViewerPage() {
   const fileWindowScrollRef = useRef<HTMLDivElement | null>(null)
   const [latestChangedFilesResult, setLatestChangedFilesResult] =
     useState<ChangedFilesResult | null>(null)
+  const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false)
 
   const {
     branches,
@@ -188,6 +193,53 @@ export function DiffViewerPage() {
     refreshBranches,
     refreshChangedFiles,
   })
+  const aiSettingsState = useAISettings()
+  const commitFeatureState = aiSettingsState.featureStateByID.commitMessage
+  const commitProviderStatus = commitFeatureState?.provider
+    ? aiSettingsState.agentByID[commitFeatureState.provider]
+    : undefined
+
+  const commitSuggestion = useCommitMessageSuggestion({
+    onApplySuggestion: (message) => {
+      gitActions.setCommitMessage(message)
+    },
+  })
+
+  const suggestCommitDisabledReason = useMemo(() => {
+    if (comparisonMode !== "head") {
+      return "Switch to HEAD to generate commit messages."
+    }
+
+    if (visibleFiles.filter((file) => file.hasStagedChanges).length === 0) {
+      return "Stage at least one file to generate a commit message."
+    }
+
+    if (hiddenStagedFileCount > 0) {
+      return "Unscope hidden staged files before generation."
+    }
+
+    if (aiSettingsState.isCheckingAgents) {
+      return "Checking provider availability..."
+    }
+
+    if (!commitFeatureState?.provider) {
+      return "Select a provider for Commit Message in AI settings."
+    }
+
+    if (!commitFeatureState.providerValid) {
+      return commitProviderStatus?.reason ?? "Configured provider is not selectable."
+    }
+
+    return null
+  }, [
+    aiSettingsState.isCheckingAgents,
+    commitFeatureState?.provider,
+    commitFeatureState?.providerValid,
+    commitProviderStatus?.reason,
+    comparisonMode,
+    hiddenStagedFileCount,
+    visibleFiles,
+  ])
 
   useShortcut("toggleStage", () => {
     if (selectedFile) gitActions.handleToggleStage(selectedFile)
@@ -296,6 +348,11 @@ export function DiffViewerPage() {
               commitMessage={gitActions.commitMessage}
               isCommitPending={gitActions.isCommitPending}
               onCommitMessageChange={gitActions.setCommitMessage}
+              isSuggestCommitPending={commitSuggestion.isPending}
+              onSuggestCommitMessage={commitSuggestion.suggest}
+              isCommitMessageProviderValid={commitFeatureState?.providerValid ?? false}
+              isCheckingAIProviders={aiSettingsState.isCheckingAgents}
+              suggestCommitDisabledReason={suggestCommitDisabledReason}
               onCommit={gitActions.handleCommit}
               isPushPending={gitActions.isPushPending}
               onPush={gitActions.handlePush}
@@ -323,6 +380,36 @@ export function DiffViewerPage() {
           onSelectBaseRef={handleSelectBaseRef}
           onCopyAnnotations={copyAnnotations}
           onSendAnnotations={sendAnnotations}
+          settingsControl={
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="outline"
+                    aria-label="AI settings"
+                    onClick={() => setIsAISettingsModalOpen(true)}
+                  >
+                    {aiSettingsState.isCheckingAgents ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Settings2 />
+                    )}
+                    <span className="sr-only">AI settings</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  AI settings
+                </TooltipContent>
+              </Tooltip>
+              <AISettingsModal
+                open={isAISettingsModalOpen}
+                onOpenChange={setIsAISettingsModalOpen}
+                settingsState={aiSettingsState}
+              />
+            </>
+          }
         />
       }
     >

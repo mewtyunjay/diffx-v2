@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	frontendassets "diffx/frontend"
+	"diffx/internal/ai"
 	"diffx/internal/gitstatus"
 )
 
@@ -40,6 +41,7 @@ type ReviewState struct {
 
 type App struct {
 	service         *gitstatus.Service
+	aiService       *ai.Service
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
 	reviewFeedback  *reviewFeedbackCoordinator
@@ -157,8 +159,16 @@ func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
 		return nil, err
 	}
 
+	aiService, err := ai.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath)
+	if err != nil {
+		_ = repoEvents.Close()
+		_ = watcher.Close()
+		return nil, err
+	}
+
 	return &App{
 		service:     gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
+		aiService:   aiService,
 		repoEvents:  repoEvents,
 		repoWatcher: watcher,
 		reviewFeedback: newReviewFeedbackCoordinator(

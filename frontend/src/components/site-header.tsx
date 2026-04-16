@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { AlertCircle, Check, Copy, LoaderCircle, Send } from "lucide-react"
 
 import { BranchPicker } from "@/diff-viewer/BranchPicker"
@@ -22,6 +23,7 @@ type SiteHeaderProps = {
   onSelectBaseRef: (baseRef: string) => void
   onCopyAnnotations: () => void
   onSendAnnotations: () => void
+  settingsControl?: ReactNode
 }
 
 function getCopyButtonContents(copyState: SiteHeaderProps["copyState"]) {
@@ -87,6 +89,7 @@ export function SiteHeader({
   onSelectBaseRef,
   onCopyAnnotations,
   onSendAnnotations,
+  settingsControl,
 }: SiteHeaderProps) {
   const copyButton = getCopyButtonContents(copyState)
   const sendButton = getSendButtonContents(sendState)
@@ -122,12 +125,13 @@ export function SiteHeader({
             <TooltipTrigger asChild>
               <Button
                 type="button"
-                size="sm"
+                size="icon-sm"
                 onClick={onSendAnnotations}
                 disabled={!canSendAnnotations || sendState === "sending"}
+                aria-label={sendButton.label}
               >
                 {sendButton.icon}
-                {sendButton.label}
+                <span className="sr-only">{sendButton.label}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
@@ -135,16 +139,25 @@ export function SiteHeader({
               <Kbd keys={SHORTCUTS.sendToAgent.keys} />
             </TooltipContent>
           </Tooltip>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={onCopyAnnotations}
-            disabled={!canCopyAnnotations || copyState === "copying"}
-          >
-            {copyButton.icon}
-            {copyButton.label}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                onClick={onCopyAnnotations}
+                disabled={!canCopyAnnotations || copyState === "copying"}
+                aria-label={copyButton.label}
+              >
+                {copyButton.icon}
+                <span className="sr-only">{copyButton.label}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {copyButton.label}
+            </TooltipContent>
+          </Tooltip>
+          {settingsControl ?? null}
         </div>
       </div>
     </header>

@@ -1,5 +1,5 @@
 import { useCallback, useRef, type KeyboardEvent } from "react"
-import { LoaderCircle } from "lucide-react"
+import { LoaderCircle, Sparkles } from "lucide-react"
 
 import type { BranchOption, ChangedFileItem, ComparisonMode } from "@/git/types"
 import { CheckoutBranchPicker } from "@/components/sidebar/CheckoutBranchPicker"
@@ -20,6 +20,11 @@ type GitActionsPanelProps = {
   commitMessage: string
   isCommitPending: boolean
   onCommitMessageChange: (value: string) => void
+  isSuggestCommitPending: boolean
+  onSuggestCommitMessage: () => void
+  isCommitMessageProviderValid: boolean
+  isCheckingAIProviders: boolean
+  suggestCommitDisabledReason: string | null
   onCommit: () => void
   isPushPending: boolean
   onPush: () => void
@@ -42,6 +47,11 @@ export function GitActionsPanel({
   commitMessage,
   isCommitPending,
   onCommitMessageChange,
+  isSuggestCommitPending,
+  onSuggestCommitMessage,
+  isCommitMessageProviderValid,
+  isCheckingAIProviders,
+  suggestCommitDisabledReason,
   onCommit,
   isPushPending,
   onPush,
@@ -67,6 +77,14 @@ export function GitActionsPanel({
   const canPush = canUseGitActions && aheadCount > 0
   const canTriggerCommit = !isCommitPending && !isPushPending && canCommit
   const canTriggerPush = !isCommitPending && !isPushPending && canPush
+  const canTriggerSuggestCommit =
+    canUseGitActions &&
+    stagedVisibleCount > 0 &&
+    hiddenStagedFileCount === 0 &&
+    isCommitMessageProviderValid &&
+    !isCheckingAIProviders &&
+    !isCommitPending &&
+    !isSuggestCommitPending
   const canTriggerFetch = canUseGitActions && !isFetchPending && !isPullPending && !isCheckoutPending
   const canTriggerPull = canUseGitActions && !isFetchPending && !isPullPending && !isCheckoutPending
   const canTriggerBranchSwitch = canUseGitActions && !isCheckoutPending && !isPullPending
@@ -153,14 +171,42 @@ export function GitActionsPanel({
 
         {canUseGitActions ? (
           <div className="space-y-2">
-            <textarea
-              ref={commitMessageRef}
-              value={commitMessage}
-              onChange={(event) => onCommitMessageChange(event.target.value)}
-              onKeyDown={handleCommitMessageKeyDown}
-              placeholder="Commit message..."
-              className="surface-sidebar-field focus-ring-default min-h-14 w-full resize-y px-2.5 py-1.5 type-meta text-sidebar-foreground placeholder:text-sidebar-foreground/40"
-            />
+            <div className="relative">
+              <textarea
+                ref={commitMessageRef}
+                value={commitMessage}
+                onChange={(event) => onCommitMessageChange(event.target.value)}
+                onKeyDown={handleCommitMessageKeyDown}
+                placeholder="Commit message..."
+                className="surface-sidebar-field focus-ring-default min-h-14 w-full resize-y px-2.5 py-1.5 pr-11 type-meta text-sidebar-foreground placeholder:text-sidebar-foreground/40"
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="absolute top-2 right-2 inline-flex">
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label="Generate commit message"
+                      disabled={!canTriggerSuggestCommit}
+                      onClick={onSuggestCommitMessage}
+                    >
+                      {isSuggestCommitPending ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <Sparkles />
+                      )}
+                      <span className="sr-only">Generate commit message</span>
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {canTriggerSuggestCommit
+                    ? "Generate commit message"
+                    : suggestCommitDisabledReason ?? "Commit message generation unavailable."}
+                </TooltipContent>
+              </Tooltip>
+            </div>
             <div className="flex items-center gap-2">
               <Tooltip>
                 <TooltipTrigger asChild>
