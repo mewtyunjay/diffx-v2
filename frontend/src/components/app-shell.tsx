@@ -15,10 +15,10 @@ type AppShellProps = {
 export function AppShell({ sidebarContent, header, children }: AppShellProps) {
   return (
     <SidebarProvider
+      defaultWidth={288}
       className="bg-sidebar"
       style={
         {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
           "--header-height": "calc(var(--spacing) * 12)",
         } as CSSProperties
       }
