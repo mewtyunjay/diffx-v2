@@ -42,7 +42,7 @@ func TestParsePorcelainStatus(t *testing.T) {
 
 func TestParsePorcelainStatusUnmergedFiles(t *testing.T) {
 	repoRoot := t.TempDir()
-	writeFile(t, filepath.Join(repoRoot, "conflicted.txt"), "content\n")
+	writeFile(t, filepath.Join(repoRoot, "conflicted.txt"), "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n")
 
 	output := []byte("UU conflicted.txt\x00DU removed.txt\x00")
 	files, err := parsePorcelainStatus(output, repoRoot)
@@ -63,6 +63,18 @@ func TestParsePorcelainStatusUnmergedFiles(t *testing.T) {
 		if !file.HasUnstagedChanges {
 			t.Fatalf("expected unmerged file to report unstaged state, got %#v", file)
 		}
+	}
+
+	filesByPath := make(map[string]ChangedFileItem, len(files))
+	for _, file := range files {
+		filesByPath[file.Path] = file
+	}
+
+	if filesByPath["conflicted.txt"].ConflictBlocksRemaining != 1 {
+		t.Fatalf("expected conflict block count 1, got %#v", filesByPath["conflicted.txt"])
+	}
+	if filesByPath["removed.txt"].ConflictBlocksRemaining != 0 {
+		t.Fatalf("expected removed.txt to report zero conflict blocks, got %#v", filesByPath["removed.txt"])
 	}
 }
 

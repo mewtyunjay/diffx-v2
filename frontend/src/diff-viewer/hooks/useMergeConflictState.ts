@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { fetchConflictFile, resolveConflictFile } from "@/git/api"
 import type {
@@ -10,6 +10,11 @@ import { toast } from "@/components/ui/sonner"
 import { getToastErrorDescription } from "@/lib/toast-errors"
 
 type MergeViewerMode = "normal" | "conflicts"
+type ConflictProgress = {
+  remainingCount: number
+  resolvedCount: number
+  totalCount: number
+}
 
 type UseMergeConflictStateOptions = {
   files: ChangedFileItem[]
@@ -31,6 +36,8 @@ export function useMergeConflictState({
   const [conflictFileError, setConflictFileError] = useState<string | null>(null)
   const [isConflictFileLoading, setIsConflictFileLoading] = useState(false)
   const [isResolvePending, setIsResolvePending] = useState(false)
+  const [conflictInitialTotalsByPath, setConflictInitialTotalsByPath] = useState<Record<string, number>>({})
+  const wasMergeInProgressRef = useRef(false)
 
   const conflictedFiles = useMemo(
     () => files.filter((file) => file.status === "conflicted"),
@@ -40,13 +47,61 @@ export function useMergeConflictState({
   useEffect(() => {
     if (!mergeState.inProgress) {
       setMergeViewMode("normal")
+      setConflictInitialTotalsByPath({})
+      wasMergeInProgressRef.current = false
       return
     }
 
-    if (mergeState.unresolvedCount > 0) {
+    if (!wasMergeInProgressRef.current && mergeState.unresolvedCount > 0) {
       setMergeViewMode("conflicts")
     }
+
+    wasMergeInProgressRef.current = true
   }, [mergeState.inProgress, mergeState.unresolvedCount])
+
+  useEffect(() => {
+    if (!mergeState.inProgress) {
+      return
+    }
+
+    setConflictInitialTotalsByPath((current) => {
+      const activePaths = new Set(conflictedFiles.map((file) => file.path))
+      let next = current
+      let didChange = false
+
+      for (const file of conflictedFiles) {
+        const remainingCount = Math.max(file.conflictBlocksRemaining ?? 0, 0)
+        const knownInitialCount = next[file.path]
+        const nextInitialCount =
+          knownInitialCount == null ? remainingCount : Math.max(knownInitialCount, remainingCount)
+        if (knownInitialCount === nextInitialCount) {
+          continue
+        }
+
+        if (!didChange) {
+          next = { ...next }
+          didChange = true
+        }
+
+        next[file.path] = nextInitialCount
+      }
+
+      for (const path of Object.keys(next)) {
+        if (activePaths.has(path)) {
+          continue
+        }
+
+        if (!didChange) {
+          next = { ...next }
+          didChange = true
+        }
+
+        delete next[path]
+      }
+
+      return didChange ? next : current
+    })
+  }, [conflictedFiles, mergeState.inProgress])
 
   const isConflictMode = mergeState.inProgress && mergeViewMode === "conflicts"
   const visibleFiles = isConflictMode ? conflictedFiles : files
@@ -141,22 +196,57 @@ export function useMergeConflictState({
     [refreshChangedFiles, selectedConflictPath]
   )
 
-  const showMergeResolvedState =
-    isConflictMode && mergeState.inProgress && mergeState.unresolvedCount === 0
+  const showMergeResolvedState = mergeState.inProgress && mergeState.unresolvedCount === 0
 
-  const returnToNormalMode = useCallback(() => {
+  const conflictProgressByPath = useMemo<Record<string, ConflictProgress>>(() => {
+    const next: Record<string, ConflictProgress> = {}
+    for (const file of conflictedFiles) {
+      const remainingCount = Math.max(file.conflictBlocksRemaining ?? 0, 0)
+      const initialCount = conflictInitialTotalsByPath[file.path]
+      const totalCount =
+        initialCount == null ? remainingCount : Math.max(initialCount, remainingCount)
+
+      next[file.path] = {
+        remainingCount,
+        resolvedCount: Math.max(totalCount - remainingCount, 0),
+        totalCount,
+      }
+    }
+
+    return next
+  }, [conflictInitialTotalsByPath, conflictedFiles])
+
+  const getConflictProgressLabel = useCallback(
+    (path: string) => {
+      const progress = conflictProgressByPath[path]
+      if (!progress || progress.totalCount <= 0) {
+        return null
+      }
+
+      return `${progress.resolvedCount}/${progress.totalCount} resolved`
+    },
+    [conflictProgressByPath]
+  )
+
+  const showAllFiles = useCallback(() => {
     setMergeViewMode("normal")
+  }, [])
+
+  const showConflicts = useCallback(() => {
+    setMergeViewMode("conflicts")
   }, [])
 
   return {
     conflictedFiles,
     conflictFile,
     conflictFileError,
+    getConflictProgressLabel,
     isConflictFileLoading,
     isConflictMode,
     isResolvePending,
     mergeViewMode,
-    returnToNormalMode,
+    showAllFiles,
+    showConflicts,
     resolveSelectedConflict,
     selectedConflictPath,
     showMergeResolvedState,

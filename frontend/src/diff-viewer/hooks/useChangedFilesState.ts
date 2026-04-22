@@ -28,7 +28,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
   const [comparisonMode, setComparisonMode] = useState<ComparisonMode>("head")
   const [selectedBaseRef, setSelectedBaseRef] = useState("HEAD")
   const [baseCommit, setBaseCommit] = useState("")
-  const [currentRef, setCurrentRef] = useState("HEAD")
+  const [currentRef, setCurrentRef] = useState("")
   const [branchSync, setBranchSync] = useState<BranchSyncState>(defaultBranchSync)
   const [mergeState, setMergeState] = useState<MergeState>(defaultMergeState)
   const [scopePath, setScopePath] = useState(".")
@@ -98,7 +98,7 @@ export function useChangedFilesState({ onApplyResult }: UseChangedFilesStateOpti
 
         setComparisonMode("head")
         setBaseCommit("")
-        setCurrentRef("HEAD")
+        setCurrentRef("")
         setBranchSync(defaultBranchSync)
         setMergeState(defaultMergeState)
         setScopePath(".")

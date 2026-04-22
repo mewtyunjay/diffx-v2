@@ -16,16 +16,17 @@ const (
 )
 
 type ChangedFileItem struct {
-	ID                 string            `json:"id"`
-	Path               string            `json:"path"`
-	DisplayPath        string            `json:"displayPath"`
-	PreviousPath       string            `json:"previousPath,omitempty"`
-	Status             ChangedFileStatus `json:"status"`
-	IsTracked          bool              `json:"isTracked"`
-	HasStagedChanges   bool              `json:"hasStagedChanges"`
-	HasUnstagedChanges bool              `json:"hasUnstagedChanges"`
-	ContentKey         string            `json:"contentKey"`
-	Language           string            `json:"language,omitempty"`
+	ID                      string            `json:"id"`
+	Path                    string            `json:"path"`
+	DisplayPath             string            `json:"displayPath"`
+	PreviousPath            string            `json:"previousPath,omitempty"`
+	Status                  ChangedFileStatus `json:"status"`
+	IsTracked               bool              `json:"isTracked"`
+	HasStagedChanges        bool              `json:"hasStagedChanges"`
+	HasUnstagedChanges      bool              `json:"hasUnstagedChanges"`
+	ConflictBlocksRemaining int               `json:"conflictBlocksRemaining,omitempty"`
+	ContentKey              string            `json:"contentKey"`
+	Language                string            `json:"language,omitempty"`
 }
 
 type ChangedFilesResult struct {

@@ -266,7 +266,7 @@ func (runner serviceClaudeCommitRunner) Run(
 	if binaryPath != runner.binaryPath {
 		return "", "", fmt.Errorf("unexpected binary path: %s", binaryPath)
 	}
-	if len(args) < 8 {
+	if len(args) < 7 {
 		return "", "", fmt.Errorf("unexpected args: %v", args)
 	}
 

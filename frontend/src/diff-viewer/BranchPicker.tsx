@@ -62,20 +62,20 @@ export function BranchPicker({
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState("")
   const normalizedQuery = normalizeQuery(query)
-  const headLabel = currentRef || "HEAD"
+  const currentBranchName = currentRef.trim()
 
   const shortcutItems = React.useMemo<BranchShortcut[]>(() => {
     const items: BranchShortcut[] = [
       {
         key: "current-branch",
         value: "HEAD",
-        label: `${headLabel} (current)`,
+        label: "HEAD (current)",
       },
     ]
 
-    const remoteCurrentBranch = branches.find(
-      (branch) => branch.kind === "remote" && branch.name === `origin/${headLabel}`
-    )
+    const remoteCurrentBranch = currentBranchName
+      ? branches.find((branch) => branch.kind === "remote" && branch.name === `origin/${currentBranchName}`)
+      : undefined
 
     if (remoteCurrentBranch) {
       items.push({
@@ -86,7 +86,7 @@ export function BranchPicker({
     }
 
     return items.filter((item) => normalizeQuery(item.label).includes(normalizedQuery))
-  }, [branches, headLabel, normalizedQuery])
+  }, [branches, currentBranchName, normalizedQuery])
 
   const branchGroups = React.useMemo<BranchGroup[]>(() => {
     const localBranches = filterBranches(
@@ -94,7 +94,10 @@ export function BranchPicker({
       normalizedQuery
     )
     const remoteBranches = filterBranches(
-      branches.filter((branch) => branch.kind === "remote" && branch.name !== `origin/${headLabel}`),
+      branches.filter(
+        (branch) =>
+          branch.kind === "remote" && (!currentBranchName || branch.name !== `origin/${currentBranchName}`)
+      ),
       normalizedQuery
     )
 
@@ -102,7 +105,7 @@ export function BranchPicker({
       { heading: "Local branches", items: localBranches },
       { heading: "Remote branches", items: remoteBranches },
     ].filter((group) => group.items.length > 0)
-  }, [branches, headLabel, normalizedQuery])
+  }, [branches, currentBranchName, normalizedQuery])
 
   React.useEffect(() => {
     if (!open) {
@@ -118,8 +121,8 @@ export function BranchPicker({
     [onSelectBaseRef]
   )
 
-  const selectedLabel = selectedBaseRef === "HEAD" ? headLabel : selectedBaseRef
   const isHeader = variant === "header"
+  const selectedLabel = selectedBaseRef === "HEAD" ? "HEAD" : selectedBaseRef
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

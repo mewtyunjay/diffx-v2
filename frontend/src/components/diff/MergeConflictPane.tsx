@@ -9,7 +9,6 @@ import { useCallback, useMemo, useState } from "react"
 
 import {
   createAnnotationTargetKey,
-  createDiffAnnotationIdentityKey,
   createDraftDiffAnnotation,
   type DraftDiffAnnotation,
   type SavedDiffAnnotation,
@@ -90,10 +89,6 @@ function MergeConflictResolver({
   onResolveConflict: (contents: string) => Promise<void>
 }) {
   const [draft, setDraft] = useState<DraftDiffAnnotation | null>(() => null)
-
-  const annotationIdentityKey = currentDiff
-    ? createDiffAnnotationIdentityKey(currentDiff)
-    : `merge:${file.path}:${file.contentKey}`
 
   const draftTarget = useMemo(
     () =>
@@ -200,7 +195,7 @@ function MergeConflictResolver({
 
   return (
     <UnresolvedFile<RenderedAnnotationMetadata>
-      key={`${clearDraftToken}:${annotationIdentityKey}`}
+      key={`${clearDraftToken}:merge:${file.path}`}
       file={{
         name: file.path,
         contents: file.contents,
@@ -228,6 +223,7 @@ function MergeConflictResolver({
             return
           }
 
+          setDraft(null)
           void onResolveConflict(result.file.contents)
         }
 
@@ -318,7 +314,7 @@ export function MergeConflictPane({
     return <DiffPlaceholder>Select a conflicted file to resolve.</DiffPlaceholder>
   }
 
-  if (isConflictFileLoading) {
+  if (isConflictFileLoading && !conflictFile) {
     return <div className="h-full min-h-0" />
   }
 

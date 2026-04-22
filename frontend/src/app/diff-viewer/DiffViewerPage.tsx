@@ -66,13 +66,15 @@ export function DiffViewerPage() {
   const {
     conflictFile,
     conflictFileError,
+    getConflictProgressLabel,
     isConflictFileLoading,
     isConflictMode,
     isResolvePending,
     resolveSelectedConflict,
     selectedConflictPath,
+    showAllFiles,
+    showConflicts,
     showMergeResolvedState,
-    returnToNormalMode,
     visibleFiles,
   } = useMergeConflictState({
     files,
@@ -188,7 +190,7 @@ export function DiffViewerPage() {
   }, [latestChangedFilesResult, primePreparedDiff, pruneForFiles])
 
   const gitActions = useGitActionCommands({
-    currentBranch: currentRef || "HEAD",
+    currentBranch: currentRef,
     files: visibleFiles,
     refreshBranches,
     refreshChangedFiles,
@@ -300,6 +302,14 @@ export function DiffViewerPage() {
           : null
   const isSelectedFileStagePending =
     selectedFile != null && gitActions.stagePendingPaths.includes(selectedFile.path)
+  const mergeModeSummary =
+    mergeState.unresolvedCount === 1
+      ? "1 conflicted file remaining"
+      : `${mergeState.unresolvedCount} conflicted files remaining`
+  const selectedConflictProgressLabel =
+    selectedFile && selectedFile.status === "conflicted"
+      ? getConflictProgressLabel(selectedFile.path)
+      : null
 
   return (
     <AppShell
@@ -329,6 +339,7 @@ export function DiffViewerPage() {
               selectedFile={selectedFile}
               scopePath={scopePath}
               comparisonMode={comparisonMode}
+              isMergeInProgress={mergeState.inProgress}
               onSelectFile={setSelectedFilePath}
               stagePendingPaths={gitActions.stagePendingPaths}
               isBulkStagePending={gitActions.isBulkStagePending}
@@ -338,7 +349,7 @@ export function DiffViewerPage() {
             />
 
             <GitActionsPanel
-              branchName={currentRef || "HEAD"}
+              branchName={currentRef}
               branches={branches}
               isBranchesLoading={isBranchesLoading}
               comparisonMode={comparisonMode}
@@ -419,14 +430,47 @@ export function DiffViewerPage() {
             <p className="measure-readable type-meta text-destructive">{headerError}</p>
           </div>
         ) : null}
+        {mergeState.inProgress ? (
+          <div className="border-b border-border/60 px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="measure-readable type-meta text-muted-foreground">
+                {isConflictMode ? mergeModeSummary : "Viewing all changed files during merge."}
+              </p>
+              <div
+                className="surface-segmented flex items-center gap-0.5 p-0.5"
+                role="group"
+                aria-label="Merge view mode"
+              >
+                <Button
+                  type="button"
+                  size="xs"
+                  variant={isConflictMode ? "secondary" : "ghost"}
+                  aria-pressed={isConflictMode}
+                  onClick={showConflicts}
+                >
+                  Conflicts
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant={!isConflictMode ? "secondary" : "ghost"}
+                  aria-pressed={!isConflictMode}
+                  onClick={showAllFiles}
+                >
+                  All Files
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {showMergeResolvedState ? (
           <div className="border-b border-border/60 px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="measure-readable type-meta text-muted-foreground">
                 All merge conflicts are resolved. Stage and commit to finish the merge.
               </p>
-              <Button type="button" size="sm" variant="outline" onClick={returnToNormalMode}>
-                Back to Normal Mode
+              <Button type="button" size="sm" variant="outline" onClick={showAllFiles}>
+                View All Files
               </Button>
             </div>
           </div>
@@ -460,6 +504,7 @@ export function DiffViewerPage() {
                   diff={currentDisplayedDiff}
                   isDiffLoading={isDiffLoading}
                   scopePath={scopePath}
+                  conflictProgressLabel={selectedConflictProgressLabel}
                 />
               </div>
             </div>

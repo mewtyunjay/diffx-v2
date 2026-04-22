@@ -23,6 +23,7 @@ export type ChangedFileItem = {
   isTracked: boolean
   hasStagedChanges: boolean
   hasUnstagedChanges: boolean
+  conflictBlocksRemaining?: number
   contentKey: string
   language?: string
 }

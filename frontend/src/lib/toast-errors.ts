@@ -14,6 +14,9 @@ export function getToastErrorDescription(error: unknown, fallback: string) {
   if (message.includes("no staged changes")) {
     return "No staged files are ready to commit."
   }
+  if (message.includes("claude headless execution failed") && message.includes("Please run /login")) {
+    return "Claude is not logged in. Open Claude CLI, run /login, then retry commit message generation."
+  }
 
   const [firstLine] = message
     .split("\n")

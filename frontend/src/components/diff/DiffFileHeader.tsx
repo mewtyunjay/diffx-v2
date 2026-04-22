@@ -9,6 +9,7 @@ type DiffFileHeaderProps = {
   diff: PreparedFileDiffResult | null
   isDiffLoading: boolean
   scopePath: string
+  conflictProgressLabel?: string | null
 }
 
 function getChangeCounts(diff: PreparedFileDiffResult | null) {
@@ -54,7 +55,13 @@ function toScopedDisplayPath(path: string, scopePath: string) {
   return normalizedPath
 }
 
-export function DiffFileHeader({ file, diff, isDiffLoading, scopePath }: DiffFileHeaderProps) {
+export function DiffFileHeader({
+  file,
+  diff,
+  isDiffLoading,
+  scopePath,
+  conflictProgressLabel,
+}: DiffFileHeaderProps) {
   const previousPath = file.previousPath ?? null
   const hasRename = previousPath != null && previousPath !== file.path
   const previousDisplayPath = hasRename ? toScopedDisplayPath(previousPath, scopePath) : null
@@ -91,6 +98,11 @@ export function DiffFileHeader({ file, diff, isDiffLoading, scopePath }: DiffFil
                 <p className="min-w-0 flex-1 truncate type-meta font-medium text-foreground" title={file.displayPath}>
                   {file.displayPath}
                 </p>
+                {conflictProgressLabel ? (
+                  <span className="rounded border border-border/70 bg-muted/40 px-1.5 py-0.5 type-meta tabular-nums text-muted-foreground">
+                    {conflictProgressLabel}
+                  </span>
+                ) : null}
                 <span
                   aria-label={`${file.status} file`}
                   title={file.status}

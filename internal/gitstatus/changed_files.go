@@ -138,19 +138,26 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 		}
 
 		item := ChangedFileItem{
-			ID:                 path,
-			Path:               path,
-			PreviousPath:       previousPath,
-			Status:             mapChangedStatus(code),
-			IsTracked:          code != "??",
-			HasStagedChanges:   code[0] != ' ' && code[0] != '?',
-			HasUnstagedChanges: code == "??" || (code[1] != ' ' && code[1] != '?'),
-			ContentKey:         "missing",
-			Language:           detectLanguage(path),
+			ID:                      path,
+			Path:                    path,
+			PreviousPath:            previousPath,
+			Status:                  mapChangedStatus(code),
+			IsTracked:               code != "??",
+			HasStagedChanges:        code[0] != ' ' && code[0] != '?',
+			HasUnstagedChanges:      code == "??" || (code[1] != ' ' && code[1] != '?'),
+			ConflictBlocksRemaining: 0,
+			ContentKey:              "missing",
+			Language:                detectLanguage(path),
 		}
 		if isUnmergedStatusCode(code) {
 			item.HasStagedChanges = false
 			item.HasUnstagedChanges = true
+
+			remainingBlocks, err := readConflictBlocksRemaining(repoRoot, path)
+			if err != nil {
+				return nil, err
+			}
+			item.ConflictBlocksRemaining = remainingBlocks
 		}
 
 		if key, err := buildContentKey(repoRoot, path); err == nil {

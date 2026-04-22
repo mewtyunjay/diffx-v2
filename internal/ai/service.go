@@ -252,7 +252,6 @@ func (s *Service) generateCommitMessageWithProvider(
 		workingDir = ""
 	case ProviderClaude:
 		args = []string{
-			"--bare",
 			"--model",
 			defaultClaudeCommitModel,
 			"-p",

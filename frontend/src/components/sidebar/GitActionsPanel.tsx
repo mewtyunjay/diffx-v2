@@ -1,10 +1,11 @@
-import { useCallback, useRef, type KeyboardEvent } from "react"
-import { LoaderCircle, Sparkles } from "lucide-react"
+import { useCallback, useRef, useState, type KeyboardEvent } from "react"
+import { ChevronDown, LoaderCircle, Sparkles } from "lucide-react"
 
 import type { BranchOption, ChangedFileItem, ComparisonMode } from "@/git/types"
 import { CheckoutBranchPicker } from "@/components/sidebar/CheckoutBranchPicker"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { SidebarFooter, useSidebar } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { SHORTCUTS, useShortcut } from "@/lib/shortcuts"
@@ -64,6 +65,7 @@ export function GitActionsPanel({
 }: GitActionsPanelProps) {
   const { open, setOpen } = useSidebar()
   const commitMessageRef = useRef<HTMLTextAreaElement>(null)
+  const [isPushMenuOpen, setIsPushMenuOpen] = useState(false)
   const stagedVisibleCount = files.filter((file) => file.hasStagedChanges).length
   const totalStagedCount = stagedVisibleCount + hiddenStagedFileCount
 
@@ -178,23 +180,24 @@ export function GitActionsPanel({
                 onChange={(event) => onCommitMessageChange(event.target.value)}
                 onKeyDown={handleCommitMessageKeyDown}
                 placeholder="Commit message..."
-                className="surface-sidebar-field focus-ring-default min-h-14 w-full resize-y px-2.5 py-1.5 pr-11 type-meta text-sidebar-foreground placeholder:text-sidebar-foreground/40"
+                className="surface-sidebar-field focus-ring-default min-h-14 w-full resize-y px-2.5 py-1.5 pr-8 type-meta text-sidebar-foreground placeholder:text-sidebar-foreground/40"
               />
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="absolute top-2 right-2 inline-flex">
+                  <span className="absolute top-1.5 right-1.5 inline-flex">
                     <Button
                       type="button"
                       size="icon-sm"
+                      className="h-6 w-6 p-0"
                       variant="outline"
                       aria-label="Generate commit message"
                       disabled={!canTriggerSuggestCommit}
                       onClick={onSuggestCommitMessage}
                     >
                       {isSuggestCommitPending ? (
-                        <LoaderCircle className="animate-spin" />
+                        <LoaderCircle className="size-3 animate-spin" />
                       ) : (
-                        <Sparkles />
+                        <Sparkles className="size-3" />
                       )}
                       <span className="sr-only">Generate commit message</span>
                     </Button>
@@ -227,49 +230,72 @@ export function GitActionsPanel({
                   <Kbd keys={["Enter"]} />
                 </TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    disabled={!canTriggerPush}
-                    onClick={onPush}
+              <div className="flex flex-1 items-stretch">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 rounded-r-none"
+                      disabled={!canTriggerPush}
+                      onClick={onPush}
+                    >
+                      {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
+                      Push
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6}>
+                    Push current branch
+                    <Kbd keys={SHORTCUTS.pushBranch.keys} />
+                  </TooltipContent>
+                </Tooltip>
+                <Popover open={isPushMenuOpen} onOpenChange={setIsPushMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      aria-label="More push actions"
+                      className="w-6 rounded-l-none border-l-0 px-0"
+                      disabled={!canTriggerFetch && !canTriggerPull}
+                    >
+                      <ChevronDown className="size-3" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    side="top"
+                    align="end"
+                    sideOffset={6}
+                    className="w-40 p-1"
                   >
-                    {isPushPending ? <LoaderCircle className="animate-spin" /> : null}
-                    Push
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>
-                  Push current branch
-                  <Kbd keys={SHORTCUTS.pushBranch.keys} />
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="flex-1"
-                disabled={!canTriggerFetch}
-                onClick={onFetch}
-              >
-                {isFetchPending ? <LoaderCircle className="animate-spin" /> : null}
-                Fetch
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="flex-1"
-                disabled={!canTriggerPull}
-                onClick={onPull}
-              >
-                {isPullPending ? <LoaderCircle className="animate-spin" /> : null}
-                Pull
-              </Button>
+                    <button
+                      type="button"
+                      disabled={!canTriggerFetch}
+                      onClick={() => {
+                        setIsPushMenuOpen(false)
+                        onFetch()
+                      }}
+                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 type-meta text-left text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <span>Fetch</span>
+                      {isFetchPending ? <LoaderCircle className="size-3 animate-spin" /> : null}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canTriggerPull}
+                      onClick={() => {
+                        setIsPushMenuOpen(false)
+                        onPull()
+                      }}
+                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 type-meta text-left text-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      <span>Pull</span>
+                      {isPullPending ? <LoaderCircle className="size-3 animate-spin" /> : null}
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
           </div>
         ) : null}
