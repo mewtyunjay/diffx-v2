@@ -16,6 +16,7 @@ type GitActionsPanelProps = {
   isBranchesLoading: boolean
   comparisonMode: ComparisonMode
   files: ChangedFileItem[]
+  hasUpstream: boolean
   aheadCount: number
   hiddenStagedFileCount: number
   commitMessage: string
@@ -43,6 +44,7 @@ export function GitActionsPanel({
   isBranchesLoading,
   comparisonMode,
   files,
+  hasUpstream,
   aheadCount,
   hiddenStagedFileCount,
   commitMessage,
@@ -76,7 +78,7 @@ export function GitActionsPanel({
     stagedVisibleCount > 0 &&
     hiddenStagedFileCount === 0 &&
     hasCommitMessage
-  const canPush = canUseGitActions && aheadCount > 0
+  const canPush = canUseGitActions && (!hasUpstream || aheadCount > 0)
   const canTriggerCommit = !isCommitPending && !isPushPending && canCommit
   const canTriggerPush = !isCommitPending && !isPushPending && canPush
   const canTriggerSuggestCommit =
