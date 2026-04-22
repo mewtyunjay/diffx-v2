@@ -354,6 +354,7 @@ export function DiffViewerPage() {
               isBranchesLoading={isBranchesLoading}
               comparisonMode={comparisonMode}
               files={visibleFiles}
+              hasUpstream={branchSync.hasUpstream}
               aheadCount={branchSync.aheadCount}
               hiddenStagedFileCount={hiddenStagedFileCount}
               commitMessage={gitActions.commitMessage}
