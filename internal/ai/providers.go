@@ -3,6 +3,7 @@ package ai
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -169,8 +170,76 @@ func probeClaudeHeadless(ctx context.Context, runner runner, binaryPath string) 
 	}
 	if strings.Contains(combined, "-p, --print") ||
 		strings.Contains(combined, "--print") {
-		return "headless via claude -p", nil
+		return probeClaudeAuthStatus(ctx, runner, binaryPath)
 	}
 
 	return "claude binary is present but does not expose `-p/--print`", fmt.Errorf("headless probe failed")
+}
+
+func probeClaudeAuthStatus(ctx context.Context, runner runner, binaryPath string) (string, error) {
+	const missingCredentialsReason = "claude credentials not detected; run `claude auth login` (or `/login`) and retry"
+	const unsupportedAuthReason = "claude CLI is too old for headless credential detection; update Claude Code to a version that supports `claude auth status`"
+
+	stdout, stderr, err := runner.Run(ctx, binaryPath, []string{"auth", "status"}, "")
+	combined := strings.TrimSpace(strings.Join([]string{stdout, stderr}, "\n"))
+	combinedLower := strings.ToLower(combined)
+
+	if hasCredentials, known := parseClaudeAuthStatusOutput(combined); known {
+		if hasCredentials {
+			return "headless via claude -p", nil
+		}
+		return missingCredentialsReason, fmt.Errorf("claude credentials missing")
+	}
+
+	if isUnsupportedClaudeAuthCommand(combinedLower) {
+		return unsupportedAuthReason, fmt.Errorf("claude auth status unsupported")
+	}
+
+	if err != nil {
+		return "unable to verify claude credentials for headless mode", err
+	}
+
+	return "unable to verify claude credentials for headless mode: unexpected `claude auth status` output", fmt.Errorf("unknown claude auth status output")
+}
+
+func isUnsupportedClaudeAuthCommand(output string) bool {
+	return strings.Contains(output, "unknown command 'auth'") ||
+		strings.Contains(output, "unknown command: auth") ||
+		strings.Contains(output, "no such command 'auth'") ||
+		strings.Contains(output, "unrecognized command 'auth'")
+}
+
+func parseClaudeAuthStatusOutput(raw string) (hasCredentials bool, known bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return false, false
+	}
+
+	var status struct {
+		LoggedIn   bool   `json:"loggedIn"`
+		AuthMethod string `json:"authMethod"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &status); err == nil {
+		method := strings.ToLower(strings.TrimSpace(status.AuthMethod))
+		if status.LoggedIn {
+			return true, true
+		}
+		if method != "" {
+			return method != "none", true
+		}
+		return false, true
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "not logged in") || strings.Contains(lower, "logged out") {
+		return false, true
+	}
+	if strings.Contains(lower, "logged in") || strings.Contains(lower, "authenticated") {
+		return true, true
+	}
+	if strings.Contains(lower, "auth method: none") || strings.Contains(lower, "authmethod\":\"none\"") {
+		return false, true
+	}
+
+	return false, false
 }

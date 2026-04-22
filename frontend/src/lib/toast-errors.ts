@@ -14,6 +14,12 @@ export function getToastErrorDescription(error: unknown, fallback: string) {
   if (message.includes("no staged changes")) {
     return "No staged files are ready to commit."
   }
+  if (message.includes("provider \"claude\" is not selectable") && message.includes("credentials not detected")) {
+    return "Claude is not logged in. Open Claude CLI, run `claude auth login` (or `/login`), then retry."
+  }
+  if (message.includes("provider \"claude\" is not selectable") && message.includes("too old for headless credential detection")) {
+    return "Claude CLI is outdated for headless auth checks. Update Claude Code, then retry."
+  }
   if (message.includes("claude headless execution failed") && message.includes("Please run /login")) {
     return "Claude is not logged in. Open Claude CLI, run /login, then retry commit message generation."
   }
