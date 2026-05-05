@@ -106,6 +106,11 @@ export function GitActionsPanel({
   }, [open, setOpen])
 
   useShortcut("focusCommitMessage", focusCommitMessage)
+  useShortcut("blurCommitMessage", () => {
+    if (document.activeElement === commitMessageRef.current) {
+      commitMessageRef.current?.blur()
+    }
+  })
   useShortcut("pushBranch", () => {
     if (canTriggerPush) {
       onPush()
@@ -126,6 +131,12 @@ export function GitActionsPanel({
         if (canTriggerPush) {
           onPush()
         }
+        return
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault()
+        commitMessageRef.current?.blur()
         return
       }
 
@@ -152,8 +163,8 @@ export function GitActionsPanel({
     <SidebarFooter className="border-t border-sidebar-border/70 p-2.5">
       <div className="space-y-2">
         <div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+            <div className="flex min-w-0 flex-1 basis-0 items-center gap-1.5">
               <CheckoutBranchPicker
                 branchName={branchName}
                 branches={branches}
@@ -162,7 +173,7 @@ export function GitActionsPanel({
                 onSelectBranch={onCheckoutBranch}
               />
             </div>
-            <p className="shrink-0 type-meta font-medium text-sidebar-foreground type-data">
+            <p className="shrink-0 text-right type-meta font-medium text-sidebar-foreground type-data">
               {canUseGitActions ? `${totalStagedCount} staged` : "In comparison mode"}
             </p>
           </div>

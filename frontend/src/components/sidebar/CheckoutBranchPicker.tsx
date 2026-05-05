@@ -92,7 +92,7 @@ export function CheckoutBranchPicker({
           type="button"
           variant="ghost"
           disabled={disabled}
-          className="surface-sidebar-field interactive-sidebar h-7 min-w-0 max-w-52 justify-between gap-2 px-2 text-sidebar-foreground"
+          className="surface-sidebar-field interactive-sidebar h-7 min-w-0 w-full max-w-full justify-between gap-2 px-2 text-sidebar-foreground"
           aria-label="Switch current branch"
         >
           <span className="flex min-w-0 items-center gap-1.5">

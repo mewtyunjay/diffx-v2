@@ -1,4 +1,12 @@
-import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, Columns2, Rows3 } from "lucide-react"
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Columns2,
+  GraduationCap,
+  Rows3,
+} from "lucide-react"
 
 import type { PreparedFileDiffResult } from "@/diffs/create"
 import type { ChangedFileItem, ComparisonMode } from "@/git/types"
@@ -24,6 +32,7 @@ type DiffViewerToolbarProps = {
   onViewModeChange: (mode: "split" | "unified") => void
   onGoPrev: () => void
   onGoNext: () => void
+  onOpenQuizMode: () => void
 }
 
 const VIEW_MODES = [
@@ -89,6 +98,7 @@ export function DiffViewerToolbar({
   onViewModeChange,
   onGoPrev,
   onGoNext,
+  onOpenQuizMode,
 }: DiffViewerToolbarProps) {
   const showFileNav = totalFiles > 0 && selectedFile != null
   const counterLabel = showFileNav ? `${fileIndex + 1} / ${totalFiles}` : null
@@ -136,6 +146,7 @@ export function DiffViewerToolbar({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
                   {label}
+                  <Kbd keys={SHORTCUTS.toggleViewMode.keys} />
                 </TooltipContent>
               </Tooltip>
             )
@@ -247,6 +258,24 @@ export function DiffViewerToolbar({
             </TooltipContent>
           </Tooltip>
         ) : null}
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5"
+              onClick={onOpenQuizMode}
+            >
+              <GraduationCap className="size-3.5" />
+              <span>Quiz</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            Open quiz mode
+          </TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

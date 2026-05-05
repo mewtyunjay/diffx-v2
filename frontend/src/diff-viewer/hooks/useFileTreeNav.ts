@@ -19,7 +19,10 @@ type UseFileTreeNavArgs = {
 type UseFileTreeNavResult = {
   tree: SidebarTreeFolderNode<ChangedFileItem>
   expandedPaths: string[]
+  hasExpandableFolders: boolean
+  areAllFoldersExpanded: boolean
   handleToggleFolder: (path: string) => void
+  handleToggleAllFolders: () => void
   selectedFile: ChangedFileItem | null
   prevFile: ChangedFileItem | null
   nextFile: ChangedFileItem | null
@@ -94,6 +97,21 @@ export function useFileTreeNav({
     )
   }, [])
 
+  const hasExpandableFolders = folderPaths.length > 1
+  const areAllFoldersExpanded = useMemo(() => {
+    const expandedPathSet = new Set(expandedPaths)
+    return folderPaths.every((path) => expandedPathSet.has(path))
+  }, [expandedPaths, folderPaths])
+
+  const handleToggleAllFolders = useCallback(() => {
+    setExpandedPaths((currentPaths) => {
+      const expandedPathSet = new Set(currentPaths)
+      const isFullyExpanded = folderPaths.every((path) => expandedPathSet.has(path))
+
+      return isFullyExpanded ? [] : [...folderPaths]
+    })
+  }, [folderPaths])
+
   const navigableFiles = useMemo(() => {
     const fullyExpandedSet = new Set(folderPaths)
     return flattenVisibleTree(tree, fullyExpandedSet)
@@ -122,7 +140,10 @@ export function useFileTreeNav({
   return {
     tree,
     expandedPaths,
+    hasExpandableFolders,
+    areAllFoldersExpanded,
     handleToggleFolder,
+    handleToggleAllFolders,
     selectedFile,
     prevFile,
     nextFile,

@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react"
+import { Folder, FolderOpen, Minus, Plus } from "lucide-react"
 import * as React from "react"
 
 import type {
@@ -10,13 +10,17 @@ import { fileStatusIndicatorClassNames } from "@/components/file-tree/status-ind
 import type { SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
 import { Button } from "@/components/ui/button"
 import { SidebarContent } from "@/components/ui/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 type FileTreePanelProps = {
   files: ChangedFileItem[]
   tree: SidebarTreeFolderNode<ChangedFileItem>
   expandedPaths: string[]
+  hasExpandableFolders: boolean
+  areAllFoldersExpanded: boolean
   onToggleFolder: (path: string) => void
+  onToggleAllFolders: () => void
   selectedFile: ChangedFileItem | null
   scopePath: string
   comparisonMode: ComparisonMode
@@ -33,7 +37,10 @@ export function FileTreePanel({
   files,
   tree,
   expandedPaths,
+  hasExpandableFolders,
+  areAllFoldersExpanded,
   onToggleFolder,
+  onToggleAllFolders,
   selectedFile,
   scopePath,
   comparisonMode,
@@ -64,27 +71,53 @@ export function FileTreePanel({
     !canUseGitActions ||
     isBulkStagePending ||
     (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
+  const folderToggleLabel = areAllFoldersExpanded ? "Collapse all folders" : "Expand all folders"
 
   return (
     <SidebarContent>
       <div className="px-2 pb-2 pt-3">
         <div className="mb-2 flex items-center justify-between gap-2 px-1">
           <p className="type-meta font-medium text-sidebar-foreground/72">{visibleFileCountLabel}</p>
-          {showBulkStageActions ? (
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              className={cn(
-                "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                isBulkStagePending && "disabled:opacity-100"
-              )}
-              disabled={bulkActionDisabled}
-              onClick={showUnstageAll ? onUnstageAll : onStageAll}
-            >
-              {bulkActionLabel}
-            </Button>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {hasExpandableFolders ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    className="text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    aria-label={folderToggleLabel}
+                    onClick={onToggleAllFolders}
+                  >
+                    {areAllFoldersExpanded ? (
+                      <Folder className="size-3.5" />
+                    ) : (
+                      <FolderOpen className="size-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {folderToggleLabel}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {showBulkStageActions ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className={cn(
+                  "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  isBulkStagePending && "disabled:opacity-100"
+                )}
+                disabled={bulkActionDisabled}
+                onClick={showUnstageAll ? onUnstageAll : onStageAll}
+              >
+                {bulkActionLabel}
+              </Button>
+            ) : null}
+          </div>
         </div>
         <SidebarFileTree
           root={tree}

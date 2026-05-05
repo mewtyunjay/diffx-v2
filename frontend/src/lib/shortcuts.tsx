@@ -89,12 +89,27 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff actions",
   },
+  toggleViewMode: {
+    id: "toggleViewMode",
+    keys: ["u"],
+    label: "Toggle unified / split view",
+    scope: "diff",
+    group: "Diff actions",
+  },
   focusCommitMessage: {
     id: "focusCommitMessage",
     keys: ["shift", "c"],
     label: "Focus commit message",
     scope: "diff",
     group: "Git actions",
+  },
+  blurCommitMessage: {
+    id: "blurCommitMessage",
+    keys: ["Escape"],
+    label: "Exit commit message",
+    scope: "diff",
+    group: "Git actions",
+    allowInEditable: true,
   },
   pushBranch: {
     id: "pushBranch",
