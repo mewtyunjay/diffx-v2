@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { FolderTree, LoaderCircle, Settings2 } from "lucide-react"
+import { FolderTree, GraduationCap, LoaderCircle, Settings2 } from "lucide-react"
 
 import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
+import { QuizModeHeader } from "@/app/quiz/components/QuizModeHeader"
+import { QuizSidebarPanel } from "@/app/quiz/components/QuizSidebarPanel"
+import { QuizWorkspacePane } from "@/app/quiz/components/QuizWorkspacePane"
+import { useQuizSession } from "@/app/quiz/hooks/useQuizSession"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
@@ -27,7 +31,16 @@ import { SidebarHeader } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useScope, useShortcut } from "@/lib/shortcuts"
 
+function resolveViewerMode() {
+  if (typeof window === "undefined") {
+    return "diff"
+  }
+
+  return window.location.pathname.startsWith("/quiz") ? "quiz" : "diff"
+}
+
 export function DiffViewerPage() {
+  const [viewerMode, setViewerMode] = useState<"diff" | "quiz">(resolveViewerMode)
   const fileWindowScrollRef = useRef<HTMLDivElement | null>(null)
   const [latestChangedFilesResult, setLatestChangedFilesResult] =
     useState<ChangedFilesResult | null>(null)
@@ -116,14 +129,56 @@ export function DiffViewerPage() {
   })
 
   useScope("diff")
+  const isQuizMode = viewerMode === "quiz"
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const handlePopState = () => {
+      setViewerMode(resolveViewerMode())
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
+
+  const navigateViewerMode = useCallback((nextMode: "diff" | "quiz") => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const nextPath = nextMode === "quiz" ? "/quiz" : "/"
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath)
+    }
+    setViewerMode(nextMode)
+  }, [])
+
+  const openQuizMode = useCallback(() => {
+    navigateViewerMode("quiz")
+  }, [navigateViewerMode])
+
+  const openDiffViewer = useCallback(() => {
+    navigateViewerMode("diff")
+  }, [navigateViewerMode])
 
   const goPrevFile = useCallback(() => {
+    if (isQuizMode) {
+      return
+    }
+
     if (prevFile) setSelectedFilePath(prevFile.path)
-  }, [prevFile, setSelectedFilePath])
+  }, [isQuizMode, prevFile, setSelectedFilePath])
 
   const goNextFile = useCallback(() => {
+    if (isQuizMode) {
+      return
+    }
+
     if (nextFile) setSelectedFilePath(nextFile.path)
-  }, [nextFile, setSelectedFilePath])
+  }, [isQuizMode, nextFile, setSelectedFilePath])
 
   useShortcut("prevFile", goPrevFile)
   useShortcut("prevFileAlt", goPrevFile)
@@ -135,9 +190,15 @@ export function DiffViewerPage() {
   }, [])
 
   useShortcut("scrollFileUp", () => {
+    if (isQuizMode) {
+      return
+    }
     scrollFileWindowBy(-120)
   })
   useShortcut("scrollFileDown", () => {
+    if (isQuizMode) {
+      return
+    }
     scrollFileWindowBy(120)
   })
 
@@ -168,6 +229,20 @@ export function DiffViewerPage() {
   } = useAnnotationSession({
     currentDiff: currentDisplayedDiff,
     selectedFile,
+  })
+
+  const {
+    questions: quizQuestions,
+    isLoading: isQuizLoading,
+    error: quizError,
+    currentQuestionIndex: currentQuizQuestionIndex,
+    resultsByQuestionID: quizResultsByQuestionID,
+    answeredCount: quizAnsweredCount,
+    correctCount: quizCorrectCount,
+    goToQuestion: goToQuizQuestion,
+    restartQuiz,
+  } = useQuizSession({
+    enabled: isQuizMode,
   })
 
   useEffect(() => {
@@ -256,9 +331,17 @@ export function DiffViewerPage() {
   ])
 
   useShortcut("toggleStage", () => {
+    if (isQuizMode) {
+      return
+    }
+
     if (selectedFile) gitActions.handleToggleStage(selectedFile)
   })
   useShortcut("sendToAgent", () => {
+    if (isQuizMode) {
+      return
+    }
+
     if (canSendAnnotations) sendAnnotations()
   })
 
@@ -270,12 +353,21 @@ export function DiffViewerPage() {
   const isCurrentFileExpanded = selectedDiffKey != null && expandedDiffKey === selectedDiffKey
 
   useShortcut("toggleViewMode", () => {
+    if (isQuizMode) {
+      return
+    }
+
     setViewMode((current) => (current === "split" ? "unified" : "split"))
   })
 
   useEffect(() => {
+    if (isQuizMode) {
+      document.title = repoName ? `DiffX - ${repoName} Quiz` : "DiffX - Quiz"
+      return
+    }
+
     document.title = repoName ? `DiffX - ${repoName}` : "DiffX"
-  }, [repoName])
+  }, [isQuizMode, repoName])
 
   const handleLiveRefreshError = useCallback(
     (error: Error, phase: "files" | "branches", signal: AbortSignal) => {
@@ -300,12 +392,16 @@ export function DiffViewerPage() {
   })
 
   const handleToggleCurrentFileExpanded = useCallback(() => {
+    if (isQuizMode) {
+      return
+    }
+
     if (!selectedDiffKey) {
       return
     }
 
     setExpandedDiffKey((current) => (current === selectedDiffKey ? null : selectedDiffKey))
-  }, [selectedDiffKey])
+  }, [isQuizMode, selectedDiffKey])
   useShortcut("toggleExpandFile", handleToggleCurrentFileExpanded)
 
   const headerError =
@@ -327,240 +423,308 @@ export function DiffViewerPage() {
       ? getConflictProgressLabel(selectedFile.path)
       : null
 
-  return (
-    <AppShell
-      sidebarContent={
-        <>
-          <SidebarHeader className="relative h-(--header-height) justify-center gap-0 px-0 py-0">
-            <div className="flex h-full items-center px-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
-                  <FolderTree className="size-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate type-title text-sidebar-foreground">
-                    {repoLabel}
-                  </p>
-                </div>
-              </div>
+  const diffSidebar = (
+    <>
+      <SidebarHeader className="relative h-(--header-height) justify-center gap-0 px-0 py-0">
+        <div className="flex h-full items-center px-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
+              <FolderTree className="size-4" />
             </div>
-          </SidebarHeader>
-
-          <div className="flex min-h-0 flex-1 flex-col">
-            <FileTreePanel
-              files={filteredVisibleFiles}
-              totalFileCount={visibleFiles.length}
-              searchQuery={fileSearchQuery}
-              onSearchQueryChange={setFileSearchQuery}
-              tree={tree}
-              expandedPaths={expandedPaths}
-              hasExpandableFolders={hasExpandableFolders}
-              areAllFoldersExpanded={areAllFoldersExpanded}
-              onToggleFolder={handleToggleFolder}
-              onToggleAllFolders={handleToggleAllFolders}
-              selectedFile={selectedFile}
-              scopePath={scopePath}
-              comparisonMode={comparisonMode}
-              isMergeInProgress={mergeState.inProgress}
-              onSelectFile={setSelectedFilePath}
-              stagePendingPaths={gitActions.stagePendingPaths}
-              isBulkStagePending={gitActions.isBulkStagePending}
-              onToggleStage={gitActions.handleToggleStage}
-              onStageAll={gitActions.handleStageAll}
-              onUnstageAll={gitActions.handleUnstageAll}
-            />
-
-            <GitActionsPanel
-              branchName={currentRef}
-              branches={branches}
-              isBranchesLoading={isBranchesLoading}
-              comparisonMode={comparisonMode}
-              files={visibleFiles}
-              hasUpstream={branchSync.hasUpstream}
-              aheadCount={branchSync.aheadCount}
-              hiddenStagedFileCount={hiddenStagedFileCount}
-              commitMessage={gitActions.commitMessage}
-              isCommitPending={gitActions.isCommitPending}
-              onCommitMessageChange={gitActions.setCommitMessage}
-              isSuggestCommitPending={commitSuggestion.isPending}
-              onSuggestCommitMessage={commitSuggestion.suggest}
-              isCommitMessageProviderValid={commitFeatureState?.providerValid ?? false}
-              isCheckingAIProviders={aiSettingsState.isCheckingAgents}
-              suggestCommitDisabledReason={suggestCommitDisabledReason}
-              onCommit={gitActions.handleCommit}
-              isPushPending={gitActions.isPushPending}
-              onPush={gitActions.handlePush}
-              isFetchPending={gitActions.isFetchPending}
-              onFetch={gitActions.handleFetch}
-              isPullPending={gitActions.isPullPending}
-              onPull={gitActions.handlePull}
-              isCheckoutPending={gitActions.isCheckoutPending}
-              onCheckoutBranch={gitActions.handleCheckoutBranch}
-            />
+            <div className="min-w-0">
+              <p className="truncate type-title text-sidebar-foreground">{repoLabel}</p>
+            </div>
           </div>
+        </div>
+      </SidebarHeader>
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <FileTreePanel
+          files={filteredVisibleFiles}
+          totalFileCount={visibleFiles.length}
+          searchQuery={fileSearchQuery}
+          onSearchQueryChange={setFileSearchQuery}
+          tree={tree}
+          expandedPaths={expandedPaths}
+          hasExpandableFolders={hasExpandableFolders}
+          areAllFoldersExpanded={areAllFoldersExpanded}
+          onToggleFolder={handleToggleFolder}
+          onToggleAllFolders={handleToggleAllFolders}
+          selectedFile={selectedFile}
+          scopePath={scopePath}
+          comparisonMode={comparisonMode}
+          isMergeInProgress={mergeState.inProgress}
+          onSelectFile={setSelectedFilePath}
+          stagePendingPaths={gitActions.stagePendingPaths}
+          isBulkStagePending={gitActions.isBulkStagePending}
+          onToggleStage={gitActions.handleToggleStage}
+          onStageAll={gitActions.handleStageAll}
+          onUnstageAll={gitActions.handleUnstageAll}
+        />
+
+        <GitActionsPanel
+          branchName={currentRef}
+          branches={branches}
+          isBranchesLoading={isBranchesLoading}
+          comparisonMode={comparisonMode}
+          files={visibleFiles}
+          hasUpstream={branchSync.hasUpstream}
+          aheadCount={branchSync.aheadCount}
+          hiddenStagedFileCount={hiddenStagedFileCount}
+          commitMessage={gitActions.commitMessage}
+          isCommitPending={gitActions.isCommitPending}
+          onCommitMessageChange={gitActions.setCommitMessage}
+          isSuggestCommitPending={commitSuggestion.isPending}
+          onSuggestCommitMessage={commitSuggestion.suggest}
+          isCommitMessageProviderValid={commitFeatureState?.providerValid ?? false}
+          isCheckingAIProviders={aiSettingsState.isCheckingAgents}
+          suggestCommitDisabledReason={suggestCommitDisabledReason}
+          onCommit={gitActions.handleCommit}
+          isPushPending={gitActions.isPushPending}
+          onPush={gitActions.handlePush}
+          isFetchPending={gitActions.isFetchPending}
+          onFetch={gitActions.handleFetch}
+          isPullPending={gitActions.isPullPending}
+          onPull={gitActions.handlePull}
+          isCheckoutPending={gitActions.isCheckoutPending}
+          onCheckoutBranch={gitActions.handleCheckoutBranch}
+        />
+      </div>
+    </>
+  )
+
+  const quizSidebar = (
+    <>
+      <SidebarHeader className="relative h-(--header-height) justify-center gap-0 px-0 py-0">
+        <div className="flex h-full items-center px-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl border border-sidebar-border/70 bg-[var(--surface-sidebar-accent)] p-1.5 text-sidebar-primary">
+              <GraduationCap className="size-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate type-title text-sidebar-foreground">{repoLabel}</p>
+            </div>
+          </div>
+        </div>
+      </SidebarHeader>
+      <QuizSidebarPanel
+        questions={quizQuestions}
+        currentQuestionIndex={currentQuizQuestionIndex}
+        resultsByQuestionID={quizResultsByQuestionID}
+        onSelectQuestion={goToQuizQuestion}
+        onRestart={restartQuiz}
+      />
+    </>
+  )
+
+  const diffHeader = (
+    <SiteHeader
+      branches={branches}
+      currentRef={currentRef}
+      selectedBaseRef={selectedBaseRef}
+      isBranchesLoading={isBranchesLoading}
+      branchesError={branchesError}
+      copyState={copyState}
+      sendState={sendState}
+      canCopyAnnotations={canCopyAnnotations}
+      canSendAnnotations={canSendAnnotations}
+      onSelectBaseRef={handleSelectBaseRef}
+      onCopyAnnotations={copyAnnotations}
+      onSendAnnotations={sendAnnotations}
+      settingsControl={
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                aria-label="Open quiz mode"
+                onClick={openQuizMode}
+              >
+                <GraduationCap />
+                <span className="sr-only">Open quiz mode</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              Quiz mode
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                aria-label="AI settings"
+                onClick={() => setIsAISettingsModalOpen(true)}
+              >
+                {aiSettingsState.isCheckingAgents ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : (
+                  <Settings2 />
+                )}
+                <span className="sr-only">AI settings</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              AI settings
+            </TooltipContent>
+          </Tooltip>
+          <AISettingsModal
+            open={isAISettingsModalOpen}
+            onOpenChange={setIsAISettingsModalOpen}
+            settingsState={aiSettingsState}
+          />
         </>
       }
-      header={
-        <SiteHeader
-          branches={branches}
-          currentRef={currentRef}
-          selectedBaseRef={selectedBaseRef}
-          isBranchesLoading={isBranchesLoading}
-          branchesError={branchesError}
-          copyState={copyState}
-          sendState={sendState}
-          canCopyAnnotations={canCopyAnnotations}
-          canSendAnnotations={canSendAnnotations}
-          onSelectBaseRef={handleSelectBaseRef}
-          onCopyAnnotations={copyAnnotations}
-          onSendAnnotations={sendAnnotations}
-          settingsControl={
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="AI settings"
-                    onClick={() => setIsAISettingsModalOpen(true)}
-                  >
-                    {aiSettingsState.isCheckingAgents ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <Settings2 />
-                    )}
-                    <span className="sr-only">AI settings</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  AI settings
-                </TooltipContent>
-              </Tooltip>
-              <AISettingsModal
-                open={isAISettingsModalOpen}
-                onOpenChange={setIsAISettingsModalOpen}
-                settingsState={aiSettingsState}
-              />
-            </>
-          }
-        />
-      }
-    >
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        {headerError ? (
-          <div className="border-b border-border/60 px-4 py-2">
-            <p className="measure-readable type-meta text-destructive">{headerError}</p>
-          </div>
-        ) : null}
-        {mergeState.inProgress ? (
-          <div className="border-b border-border/60 px-4 py-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="measure-readable type-meta text-muted-foreground">
-                {isConflictMode ? mergeModeSummary : "Viewing all changed files during merge."}
-              </p>
-              <div
-                className="surface-segmented flex items-center gap-0.5 p-0.5"
-                role="group"
-                aria-label="Merge view mode"
+    />
+  )
+
+  const quizHeader = (
+    <QuizModeHeader
+      currentQuestionIndex={currentQuizQuestionIndex}
+      totalQuestions={quizQuestions.length}
+      answeredCount={quizAnsweredCount}
+      correctCount={quizCorrectCount}
+      onOpenDiffViewer={openDiffViewer}
+    />
+  )
+
+  const diffContent = (
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      {headerError ? (
+        <div className="border-b border-border/60 px-4 py-2">
+          <p className="measure-readable type-meta text-destructive">{headerError}</p>
+        </div>
+      ) : null}
+      {mergeState.inProgress ? (
+        <div className="border-b border-border/60 px-4 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="measure-readable type-meta text-muted-foreground">
+              {isConflictMode ? mergeModeSummary : "Viewing all changed files during merge."}
+            </p>
+            <div
+              className="surface-segmented flex items-center gap-0.5 p-0.5"
+              role="group"
+              aria-label="Merge view mode"
+            >
+              <Button
+                type="button"
+                size="xs"
+                variant={isConflictMode ? "secondary" : "ghost"}
+                aria-pressed={isConflictMode}
+                onClick={showConflicts}
               >
-                <Button
-                  type="button"
-                  size="xs"
-                  variant={isConflictMode ? "secondary" : "ghost"}
-                  aria-pressed={isConflictMode}
-                  onClick={showConflicts}
-                >
-                  Conflicts
-                </Button>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant={!isConflictMode ? "secondary" : "ghost"}
-                  aria-pressed={!isConflictMode}
-                  onClick={showAllFiles}
-                >
-                  All Files
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-        {showMergeResolvedState ? (
-          <div className="border-b border-border/60 px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="measure-readable type-meta text-muted-foreground">
-                All merge conflicts are resolved. Stage and commit to finish the merge.
-              </p>
-              <Button type="button" size="sm" variant="outline" onClick={showAllFiles}>
-                View All Files
+                Conflicts
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant={!isConflictMode ? "secondary" : "ghost"}
+                aria-pressed={!isConflictMode}
+                onClick={showAllFiles}
+              >
+                All Files
               </Button>
             </div>
           </div>
+        </div>
+      ) : null}
+      {showMergeResolvedState ? (
+        <div className="border-b border-border/60 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="measure-readable type-meta text-muted-foreground">
+              All merge conflicts are resolved. Stage and commit to finish the merge.
+            </p>
+            <Button type="button" size="sm" variant="outline" onClick={showAllFiles}>
+              View All Files
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <div ref={fileWindowScrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
+        {selectedFile ? (
+          <div className="sticky top-0 z-20">
+            <div className="relative z-20">
+              <DiffViewerToolbar
+                diff={currentDisplayedDiff}
+                comparisonMode={comparisonMode}
+                selectedFile={selectedFile}
+                isStagePending={isSelectedFileStagePending}
+                viewMode={viewMode}
+                isExpanded={isCurrentFileExpanded}
+                canGoPrev={prevFile != null}
+                canGoNext={nextFile != null}
+                fileIndex={indexOfSelected}
+                totalFiles={totalNavigable}
+                onToggleExpandAll={handleToggleCurrentFileExpanded}
+                onToggleStage={gitActions.handleToggleStage}
+                onViewModeChange={setViewMode}
+                onGoPrev={goPrevFile}
+                onGoNext={goNextFile}
+                onOpenQuizMode={openQuizMode}
+              />
+            </div>
+            <div className="relative z-10">
+              <DiffFileHeader
+                file={selectedFile}
+                diff={currentDisplayedDiff}
+                isDiffLoading={isDiffLoading}
+                scopePath={scopePath}
+                conflictProgressLabel={selectedConflictProgressLabel}
+              />
+            </div>
+          </div>
         ) : null}
 
-        <div ref={fileWindowScrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
-          {selectedFile ? (
-            <div className="sticky top-0 z-20">
-              <div className="relative z-20">
-                <DiffViewerToolbar
-                  diff={currentDisplayedDiff}
-                  comparisonMode={comparisonMode}
-                  selectedFile={selectedFile}
-                  isStagePending={isSelectedFileStagePending}
-                  viewMode={viewMode}
-                  isExpanded={isCurrentFileExpanded}
-                  canGoPrev={prevFile != null}
-                  canGoNext={nextFile != null}
-                  fileIndex={indexOfSelected}
-                  totalFiles={totalNavigable}
-                  onToggleExpandAll={handleToggleCurrentFileExpanded}
-                  onToggleStage={gitActions.handleToggleStage}
-                  onViewModeChange={setViewMode}
-                  onGoPrev={goPrevFile}
-                  onGoNext={goNextFile}
-                />
-              </div>
-              <div className="relative z-10">
-                <DiffFileHeader
-                  file={selectedFile}
-                  diff={currentDisplayedDiff}
-                  isDiffLoading={isDiffLoading}
-                  scopePath={scopePath}
-                  conflictProgressLabel={selectedConflictProgressLabel}
-                />
-              </div>
-            </div>
-          ) : null}
+        {isConflictMode ? (
+          <MergeConflictPane
+            selectedFilePath={selectedConflictPath}
+            conflictFile={conflictFile}
+            conflictFileError={conflictFileError}
+            isConflictFileLoading={isConflictFileLoading}
+            isResolvePending={isResolvePending}
+            currentDiff={selectedFile ? currentDisplayedDiff : null}
+            clearDraftToken={clearDraftToken}
+            savedAnnotations={visibleSavedAnnotations}
+            onSaveAnnotation={saveAnnotation}
+            onDeleteAnnotation={deleteAnnotation}
+            onResolveConflict={resolveSelectedConflict}
+          />
+        ) : (
+          <DiffPane
+            diff={selectedFile ? currentDisplayedDiff : null}
+            hasSelectedFile={!!selectedFile}
+            viewMode={viewMode}
+            expandAll={isCurrentFileExpanded}
+            savedAnnotations={visibleSavedAnnotations}
+            clearDraftToken={clearDraftToken}
+            onSaveAnnotation={saveAnnotation}
+            onDeleteAnnotation={deleteAnnotation}
+          />
+        )}
+      </div>
+    </section>
+  )
 
-          {isConflictMode ? (
-            <MergeConflictPane
-              selectedFilePath={selectedConflictPath}
-              conflictFile={conflictFile}
-              conflictFileError={conflictFileError}
-              isConflictFileLoading={isConflictFileLoading}
-              isResolvePending={isResolvePending}
-              currentDiff={selectedFile ? currentDisplayedDiff : null}
-              clearDraftToken={clearDraftToken}
-              savedAnnotations={visibleSavedAnnotations}
-              onSaveAnnotation={saveAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-              onResolveConflict={resolveSelectedConflict}
-            />
-          ) : (
-            <DiffPane
-              diff={selectedFile ? currentDisplayedDiff : null}
-              hasSelectedFile={!!selectedFile}
-              viewMode={viewMode}
-              expandAll={isCurrentFileExpanded}
-              savedAnnotations={visibleSavedAnnotations}
-              clearDraftToken={clearDraftToken}
-              onSaveAnnotation={saveAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-            />
-          )}
-        </div>
-      </section>
+  return (
+    <AppShell
+      sidebarContent={isQuizMode ? quizSidebar : diffSidebar}
+      header={isQuizMode ? quizHeader : diffHeader}
+    >
+      {isQuizMode ? (
+        <QuizWorkspacePane
+          questions={quizQuestions}
+          currentQuestionIndex={currentQuizQuestionIndex}
+          isLoading={isQuizLoading}
+          error={quizError}
+          onRestart={restartQuiz}
+        />
+      ) : (
+        diffContent
+      )}
     </AppShell>
   )
 }

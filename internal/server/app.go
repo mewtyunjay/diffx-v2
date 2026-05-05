@@ -12,6 +12,7 @@ import (
 	frontendassets "diffx/frontend"
 	"diffx/internal/ai"
 	"diffx/internal/gitstatus"
+	"diffx/internal/quiz"
 )
 
 type FrontendConfig struct {
@@ -47,6 +48,7 @@ type ReviewState struct {
 type App struct {
 	service         *gitstatus.Service
 	aiService       *ai.Service
+	quizService     *quiz.Service
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
 	reviewFeedback  *reviewFeedbackCoordinator
@@ -175,6 +177,7 @@ func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
 	return &App{
 		service:     gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
 		aiService:   aiService,
+		quizService: quiz.NewService(),
 		repoEvents:  repoEvents,
 		repoWatcher: watcher,
 		reviewFeedback: newReviewFeedbackCoordinator(

@@ -24,6 +24,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ai/settings", a.handleAISettings)
 	mux.HandleFunc("/api/ai/settings/update", a.handleUpdateAISettings)
 	mux.HandleFunc("/api/ai/features/commit-message/suggest", a.handleSuggestCommitMessage)
+	mux.HandleFunc("/api/quiz/questions", a.handleQuizQuestions)
+	mux.HandleFunc("/api/quiz/answer", a.handleQuizAnswer)
 	mux.HandleFunc("/api/feedback", a.handleReviewFeedback)
 	mux.HandleFunc("/api/review/state", a.handleReviewState)
 	mux.Handle("/", a.frontend())

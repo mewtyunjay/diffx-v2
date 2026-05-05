@@ -229,6 +229,89 @@ func TestHandleAppConfigReturnsConfiguredFont(t *testing.T) {
 	}
 }
 
+func TestHandleQuizQuestionsReturnsHardcodedQuestions(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/quiz/questions", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload struct {
+		Questions []struct {
+			ID             string `json:"id"`
+			Prompt         string `json:"prompt"`
+			AllowsMultiple bool   `json:"allowsMultiple"`
+			Options        []struct {
+				ID    string `json:"id"`
+				Label string `json:"label"`
+			} `json:"options"`
+		} `json:"questions"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode quiz questions: %v", err)
+	}
+
+	if len(payload.Questions) == 0 {
+		t.Fatalf("expected at least one question, got %#v", payload)
+	}
+	first := payload.Questions[0]
+	if first.ID == "" || first.Prompt == "" {
+		t.Fatalf("expected first question metadata, got %#v", first)
+	}
+	if len(first.Options) < 2 {
+		t.Fatalf("expected first question options, got %#v", first)
+	}
+}
+
+func TestHandleQuizAnswerGradesSelectedOptions(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/quiz/answer",
+		bytes.NewBufferString(`{"questionId":"q-dev-mode","optionIds":["a"]}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload struct {
+		QuestionID        string   `json:"questionId"`
+		SelectedOptionIDs []string `json:"selectedOptionIds"`
+		CorrectOptionIDs  []string `json:"correctOptionIds"`
+		IsCorrect         bool     `json:"isCorrect"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode quiz answer: %v", err)
+	}
+
+	if payload.QuestionID != "q-dev-mode" {
+		t.Fatalf("expected question id q-dev-mode, got %#v", payload)
+	}
+	if !payload.IsCorrect {
+		t.Fatalf("expected answer to be correct, got %#v", payload)
+	}
+	if len(payload.CorrectOptionIDs) != 1 || payload.CorrectOptionIDs[0] != "a" {
+		t.Fatalf("expected correct options [a], got %#v", payload)
+	}
+}
+
 func TestHandleStageFileRejectsUnknownFields(t *testing.T) {
 	t.Parallel()
 
