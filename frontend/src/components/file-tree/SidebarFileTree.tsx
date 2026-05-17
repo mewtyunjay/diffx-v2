@@ -74,7 +74,7 @@ export function SidebarFileTree<T>({
               size={density === "compact" ? "sm" : "default"}
               isActive={isSelected}
               onClick={() => (isFile ? onSelectFile(row.path, row.data) : onToggleFolder(row.path))}
-              className="justify-start gap-2 rounded-lg font-normal transition-colors"
+              className="justify-start gap-2 rounded-md font-normal text-sidebar-foreground/86 transition-colors hover:bg-[var(--surface-sidebar-hover)] data-active:bg-[var(--surface-selected)] data-active:!font-normal data-active:text-sidebar-foreground"
               style={{
                 paddingLeft: `${2 + row.depth * indent}px`,
               }}
@@ -94,14 +94,14 @@ export function SidebarFileTree<T>({
               ) : row.isExpanded ? (
                 <ChevronDown className="size-3.5 text-sidebar-foreground/45" />
               ) : (
-                <ChevronRight className="size-3.5 text-sidebar-foreground/45" />
+                <ChevronRight className="size-3.5 text-sidebar-foreground/40" />
               )}
               {isFile ? (
                 <FileTreeFileIcon path={row.path} language={fileLanguage} />
               ) : row.isExpanded ? (
-                <FolderOpen className="size-4 shrink-0 text-sidebar-primary" />
+                <FolderOpen className="size-4 shrink-0 text-sidebar-primary/90" />
               ) : (
-                <Folder className="size-4 shrink-0 text-sidebar-primary" />
+                <Folder className="size-4 shrink-0 text-sidebar-primary/75" />
               )}
               <span className="min-w-0 truncate">{row.name}</span>
             </SidebarMenuButton>

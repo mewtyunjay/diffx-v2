@@ -16,7 +16,7 @@ const maxCommitPromptDiffChars = 120000
 
 const (
 	defaultCodexCommitModel  = "gpt-5.4-codex-spark"
-	defaultClaudeCommitModel = "haiku"
+	defaultClaudeCommitModel = "claude-sonnet-4-6"
 )
 
 type Service struct {
@@ -260,7 +260,10 @@ func (s *Service) generateCommitMessageWithProvider(
 			"text",
 			"--max-turns",
 			"2",
+			"--setting-sources",
+			"user",
 		}
+		workingDir = os.TempDir()
 	default:
 		return "", fmt.Errorf("unsupported provider %q", provider)
 	}

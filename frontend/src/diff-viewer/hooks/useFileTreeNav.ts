@@ -14,6 +14,7 @@ type UseFileTreeNavArgs = {
   selectedFilePath: string | null
   repoName: string
   workspaceName: string
+  autoExpandFolders?: boolean
 }
 
 type UseFileTreeNavResult = {
@@ -35,6 +36,7 @@ export function useFileTreeNav({
   selectedFilePath,
   repoName,
   workspaceName,
+  autoExpandFolders = false,
 }: UseFileTreeNavArgs): UseFileTreeNavResult {
   const tree = useMemo(
     () =>
@@ -71,9 +73,11 @@ export function useFileTreeNav({
     setExpandedPaths((currentPaths) => {
       const shouldInitialize =
         !hasInitialized.current && (files.length > 0 || folderPaths.length > 1)
-      const nextPaths = shouldInitialize
+      const nextPaths = autoExpandFolders
         ? [...folderPaths]
-        : currentPaths.filter((path) => folderPathSet.has(path))
+        : shouldInitialize
+          ? [...folderPaths]
+          : currentPaths.filter((path) => folderPathSet.has(path))
 
       if (shouldInitialize) {
         hasInitialized.current = true
@@ -87,7 +91,7 @@ export function useFileTreeNav({
 
       return nextPaths
     })
-  }, [files.length, folderPaths, selectedAncestorPaths])
+  }, [autoExpandFolders, files.length, folderPaths, selectedAncestorPaths])
 
   const handleToggleFolder = useCallback((path: string) => {
     setExpandedPaths((currentPaths) =>

@@ -75,6 +75,13 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff navigation",
   },
+  focusFileSearch: {
+    id: "focusFileSearch",
+    keys: ["/"],
+    label: "Focus file search",
+    scope: "diff",
+    group: "Diff navigation",
+  },
   toggleExpandFile: {
     id: "toggleExpandFile",
     keys: ["f"],
@@ -106,9 +113,9 @@ export const SHORTCUTS = {
   blurCommitMessage: {
     id: "blurCommitMessage",
     keys: ["Escape"],
-    label: "Exit commit message",
+    label: "Return to normal mode",
     scope: "diff",
-    group: "Git actions",
+    group: "Diff navigation",
     allowInEditable: true,
   },
   pushBranch: {

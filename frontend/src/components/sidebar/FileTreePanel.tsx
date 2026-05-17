@@ -74,10 +74,12 @@ export function FileTreePanel({
   const folderToggleLabel = areAllFoldersExpanded ? "Collapse all folders" : "Expand all folders"
 
   return (
-    <SidebarContent>
-      <div className="px-2 pb-2 pt-3">
-        <div className="mb-2 flex items-center justify-between gap-2 px-1">
-          <p className="type-meta font-medium text-sidebar-foreground/72">{visibleFileCountLabel}</p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-2 pb-2 pt-3">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <p className="whitespace-nowrap type-meta font-medium text-sidebar-foreground/72">
+            {visibleFileCountLabel}
+          </p>
           <div className="flex shrink-0 items-center gap-1">
             {hasExpandableFolders ? (
               <Tooltip>
@@ -119,63 +121,67 @@ export function FileTreePanel({
             ) : null}
           </div>
         </div>
-        <SidebarFileTree
-          root={tree}
-          expandedPaths={expandedPaths}
-          selectedPath={selectedFile?.displayPath ?? null}
-          showRoot={false}
-          indent={10}
-          density="comfortable"
-          getFileIndicatorClassName={(file) => fileStatusIndicatorClassNames[file.status]}
-          getFileLanguage={(file) => file.language}
-          renderFileAction={
-            isMergeInProgress
-              ? undefined
-              : (file) => {
-                  const isPending = stagePendingPathSet.has(file.path)
-                  const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
-                  const isDisabled = !canUseGitActions || !hasAction || isPending
-                  const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
-
-                  return (
-                    <button
-                      type="button"
-                      aria-label={`${actionLabel}: ${file.displayPath}`}
-                      title={
-                        !canUseGitActions
-                          ? "Switch comparison back to HEAD to stage files"
-                          : actionLabel
-                      }
-                      className={cn(
-                        "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
-                        isDisabled
-                          ? "cursor-not-allowed opacity-45"
-                          : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      )}
-                      disabled={isDisabled}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (!isDisabled) {
-                          onToggleStage(file)
-                        }
-                      }}
-                    >
-                      {file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
-                    </button>
-                  )
-                }
-          }
-          onToggleFolder={onToggleFolder}
-          onSelectFile={(path, file) => {
-            if (file) {
-              onSelectFile(file.path)
-              return
-            }
-
-            onSelectFile(path)
-          }}
-        />
       </div>
-    </SidebarContent>
+      <SidebarContent>
+        <div className="px-2 pb-2">
+          <SidebarFileTree
+            root={tree}
+            expandedPaths={expandedPaths}
+            selectedPath={selectedFile?.displayPath ?? null}
+            showRoot={false}
+            indent={10}
+            density="comfortable"
+            getFileIndicatorClassName={(file) => fileStatusIndicatorClassNames[file.status]}
+            getFileLanguage={(file) => file.language}
+            renderFileAction={
+              isMergeInProgress
+                ? undefined
+                : (file) => {
+                    const isPending = stagePendingPathSet.has(file.path)
+                    const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
+                    const isDisabled = !canUseGitActions || !hasAction || isPending
+                    const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
+
+                    return (
+                      <button
+                        type="button"
+                        aria-label={`${actionLabel}: ${file.displayPath}`}
+                        title={
+                          !canUseGitActions
+                            ? "Switch comparison back to HEAD to stage files"
+                            : actionLabel
+                        }
+                        className={cn(
+                          "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
+                          isDisabled
+                            ? "cursor-not-allowed opacity-45"
+                            : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        )}
+                        disabled={isDisabled}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (!isDisabled) {
+                            onToggleStage(file)
+                          }
+                        }}
+                      >
+                        {file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
+                      </button>
+                    )
+                  }
+            }
+            onToggleFolder={onToggleFolder}
+            onSelectFile={(path, file) => {
+              if (file) {
+                onSelectFile(file.path)
+                return
+              }
+
+              onSelectFile(path)
+            }}
+          />
+        </div>
+      </SidebarContent>
+    </div>
   )
 }
