@@ -75,6 +75,13 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff navigation",
   },
+  focusFileSearch: {
+    id: "focusFileSearch",
+    keys: ["/"],
+    label: "Focus file search",
+    scope: "diff",
+    group: "Diff navigation",
+  },
   toggleExpandFile: {
     id: "toggleExpandFile",
     keys: ["f"],
@@ -89,12 +96,27 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff actions",
   },
+  toggleViewMode: {
+    id: "toggleViewMode",
+    keys: ["u"],
+    label: "Toggle unified / split view",
+    scope: "diff",
+    group: "Diff actions",
+  },
   focusCommitMessage: {
     id: "focusCommitMessage",
     keys: ["shift", "c"],
     label: "Focus commit message",
     scope: "diff",
     group: "Git actions",
+  },
+  blurCommitMessage: {
+    id: "blurCommitMessage",
+    keys: ["Escape"],
+    label: "Return to normal mode",
+    scope: "diff",
+    group: "Diff navigation",
+    allowInEditable: true,
   },
   pushBranch: {
     id: "pushBranch",

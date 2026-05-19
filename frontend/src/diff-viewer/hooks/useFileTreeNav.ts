@@ -14,12 +14,16 @@ type UseFileTreeNavArgs = {
   selectedFilePath: string | null
   repoName: string
   workspaceName: string
+  autoExpandFolders?: boolean
 }
 
 type UseFileTreeNavResult = {
   tree: SidebarTreeFolderNode<ChangedFileItem>
   expandedPaths: string[]
+  hasExpandableFolders: boolean
+  areAllFoldersExpanded: boolean
   handleToggleFolder: (path: string) => void
+  handleToggleAllFolders: () => void
   selectedFile: ChangedFileItem | null
   prevFile: ChangedFileItem | null
   nextFile: ChangedFileItem | null
@@ -32,6 +36,7 @@ export function useFileTreeNav({
   selectedFilePath,
   repoName,
   workspaceName,
+  autoExpandFolders = false,
 }: UseFileTreeNavArgs): UseFileTreeNavResult {
   const tree = useMemo(
     () =>
@@ -68,9 +73,11 @@ export function useFileTreeNav({
     setExpandedPaths((currentPaths) => {
       const shouldInitialize =
         !hasInitialized.current && (files.length > 0 || folderPaths.length > 1)
-      const nextPaths = shouldInitialize
+      const nextPaths = autoExpandFolders
         ? [...folderPaths]
-        : currentPaths.filter((path) => folderPathSet.has(path))
+        : shouldInitialize
+          ? [...folderPaths]
+          : currentPaths.filter((path) => folderPathSet.has(path))
 
       if (shouldInitialize) {
         hasInitialized.current = true
@@ -84,7 +91,7 @@ export function useFileTreeNav({
 
       return nextPaths
     })
-  }, [files.length, folderPaths, selectedAncestorPaths])
+  }, [autoExpandFolders, files.length, folderPaths, selectedAncestorPaths])
 
   const handleToggleFolder = useCallback((path: string) => {
     setExpandedPaths((currentPaths) =>
@@ -93,6 +100,21 @@ export function useFileTreeNav({
         : [...currentPaths, path]
     )
   }, [])
+
+  const hasExpandableFolders = folderPaths.length > 1
+  const areAllFoldersExpanded = useMemo(() => {
+    const expandedPathSet = new Set(expandedPaths)
+    return folderPaths.every((path) => expandedPathSet.has(path))
+  }, [expandedPaths, folderPaths])
+
+  const handleToggleAllFolders = useCallback(() => {
+    setExpandedPaths((currentPaths) => {
+      const expandedPathSet = new Set(currentPaths)
+      const isFullyExpanded = folderPaths.every((path) => expandedPathSet.has(path))
+
+      return isFullyExpanded ? [] : [...folderPaths]
+    })
+  }, [folderPaths])
 
   const navigableFiles = useMemo(() => {
     const fullyExpandedSet = new Set(folderPaths)
@@ -122,7 +144,10 @@ export function useFileTreeNav({
   return {
     tree,
     expandedPaths,
+    hasExpandableFolders,
+    areAllFoldersExpanded,
     handleToggleFolder,
+    handleToggleAllFolders,
     selectedFile,
     prevFile,
     nextFile,

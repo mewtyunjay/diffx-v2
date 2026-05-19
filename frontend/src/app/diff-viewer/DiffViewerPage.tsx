@@ -14,6 +14,7 @@ import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
 import type { ChangedFilesResult } from "@/git/types"
+import { fuzzyFilterChangedFiles } from "@/components/file-tree/fuzzy-search"
 import { AppShell } from "@/components/app-shell"
 import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
 import { DiffPane } from "@/components/diff/DiffPane"
@@ -31,6 +32,7 @@ export function DiffViewerPage() {
   const [latestChangedFilesResult, setLatestChangedFilesResult] =
     useState<ChangedFilesResult | null>(null)
   const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false)
+  const [fileSearchQuery, setFileSearchQuery] = useState("")
 
   const {
     branches,
@@ -84,23 +86,33 @@ export function DiffViewerPage() {
     refreshChangedFiles,
   })
 
+  const filteredVisibleFiles = useMemo(
+    () => fuzzyFilterChangedFiles(visibleFiles, fileSearchQuery),
+    [fileSearchQuery, visibleFiles]
+  )
   const selectedFile =
-    visibleFiles.find((file) => file.path === selectedFilePath) ?? visibleFiles[0] ?? null
+    filteredVisibleFiles.find((file) => file.path === selectedFilePath) ??
+    filteredVisibleFiles[0] ??
+    null
   const repoLabel = repoName || workspaceName || "repository"
 
   const {
     tree,
     expandedPaths,
+    hasExpandableFolders,
+    areAllFoldersExpanded,
     handleToggleFolder,
+    handleToggleAllFolders,
     prevFile,
     nextFile,
     indexOfSelected,
     totalNavigable,
   } = useFileTreeNav({
-    files: visibleFiles,
+    files: filteredVisibleFiles,
     selectedFilePath: selectedFile?.path ?? null,
     repoName,
     workspaceName,
+    autoExpandFolders: fileSearchQuery.trim().length > 0,
   })
 
   useScope("diff")
@@ -257,6 +269,10 @@ export function DiffViewerPage() {
     : null
   const isCurrentFileExpanded = selectedDiffKey != null && expandedDiffKey === selectedDiffKey
 
+  useShortcut("toggleViewMode", () => {
+    setViewMode((current) => (current === "split" ? "unified" : "split"))
+  })
+
   useEffect(() => {
     document.title = repoName ? `DiffX - ${repoName}` : "DiffX"
   }, [repoName])
@@ -332,10 +348,16 @@ export function DiffViewerPage() {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
-              files={visibleFiles}
+              files={filteredVisibleFiles}
+              totalFileCount={visibleFiles.length}
+              searchQuery={fileSearchQuery}
+              onSearchQueryChange={setFileSearchQuery}
               tree={tree}
               expandedPaths={expandedPaths}
+              hasExpandableFolders={hasExpandableFolders}
+              areAllFoldersExpanded={areAllFoldersExpanded}
               onToggleFolder={handleToggleFolder}
+              onToggleAllFolders={handleToggleAllFolders}
               selectedFile={selectedFile}
               scopePath={scopePath}
               comparisonMode={comparisonMode}

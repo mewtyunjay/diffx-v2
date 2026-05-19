@@ -18,7 +18,7 @@ const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar_width"
 const SIDEBAR_WIDTH_ICON = "3rem"
-const SIDEBAR_WIDTH_MIN = 224
+const SIDEBAR_WIDTH_MIN = 320
 const SIDEBAR_WIDTH_MAX = 640
 
 function clampSidebarWidth(width: number, min: number, max: number) {

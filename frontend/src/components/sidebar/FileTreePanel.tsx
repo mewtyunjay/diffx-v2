@@ -1,4 +1,4 @@
-import { Minus, Plus } from "lucide-react"
+import { Folder, FolderOpen, Minus, Plus, Search, X } from "lucide-react"
 import * as React from "react"
 
 import type {
@@ -10,13 +10,21 @@ import { fileStatusIndicatorClassNames } from "@/components/file-tree/status-ind
 import type { SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
 import { Button } from "@/components/ui/button"
 import { SidebarContent } from "@/components/ui/sidebar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { useShortcut } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
 type FileTreePanelProps = {
   files: ChangedFileItem[]
+  totalFileCount: number
+  searchQuery: string
+  onSearchQueryChange: (query: string) => void
   tree: SidebarTreeFolderNode<ChangedFileItem>
   expandedPaths: string[]
+  hasExpandableFolders: boolean
+  areAllFoldersExpanded: boolean
   onToggleFolder: (path: string) => void
+  onToggleAllFolders: () => void
   selectedFile: ChangedFileItem | null
   scopePath: string
   comparisonMode: ComparisonMode
@@ -31,9 +39,15 @@ type FileTreePanelProps = {
 
 export function FileTreePanel({
   files,
+  totalFileCount,
+  searchQuery,
+  onSearchQueryChange,
   tree,
   expandedPaths,
+  hasExpandableFolders,
+  areAllFoldersExpanded,
   onToggleFolder,
+  onToggleAllFolders,
   selectedFile,
   scopePath,
   comparisonMode,
@@ -45,11 +59,21 @@ export function FileTreePanel({
   onStageAll,
   onUnstageAll,
 }: FileTreePanelProps) {
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const stagePendingPathSet = React.useMemo(() => new Set(stagePendingPaths), [stagePendingPaths])
+
+  useShortcut("focusFileSearch", () => {
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  })
 
   const canUseGitActions = comparisonMode === "head"
   const showBulkStageActions = scopePath === "."
-  const visibleFileCountLabel = `${files.length} changed ${files.length === 1 ? "file" : "files"}`
+  const isSearching = searchQuery.trim().length > 0
+  const changedFileLabel = totalFileCount === 1 ? "file" : "files"
+  const visibleFileCountLabel = isSearching
+    ? `${files.length} of ${totalFileCount} changed ${changedFileLabel}`
+    : `${totalFileCount} changed ${changedFileLabel}`
   const stageAllCount = React.useMemo(
     () => files.filter((file) => file.hasUnstagedChanges).length,
     [files]
@@ -64,85 +88,155 @@ export function FileTreePanel({
     !canUseGitActions ||
     isBulkStagePending ||
     (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
+  const folderToggleLabel = areAllFoldersExpanded ? "Collapse all folders" : "Expand all folders"
 
   return (
-    <SidebarContent>
-      <div className="px-2 pb-2 pt-3">
-        <div className="mb-2 flex items-center justify-between gap-2 px-1">
-          <p className="type-meta font-medium text-sidebar-foreground/72">{visibleFileCountLabel}</p>
-          {showBulkStageActions ? (
-            <Button
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-2 pb-2 pt-3">
+        <div className="flex items-center justify-between gap-2 px-1">
+          <p className="whitespace-nowrap type-meta font-medium text-sidebar-foreground/72">
+            {visibleFileCountLabel}
+          </p>
+          <div className="flex shrink-0 items-center gap-1">
+            {hasExpandableFolders ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-xs"
+                    variant="ghost"
+                    className="text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    aria-label={folderToggleLabel}
+                    onClick={onToggleAllFolders}
+                  >
+                    {areAllFoldersExpanded ? (
+                      <Folder className="size-3.5" />
+                    ) : (
+                      <FolderOpen className="size-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {folderToggleLabel}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+            {showBulkStageActions ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                className={cn(
+                  "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  isBulkStagePending && "disabled:opacity-100"
+                )}
+                disabled={bulkActionDisabled}
+                onClick={showUnstageAll ? onUnstageAll : onStageAll}
+              >
+                {bulkActionLabel}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="relative mt-2">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-sidebar-foreground/45" />
+          <input
+            ref={searchInputRef}
+            type="search"
+            value={searchQuery}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") {
+                return
+              }
+
+              event.preventDefault()
+              if (searchQuery) {
+                onSearchQueryChange("")
+                return
+              }
+
+              searchInputRef.current?.blur()
+            }}
+            placeholder="Search files"
+            aria-label="Search changed files"
+            className="h-8 w-full rounded-md border border-sidebar-border/70 bg-sidebar/70 pl-7 pr-7 type-meta text-sidebar-foreground outline-none transition-colors placeholder:text-sidebar-foreground/45 focus:border-sidebar-ring/70 focus:bg-sidebar"
+          />
+          {searchQuery ? (
+            <button
               type="button"
-              size="xs"
-              variant="outline"
-              className={cn(
-                "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                isBulkStagePending && "disabled:opacity-100"
-              )}
-              disabled={bulkActionDisabled}
-              onClick={showUnstageAll ? onUnstageAll : onStageAll}
+              className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              aria-label="Clear file search"
+              onClick={() => {
+                onSearchQueryChange("")
+                searchInputRef.current?.focus()
+              }}
             >
-              {bulkActionLabel}
-            </Button>
+              <X className="size-3.5" />
+            </button>
           ) : null}
         </div>
-        <SidebarFileTree
-          root={tree}
-          expandedPaths={expandedPaths}
-          selectedPath={selectedFile?.displayPath ?? null}
-          showRoot={false}
-          indent={10}
-          density="comfortable"
-          getFileIndicatorClassName={(file) => fileStatusIndicatorClassNames[file.status]}
-          getFileLanguage={(file) => file.language}
-          renderFileAction={
-            isMergeInProgress
-              ? undefined
-              : (file) => {
-                  const isPending = stagePendingPathSet.has(file.path)
-                  const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
-                  const isDisabled = !canUseGitActions || !hasAction || isPending
-                  const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
-
-                  return (
-                    <button
-                      type="button"
-                      aria-label={`${actionLabel}: ${file.displayPath}`}
-                      title={
-                        !canUseGitActions
-                          ? "Switch comparison back to HEAD to stage files"
-                          : actionLabel
-                      }
-                      className={cn(
-                        "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
-                        isDisabled
-                          ? "cursor-not-allowed opacity-45"
-                          : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      )}
-                      disabled={isDisabled}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (!isDisabled) {
-                          onToggleStage(file)
-                        }
-                      }}
-                    >
-                      {file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
-                    </button>
-                  )
-                }
-          }
-          onToggleFolder={onToggleFolder}
-          onSelectFile={(path, file) => {
-            if (file) {
-              onSelectFile(file.path)
-              return
-            }
-
-            onSelectFile(path)
-          }}
-        />
       </div>
-    </SidebarContent>
+      <SidebarContent>
+        <div className="px-2 pb-2">
+          <SidebarFileTree
+            root={tree}
+            expandedPaths={expandedPaths}
+            selectedPath={selectedFile?.displayPath ?? null}
+            showRoot={false}
+            indent={10}
+            density="comfortable"
+            getFileIndicatorClassName={(file) => fileStatusIndicatorClassNames[file.status]}
+            getFileLanguage={(file) => file.language}
+            renderFileAction={
+              isMergeInProgress
+                ? undefined
+                : (file) => {
+                    const isPending = stagePendingPathSet.has(file.path)
+                    const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
+                    const isDisabled = !canUseGitActions || !hasAction || isPending
+                    const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
+
+                    return (
+                      <button
+                        type="button"
+                        aria-label={`${actionLabel}: ${file.displayPath}`}
+                        title={
+                          !canUseGitActions
+                            ? "Switch comparison back to HEAD to stage files"
+                            : actionLabel
+                        }
+                        className={cn(
+                          "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
+                          isDisabled
+                            ? "cursor-not-allowed opacity-45"
+                            : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        )}
+                        disabled={isDisabled}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          if (!isDisabled) {
+                            onToggleStage(file)
+                          }
+                        }}
+                      >
+                        {file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
+                      </button>
+                    )
+                  }
+            }
+            onToggleFolder={onToggleFolder}
+            onSelectFile={(path, file) => {
+              if (file) {
+                onSelectFile(file.path)
+                return
+              }
+
+              onSelectFile(path)
+            }}
+          />
+        </div>
+      </SidebarContent>
+    </div>
   )
 }

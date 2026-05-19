@@ -136,6 +136,7 @@ export function DiffViewerToolbar({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
                   {label}
+                  <Kbd keys={SHORTCUTS.toggleViewMode.keys} />
                 </TooltipContent>
               </Tooltip>
             )
