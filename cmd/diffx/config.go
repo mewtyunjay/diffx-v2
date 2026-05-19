@@ -24,6 +24,7 @@ type config struct {
 	reviewTimeout time.Duration
 	dev           bool
 	reviewMode    bool
+	font          string
 	targetPath    string
 }
 
@@ -51,9 +52,10 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	noBrowser := false
 	flagSet.BoolVar(&noBrowser, "no-browser", false, "Do not open the app URL in your browser")
 	flagSet.BoolVar(&cfg.dev, "dev", cfg.dev, "Start the Vite dev server for frontend development")
+	flagSet.StringVar(&cfg.font, "font", cfg.font, "Code font family to try before the default JetBrains Mono stack")
 	flagSet.DurationVar(&cfg.reviewTimeout, "review-timeout", cfg.reviewTimeout, "Max time to keep `diffx review` waiting for feedback (0 disables timeout)")
 	flagSet.Usage = func() {
-		fmt.Fprintln(flagSet.Output(), "Usage: diffx [review] [path] [-a 127.0.0.1] [-p 8080] [--dev] [--no-browser] [--review-timeout 30m]")
+		fmt.Fprintln(flagSet.Output(), "Usage: diffx [review] [path] [-a 127.0.0.1] [-p 8080] [--dev] [--font \"Berkeley Mono Variable\"] [--no-browser] [--review-timeout 30m]")
 		flagSet.PrintDefaults()
 	}
 
@@ -73,6 +75,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	if noBrowser {
 		cfg.openBrowser = false
 	}
+	cfg.font = strings.TrimSpace(cfg.font)
 
 	remainingArgs := flagSet.Args()
 	if len(remainingArgs) > 1 {

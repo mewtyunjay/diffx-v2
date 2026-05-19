@@ -83,6 +83,20 @@ func TestParseConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "custom code font",
+			args: []string{"--font", " Berkeley Mono Variable "},
+			want: config{
+				address:       defaultAddress,
+				port:          defaultPort,
+				explicitPort:  false,
+				openBrowser:   true,
+				reviewTimeout: defaultReviewTimeout,
+				dev:           false,
+				font:          "Berkeley Mono Variable",
+				targetPath:    ".",
+			},
+		},
+		{
 			name: "review mode",
 			args: []string{"review"},
 			want: config{

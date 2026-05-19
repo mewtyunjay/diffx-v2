@@ -47,6 +47,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 			WorkingDir: mustGetwd(),
 			DevURL:     defaultFrontendURL,
 			LogOutput:  stdout,
+			FontFamily: cfg.font,
 		},
 		Review: server.ReviewConfig{
 			Enabled: cfg.reviewMode,

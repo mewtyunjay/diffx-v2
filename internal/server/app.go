@@ -19,12 +19,17 @@ type FrontendConfig struct {
 	WorkingDir string
 	DevURL     string
 	LogOutput  io.Writer
+	FontFamily string
 }
 
 type Config struct {
 	Workspace gitstatus.WorkspaceTarget
 	Frontend  FrontendConfig
 	Review    ReviewConfig
+}
+
+type AppConfig struct {
+	FontFamily string `json:"fontFamily,omitempty"`
 }
 
 type ReviewConfig struct {
@@ -45,6 +50,7 @@ type App struct {
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
 	reviewFeedback  *reviewFeedbackCoordinator
+	appConfig       AppConfig
 	assets          fs.FS
 	indexHTML       []byte
 	fileSrv         http.Handler
@@ -174,6 +180,9 @@ func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
 		reviewFeedback: newReviewFeedbackCoordinator(
 			cfg.Review.Enabled,
 		),
+		appConfig: AppConfig{
+			FontFamily: cfg.Frontend.FontFamily,
+		},
 	}, nil
 }
 

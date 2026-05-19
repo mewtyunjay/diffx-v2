@@ -191,6 +191,44 @@ func TestHandleReviewStateReflectsSubmittedFeedback(t *testing.T) {
 	}
 }
 
+func TestHandleAppConfigReturnsConfiguredFont(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app, err := newWithAssets(
+		Config{
+			Workspace: gitstatus.WorkspaceTarget{
+				RepoRoot:  repoRoot,
+				ScopePath: ".",
+			},
+			Frontend: FrontendConfig{
+				FontFamily: "Berkeley Mono Variable",
+			},
+		},
+		testAssets(),
+	)
+	if err != nil {
+		t.Fatalf("newWithAssets returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := app.Close(); err != nil {
+			t.Fatalf("close app: %v", err)
+		}
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/app-config", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", recorder.Code)
+	}
+	if got := strings.TrimSpace(recorder.Body.String()); got != `{"fontFamily":"Berkeley Mono Variable"}` {
+		t.Fatalf("unexpected body: %s", got)
+	}
+}
+
 func TestHandleStageFileRejectsUnknownFields(t *testing.T) {
 	t.Parallel()
 

@@ -3,6 +3,7 @@ package server
 import "net/http"
 
 func (a *App) registerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/app-config", a.handleAppConfig)
 	mux.HandleFunc("/api/branches", a.handleBranches)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
