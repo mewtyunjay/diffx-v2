@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
@@ -15,7 +16,7 @@ import (
 const maxCommitPromptDiffChars = 120000
 
 const (
-	defaultCodexCommitModel  = "gpt-5.4-codex-spark"
+	defaultCodexCommitModel  = "gpt-5.4-mini"
 	defaultClaudeCommitModel = "claude-sonnet-4-6"
 )
 
@@ -28,6 +29,7 @@ type Service struct {
 
 	runner runner
 	specs  []providerSpec
+	logger *slog.Logger
 
 	mu               sync.RWMutex
 	agentStatusByID  map[ProviderID]AgentStatus
@@ -35,10 +37,15 @@ type Service struct {
 	bootProbeStarted bool
 }
 
-func NewService(repoRoot string, scopePath string) (*Service, error) {
+func NewService(repoRoot string, scopePath string, loggers ...*slog.Logger) (*Service, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolve home directory: %w", err)
+	}
+
+	var logger *slog.Logger
+	if len(loggers) > 0 {
+		logger = loggers[0]
 	}
 
 	service := &Service{
@@ -48,6 +55,7 @@ func NewService(repoRoot string, scopePath string) (*Service, error) {
 		store:            newConfigStore(homeDir),
 		runner:           execRunner{},
 		specs:            defaultProviderSpecs(),
+		logger:           logger,
 		agentStatusByID:  make(map[ProviderID]AgentStatus),
 		agentsRefreshing: false,
 		bootProbeStarted: false,
@@ -75,7 +83,8 @@ func (s *Service) RefreshAgents(ctx context.Context) ([]AgentStatus, error) {
 
 	statuses := make(map[ProviderID]AgentStatus, len(s.specs))
 	for _, spec := range s.specs {
-		statuses[spec.ID] = detectProviderStatus(ctx, s.runner, s.homeDir, spec)
+		status := detectProviderStatus(ctx, s.runner, s.homeDir, spec)
+		statuses[spec.ID] = status
 	}
 
 	s.mu.Lock()
@@ -83,6 +92,8 @@ func (s *Service) RefreshAgents(ctx context.Context) ([]AgentStatus, error) {
 	s.agentsRefreshing = false
 	agents := s.snapshotAgentsLocked()
 	s.mu.Unlock()
+
+	s.logDebug("providers", "summary", formatAgentSummary(agents))
 
 	return agents, nil
 }
@@ -271,16 +282,31 @@ func (s *Service) generateCommitMessageWithProvider(
 	runCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
+	started := time.Now()
+	logArgs := redactProviderCommandArgs(provider, args)
+	s.logDebug(
+		fmt.Sprintf("%s exec start", provider),
+		"binary", agentStatus.BinaryPath,
+		"working_dir", displayWorkingDir(workingDir),
+		"args", strings.Join(logArgs, " "),
+		"diff_chars", len(diffText),
+	)
+
 	stdout, stderr, err := s.runner.Run(runCtx, agentStatus.BinaryPath, args, workingDir)
+	duration := time.Since(started).Round(time.Millisecond)
 	if err != nil {
-		firstLine := firstNonEmptyLine(stderr)
-		if firstLine == "" {
-			firstLine = firstNonEmptyLine(stdout)
-		}
-		if firstLine == "" {
-			firstLine = err.Error()
-		}
-		return "", fmt.Errorf("%s headless execution failed: %s", provider, firstLine)
+		diagnostic := providerFailureDiagnostic(stderr, stdout, err)
+		s.logError(
+			fmt.Sprintf("%s: %s", provider, diagnostic),
+			"binary", agentStatus.BinaryPath,
+			"working_dir", displayWorkingDir(workingDir),
+			"args", strings.Join(logArgs, " "),
+			"duration", duration,
+			"stderr", truncateLogValue(providerFailureDiagnostic(stderr, "", nil), 300),
+			"stdout", truncateLogValue(providerFailureDiagnostic("", stdout, nil), 300),
+			"error", err.Error(),
+		)
+		return "", fmt.Errorf("%s headless execution failed: %s", provider, diagnostic)
 	}
 
 	message := sanitizeCommitMessage(stdout)
@@ -288,8 +314,24 @@ func (s *Service) generateCommitMessageWithProvider(
 		message = sanitizeCommitMessage(stderr)
 	}
 	if message == "" {
+		s.logError(
+			fmt.Sprintf("%s exec empty", provider),
+			"binary", agentStatus.BinaryPath,
+			"working_dir", displayWorkingDir(workingDir),
+			"args", strings.Join(logArgs, " "),
+			"duration", duration,
+			"stderr", truncateLogValue(firstNonEmptyLine(stderr), 300),
+			"stdout", truncateLogValue(firstNonEmptyLine(stdout), 300),
+		)
 		return "", fmt.Errorf("%s returned an empty commit message", provider)
 	}
+
+	s.logDebug(
+		fmt.Sprintf("%s exec ok", provider),
+		"binary", agentStatus.BinaryPath,
+		"working_dir", displayWorkingDir(workingDir),
+		"duration", duration,
+	)
 
 	return message, nil
 }
@@ -486,4 +528,159 @@ func firstNonEmptyLine(value string) string {
 	}
 
 	return ""
+}
+
+func providerFailureDiagnostic(stderr string, stdout string, runErr error) string {
+	for _, value := range []string{stderr, stdout} {
+		if line := preferredDiagnosticLine(value); line != "" {
+			return line
+		}
+	}
+
+	for _, value := range []string{stderr, stdout} {
+		if line := firstUsefulDiagnosticLine(value); line != "" {
+			return line
+		}
+	}
+
+	if runErr != nil {
+		return runErr.Error()
+	}
+
+	return ""
+}
+
+func preferredDiagnosticLine(value string) string {
+	for _, line := range diagnosticLines(value) {
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "warning:") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(lower, "error:"):
+			return strings.TrimSpace(line[len("error:"):])
+		case strings.HasPrefix(lower, "fatal:"):
+			return line
+		case strings.Contains(lower, "operation not permitted"):
+			return line
+		case strings.Contains(lower, "permission denied"):
+			return line
+		case strings.Contains(lower, "not logged in"):
+			return line
+		case strings.Contains(lower, "unauthorized"):
+			return line
+		case strings.Contains(lower, "authentication"):
+			return line
+		}
+	}
+
+	return ""
+}
+
+func firstUsefulDiagnosticLine(value string) string {
+	for _, line := range diagnosticLines(value) {
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "warning:") {
+			continue
+		}
+		if strings.Contains(lower, "reading additional input from stdin") {
+			continue
+		}
+		return line
+	}
+
+	return ""
+}
+
+func diagnosticLines(value string) []string {
+	var lines []string
+	for _, line := range strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		lines = append(lines, trimmed)
+	}
+
+	return lines
+}
+
+func (s *Service) logDebug(message string, args ...any) {
+	if s.logger == nil {
+		return
+	}
+
+	s.logger.Debug(message, args...)
+}
+
+func (s *Service) logError(message string, args ...any) {
+	if s.logger == nil {
+		return
+	}
+
+	s.logger.Error(message, args...)
+}
+
+func redactProviderCommandArgs(provider ProviderID, args []string) []string {
+	redacted := append([]string(nil), args...)
+	switch provider {
+	case ProviderCodex:
+		if len(redacted) > 0 {
+			redacted[len(redacted)-1] = "<prompt>"
+		}
+	case ProviderClaude:
+		for index := 0; index < len(redacted)-1; index++ {
+			if redacted[index] == "-p" || redacted[index] == "--print" {
+				redacted[index+1] = "<prompt>"
+				index++
+			}
+		}
+	}
+
+	return redacted
+}
+
+func displayWorkingDir(workingDir string) string {
+	if strings.TrimSpace(workingDir) == "" {
+		return "<default>"
+	}
+
+	return workingDir
+}
+
+func truncateLogValue(value string, maxLength int) string {
+	if len(value) <= maxLength {
+		return value
+	}
+	if maxLength <= 3 {
+		return value[:maxLength]
+	}
+
+	return value[:maxLength-3] + "..."
+}
+
+func formatAgentSummary(agents []AgentStatus) string {
+	parts := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		status := "unavailable"
+		switch {
+		case agent.Selectable:
+			status = "ok"
+		case agent.Available:
+			status = "not-ready"
+		}
+
+		detail := strings.TrimSpace(agent.BinaryPath)
+		if detail == "" {
+			detail = strings.TrimSpace(agent.Reason)
+		}
+		if detail != "" {
+			parts = append(parts, fmt.Sprintf("%s=%s (%s)", agent.ID, status, detail))
+			continue
+		}
+
+		parts = append(parts, fmt.Sprintf("%s=%s", agent.ID, status))
+	}
+
+	return strings.Join(parts, ", ")
 }

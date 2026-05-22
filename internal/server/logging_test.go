@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,7 +11,7 @@ import (
 func TestLogAPIMiddlewareLogsStatusCodes(t *testing.T) {
 	var output bytes.Buffer
 	app := &App{
-		apiLogger: log.New(&output, "", 0),
+		logger: newBackendLogger(FrontendConfig{Debug: true, LogOutput: &output}),
 	}
 
 	handler := app.logAPIMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,16 +27,15 @@ func TestLogAPIMiddlewareLogsStatusCodes(t *testing.T) {
 		t.Fatalf("expected 204 response, got %d", recorder.Code)
 	}
 
-	logged := output.String()
-	if !strings.Contains(logged, "POST /api/git/stage-all -> 204") {
-		t.Fatalf("expected success log entry, got %q", logged)
+	if output.Len() != 0 {
+		t.Fatalf("expected successful request to stay quiet, got %q", output.String())
 	}
 }
 
 func TestLogAPIMiddlewareLogsErrorBody(t *testing.T) {
 	var output bytes.Buffer
 	app := &App{
-		apiLogger: log.New(&output, "", 0),
+		logger: loggerWithComponent(newBackendLogger(FrontendConfig{Debug: true, LogOutput: &output}), "api"),
 	}
 
 	handler := app.logAPIMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +52,10 @@ func TestLogAPIMiddlewareLogsErrorBody(t *testing.T) {
 	}
 
 	logged := output.String()
-	if !strings.Contains(logged, "POST /api/git/stage-all -> 500") {
+	if !strings.Contains(logged, "[api] WARN request failed") ||
+		!strings.Contains(logged, "POST") ||
+		!strings.Contains(logged, "/api/git/stage-all") ||
+		!strings.Contains(logged, "500") {
 		t.Fatalf("expected error status in log entry, got %q", logged)
 	}
 	if !strings.Contains(logged, `error="fatal: Unable to create '/tmp/repo/.git/index.lock': File exists."`) {
@@ -65,7 +66,7 @@ func TestLogAPIMiddlewareLogsErrorBody(t *testing.T) {
 func TestLogAPIMiddlewareSkipsNonAPIRequests(t *testing.T) {
 	var output bytes.Buffer
 	app := &App{
-		apiLogger: log.New(&output, "", 0),
+		logger: loggerWithComponent(newBackendLogger(FrontendConfig{Debug: true, LogOutput: &output}), "api"),
 	}
 
 	handler := app.logAPIMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

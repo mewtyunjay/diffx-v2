@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 
@@ -16,6 +16,7 @@ import (
 
 type FrontendConfig struct {
 	Dev        bool
+	Debug      bool
 	WorkingDir string
 	DevURL     string
 	LogOutput  io.Writer
@@ -56,14 +57,14 @@ type App struct {
 	fileSrv         http.Handler
 	frontendHandler http.Handler
 	frontendCloser  func() error
-	apiLogger       *log.Logger
+	logger          *slog.Logger
 	closeOnce       sync.Once
 	closeErr        error
 }
 
 func New(cfg Config) (*App, error) {
 	repoEvents := newRepoEventHub()
-	logger := newAPILogger(cfg.Frontend)
+	logger := newBackendLogger(cfg.Frontend)
 
 	if shouldUseFrontendDev(cfg.Frontend) {
 		frontendHandler, frontendCloser, err := newFrontendDevServer(cfg.Frontend)
@@ -71,7 +72,7 @@ func New(cfg Config) (*App, error) {
 			return nil, err
 		}
 
-		app, err := newApp(cfg, repoEvents)
+		app, err := newApp(cfg, repoEvents, logger)
 		if err != nil {
 			_ = frontendCloser()
 			return nil, err
@@ -79,7 +80,7 @@ func New(cfg Config) (*App, error) {
 
 		app.frontendHandler = frontendHandler
 		app.frontendCloser = frontendCloser
-		app.apiLogger = logger
+		app.logger = loggerWithComponent(logger, "api")
 
 		return app, nil
 	}
@@ -93,7 +94,7 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	app.apiLogger = logger
+	app.logger = loggerWithComponent(logger, "api")
 
 	return app, nil
 }
@@ -113,7 +114,7 @@ func newWithAssetFS(cfg Config, assets fs.FS) (*App, error) {
 		return nil, err
 	}
 
-	app, err := newApp(cfg, newRepoEventHub())
+	app, err := newApp(cfg, newRepoEventHub(), newBackendLogger(cfg.Frontend))
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +130,7 @@ func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
 	a.registerRoutes(mux)
 	handler := a.suppressRepoWatcherGitEventsMiddleware(mux)
-	if a.apiLogger != nil {
+	if a.logger != nil {
 		return a.logAPIMiddleware(handler)
 	}
 
@@ -158,14 +159,14 @@ func (a *App) Close() error {
 	return a.closeErr
 }
 
-func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
+func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, error) {
 	watcher, err := newRepoWatcher(cfg.Workspace, repoEvents)
 	if err != nil {
 		_ = repoEvents.Close()
 		return nil, err
 	}
 
-	aiService, err := ai.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath)
+	aiService, err := ai.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath, loggerWithComponent(logger, "agent"))
 	if err != nil {
 		_ = repoEvents.Close()
 		_ = watcher.Close()
@@ -177,6 +178,7 @@ func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
 		aiService:   aiService,
 		repoEvents:  repoEvents,
 		repoWatcher: watcher,
+		logger:      loggerWithComponent(logger, "api"),
 		reviewFeedback: newReviewFeedbackCoordinator(
 			cfg.Review.Enabled,
 		),

@@ -23,6 +23,7 @@ type config struct {
 	openBrowser   bool
 	reviewTimeout time.Duration
 	dev           bool
+	debug         bool
 	reviewMode    bool
 	font          string
 	targetPath    string
@@ -52,14 +53,15 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	noBrowser := false
 	flagSet.BoolVar(&noBrowser, "no-browser", false, "Do not open the app URL in your browser")
 	flagSet.BoolVar(&cfg.dev, "dev", cfg.dev, "Start the Vite dev server for frontend development")
+	flagSet.BoolVar(&cfg.debug, "debug", cfg.debug, "Print structured backend debug logs")
 	flagSet.StringVar(&cfg.font, "font", cfg.font, "Code font family to try before the default JetBrains Mono stack")
 	flagSet.DurationVar(&cfg.reviewTimeout, "review-timeout", cfg.reviewTimeout, "Max time to keep `diffx review` waiting for feedback (0 disables timeout)")
 	flagSet.Usage = func() {
-		fmt.Fprintln(flagSet.Output(), "Usage: diffx [review] [path] [-a 127.0.0.1] [-p 8080] [--dev] [--font \"Berkeley Mono Variable\"] [--no-browser] [--review-timeout 30m]")
+		fmt.Fprintln(flagSet.Output(), "Usage: diffx [review] [path] [-a 127.0.0.1] [-p 8080] [--dev] [--debug] [--font \"Berkeley Mono Variable\"] [--no-browser] [--review-timeout 30m]")
 		flagSet.PrintDefaults()
 	}
 
-	normalizedArgs := normalizeFlagAliases(args)
+	normalizedArgs := reorderFlagsBeforePositionals(normalizeFlagAliases(args))
 	if err := flagSet.Parse(normalizedArgs); err != nil {
 		return config{}, err
 	}
@@ -106,4 +108,43 @@ func normalizeFlagAliases(args []string) []string {
 	}
 
 	return normalized
+}
+
+func reorderFlagsBeforePositionals(args []string) []string {
+	flags := make([]string, 0, len(args))
+	positionals := make([]string, 0, len(args))
+
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		if arg == "--" {
+			positionals = append(positionals, args[index+1:]...)
+			break
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			positionals = append(positionals, arg)
+			continue
+		}
+
+		flags = append(flags, arg)
+		if flagExpectsValue(arg) && !strings.Contains(arg, "=") && index+1 < len(args) {
+			index++
+			flags = append(flags, args[index])
+		}
+	}
+
+	return append(flags, positionals...)
+}
+
+func flagExpectsValue(arg string) bool {
+	name := strings.TrimLeft(arg, "-")
+	if before, _, ok := strings.Cut(name, "="); ok {
+		name = before
+	}
+
+	switch name {
+	case "a", "address", "p", "port", "font", "review-timeout":
+		return true
+	default:
+		return false
+	}
 }

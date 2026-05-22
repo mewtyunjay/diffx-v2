@@ -83,6 +83,33 @@ func TestParseConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "debug logs",
+			args: []string{"--debug"},
+			want: config{
+				address:       defaultAddress,
+				port:          defaultPort,
+				explicitPort:  false,
+				openBrowser:   true,
+				reviewTimeout: defaultReviewTimeout,
+				dev:           false,
+				debug:         true,
+				targetPath:    ".",
+			},
+		},
+		{
+			name: "path before dev flag",
+			args: []string{"frontend", "--dev", "--no-browser"},
+			want: config{
+				address:       defaultAddress,
+				port:          defaultPort,
+				explicitPort:  false,
+				openBrowser:   false,
+				reviewTimeout: defaultReviewTimeout,
+				dev:           true,
+				targetPath:    "frontend",
+			},
+		},
+		{
 			name: "custom code font",
 			args: []string{"--font", " Berkeley Mono Variable "},
 			want: config{

@@ -208,6 +208,32 @@ func TestServiceSuggestCommitMessageUsesClaudeDefaultModel(t *testing.T) {
 	}
 }
 
+func TestProviderFailureDiagnosticPrefersCodexErrorLine(t *testing.T) {
+	t.Parallel()
+
+	stderr := strings.Join([]string{
+		"WARNING: proceeding, even though we could not update PATH: Operation not permitted (os error 1)",
+		"Reading additional input from stdin...",
+		"Error: failed to initialize in-process app-server client: Operation not permitted (os error 1)",
+	}, "\n")
+
+	got := providerFailureDiagnostic(stderr, "", errors.New("exit status 1"))
+	want := "failed to initialize in-process app-server client: Operation not permitted (os error 1)"
+	if got != want {
+		t.Fatalf("providerFailureDiagnostic() = %q, want %q", got, want)
+	}
+}
+
+func TestProviderFailureDiagnosticSkipsProgressLines(t *testing.T) {
+	t.Parallel()
+
+	got := providerFailureDiagnostic("Reading additional input from stdin...\nmodel unavailable", "", errors.New("exit status 1"))
+	want := "model unavailable"
+	if got != want {
+		t.Fatalf("providerFailureDiagnostic() = %q, want %q", got, want)
+	}
+}
+
 type serviceCommitRunner struct {
 	binaryPath string
 	repoRoot   string

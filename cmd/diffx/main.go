@@ -44,6 +44,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		Workspace: workspace,
 		Frontend: server.FrontendConfig{
 			Dev:        cfg.dev,
+			Debug:      cfg.debug,
 			WorkingDir: mustGetwd(),
 			DevURL:     defaultFrontendURL,
 			LogOutput:  stdout,
