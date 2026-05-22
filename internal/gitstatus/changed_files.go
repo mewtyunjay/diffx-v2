@@ -31,18 +31,31 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		return ChangedFilesResult{}, err
 	}
 
+	var branchSync BranchSyncStatus
+	var branchSyncErr error
+	branchSyncDone := make(chan struct{})
+	go func() {
+		defer close(branchSyncDone)
+		branchSync, branchSyncErr = s.BranchSyncStatus(ctx)
+	}()
+	waitForBranchSync := func() error {
+		<-branchSyncDone
+		return branchSyncErr
+	}
+
 	statusFiles, err := s.listStatusFiles(ctx)
 	if err != nil {
+		_ = waitForBranchSync()
 		return ChangedFilesResult{}, err
 	}
 
 	mergeState, err := s.ReadMergeState(ctx, statusFiles)
 	if err != nil {
+		_ = waitForBranchSync()
 		return ChangedFilesResult{}, err
 	}
 
-	branchSync, err := s.BranchSyncStatus(ctx)
-	if err != nil {
+	if err := waitForBranchSync(); err != nil {
 		return ChangedFilesResult{}, err
 	}
 

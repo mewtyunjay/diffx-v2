@@ -18,13 +18,28 @@ type UseSelectedDiffOptions = {
   baseCommit: string
   selectedBaseRef: string
   selectedFile: DiffSelectableFile | null
+  initialDiff?: FileDiffResult | null
   onDiffLoaded?: (diff: PreparedFileDiffResult) => void
+}
+
+function matchesSelectedFileDiff(
+  diff: FileDiffResult,
+  baseCommit: string,
+  file: DiffSelectableFile
+) {
+  return (
+    diff.baseCommit === baseCommit &&
+    diff.path === file.path &&
+    (diff.previousPath ?? "") === (file.previousPath ?? "") &&
+    diff.status === file.status
+  )
 }
 
 export function useSelectedDiff({
   baseCommit,
   selectedBaseRef,
   selectedFile,
+  initialDiff,
   onDiffLoaded,
 }: UseSelectedDiffOptions) {
   const [displayedDiff, setDisplayedDiff] = useState<PreparedFileDiffResult | null>(null)
@@ -109,15 +124,6 @@ export function useSelectedDiff({
     [prepareLoadedDiff, readCachedDiff]
   )
 
-  const primePreparedDiff = useCallback(
-    (
-      nextBaseCommit: string,
-      file: Pick<ChangedFileItem, "path" | "contentKey">,
-      diff: FileDiffResult
-    ) => prepareLoadedDiff(nextBaseCommit, file, diff),
-    [prepareLoadedDiff]
-  )
-
   const currentDisplayedDiff =
     displayedDiff &&
     selectedFile &&
@@ -137,6 +143,10 @@ export function useSelectedDiff({
 
     const cacheKey = createDiffCacheKey(baseCommit, selectedFile)
     const cachedDiff = readCachedDiff(cacheKey)
+    const preparedInitialDiffRequest =
+      !cachedDiff && initialDiff && matchesSelectedFileDiff(initialDiff, baseCommit, selectedFile)
+        ? prepareLoadedDiff(baseCommit, selectedFile, initialDiff)
+        : null
     const controller = new AbortController()
     diffAbortRef.current = controller
     queueMicrotask(() => {
@@ -160,6 +170,8 @@ export function useSelectedDiff({
     const inFlightPreparedDiff = diffPrepareRequestCacheRef.current.get(cacheKey)
     const request = cachedDiff
       ? Promise.resolve(cachedDiff)
+      : preparedInitialDiffRequest
+        ? preparedInitialDiffRequest
       : inFlightPreparedDiff ?? loadDiff(selectedBaseRef, baseCommit, selectedFile, controller.signal)
 
     request
@@ -183,12 +195,20 @@ export function useSelectedDiff({
       })
 
     return () => controller.abort()
-  }, [baseCommit, loadDiff, onDiffLoaded, readCachedDiff, selectedBaseRef, selectedFile])
+  }, [
+    baseCommit,
+    initialDiff,
+    loadDiff,
+    onDiffLoaded,
+    prepareLoadedDiff,
+    readCachedDiff,
+    selectedBaseRef,
+    selectedFile,
+  ])
 
   return {
     currentDisplayedDiff,
     diffError,
     isDiffLoading,
-    primePreparedDiff,
   }
 }

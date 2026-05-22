@@ -103,51 +103,73 @@ export function flattenVisibleTree<T>(
   expandedPaths: Set<string>,
   depth = 0
 ): SidebarTreeRow<T>[] {
-  if (node.kind === "file") {
-    return [
-      {
-        kind: node.kind,
-        name: node.name,
-        path: node.path,
-        depth,
-        isExpanded: false,
-        data: node.data,
-      },
-    ]
-  }
+  const rows: SidebarTreeRow<T>[] = []
+  appendVisibleTreeRows(node, expandedPaths, depth, rows)
+  return rows
+}
 
-  const isExpanded = expandedPaths.has(node.path)
-  const rows: SidebarTreeRow<T>[] = [
-    {
+export function flattenVisibleTreeNodes<T>(
+  nodes: SidebarTreeNode<T>[],
+  expandedPaths: Set<string>,
+  depth = 0
+): SidebarTreeRow<T>[] {
+  const rows: SidebarTreeRow<T>[] = []
+  for (const node of nodes) {
+    appendVisibleTreeRows(node, expandedPaths, depth, rows)
+  }
+  return rows
+}
+
+function appendVisibleTreeRows<T>(
+  node: SidebarTreeNode<T>,
+  expandedPaths: Set<string>,
+  depth: number,
+  rows: SidebarTreeRow<T>[]
+) {
+  if (node.kind === "file") {
+    rows.push({
       kind: node.kind,
       name: node.name,
       path: node.path,
       depth,
-      isExpanded,
-    },
-  ]
+      isExpanded: false,
+      data: node.data,
+    })
+    return
+  }
+
+  const isExpanded = expandedPaths.has(node.path)
+  rows.push({
+    kind: node.kind,
+    name: node.name,
+    path: node.path,
+    depth,
+    isExpanded,
+  })
 
   if (!isExpanded) {
-    return rows
+    return
   }
 
   for (const child of node.children) {
-    rows.push(...flattenVisibleTree(child, expandedPaths, depth + 1))
+    appendVisibleTreeRows(child, expandedPaths, depth + 1, rows)
   }
-
-  return rows
 }
 
 export function collectFolderPaths<T>(node: SidebarTreeFolderNode<T>) {
-  const paths = [node.path]
+  const paths: string[] = []
+  appendFolderPaths(node, paths)
+  return paths
+}
+
+function appendFolderPaths<T>(node: SidebarTreeFolderNode<T>, paths: string[]) {
+  paths.push(node.path)
 
   for (const child of node.children) {
     if (child.kind === "folder") {
-      paths.push(...collectFolderPaths(child))
+      appendFolderPaths(child, paths)
     }
   }
-
-  return paths
 }
 
 export function getAncestorFolderPaths(path: string, rootPath = ".") {

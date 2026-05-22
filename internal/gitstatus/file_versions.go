@@ -214,11 +214,18 @@ func (s *Service) readFileDiffWithComparison(
 			result.PreviousPath = beforePath
 		}
 
-		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, beforePath)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		afterResult, err = s.readWorkingTreeVersion(path)
+		err = runParallel(
+			func() error {
+				var readErr error
+				beforeResult, readErr = s.readGitVersion(ctx, comparison.BaseCommit, beforePath)
+				return readErr
+			},
+			func() error {
+				var readErr error
+				afterResult, readErr = s.readWorkingTreeVersion(path)
+				return readErr
+			},
+		)
 		if err != nil {
 			return FileDiffResult{}, err
 		}
@@ -226,11 +233,18 @@ func (s *Service) readFileDiffWithComparison(
 		result.Before = beforeResult.version
 		result.After = afterResult.version
 	case StatusConflicted:
-		beforeResult, err = s.readOptionalGitVersion(ctx, comparison.BaseCommit, path)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		afterResult, err = s.readOptionalWorkingTreeVersion(path)
+		err = runParallel(
+			func() error {
+				var readErr error
+				beforeResult, readErr = s.readOptionalGitVersion(ctx, comparison.BaseCommit, path)
+				return readErr
+			},
+			func() error {
+				var readErr error
+				afterResult, readErr = s.readOptionalWorkingTreeVersion(path)
+				return readErr
+			},
+		)
 		if err != nil {
 			return FileDiffResult{}, err
 		}
@@ -238,11 +252,18 @@ func (s *Service) readFileDiffWithComparison(
 		result.Before = beforeResult.version
 		result.After = afterResult.version
 	default:
-		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, path)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		afterResult, err = s.readWorkingTreeVersion(path)
+		err = runParallel(
+			func() error {
+				var readErr error
+				beforeResult, readErr = s.readGitVersion(ctx, comparison.BaseCommit, path)
+				return readErr
+			},
+			func() error {
+				var readErr error
+				afterResult, readErr = s.readWorkingTreeVersion(path)
+				return readErr
+			},
+		)
 		if err != nil {
 			return FileDiffResult{}, err
 		}

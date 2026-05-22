@@ -61,21 +61,33 @@ export function useRepoEventsRefresh({
           const controller = new AbortController()
           abortRef.current = controller
 
-          try {
-            await refreshChangedFilesRef.current(controller.signal)
-          } catch (error) {
-            handleRefreshError(error, "files", controller.signal, onErrorRef.current, cancelled)
+          const refreshes = [refreshChangedFilesRef.current(controller.signal)]
+          if (cycleKind === "git") {
+            refreshes.push(refreshBranchesRef.current(controller.signal))
+          }
+          const results = await Promise.allSettled(refreshes)
+
+          const filesResult = results[0]
+          if (filesResult.status === "rejected") {
+            handleRefreshError(
+              filesResult.reason,
+              "files",
+              controller.signal,
+              onErrorRef.current,
+              cancelled
+            )
             break
           }
 
-          if (cycleKind !== "git") {
-            continue
-          }
-
-          try {
-            await refreshBranchesRef.current(controller.signal)
-          } catch (error) {
-            handleRefreshError(error, "branches", controller.signal, onErrorRef.current, cancelled)
+          const branchesResult = results[1]
+          if (branchesResult?.status === "rejected") {
+            handleRefreshError(
+              branchesResult.reason,
+              "branches",
+              controller.signal,
+              onErrorRef.current,
+              cancelled
+            )
             break
           }
         }

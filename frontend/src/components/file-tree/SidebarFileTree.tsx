@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ReactNode } from "react"
+import { useCallback, useMemo, useRef, type ReactNode } from "react"
 import { ChevronDown, ChevronRight, Folder, FolderOpen } from "lucide-react"
 
 import {
@@ -10,7 +10,11 @@ import {
 import { cn } from "@/lib/utils"
 
 import { FileTreeFileIcon } from "@/components/file-tree/file-icon"
-import { flattenVisibleTree, type SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
+import {
+  flattenVisibleTree,
+  flattenVisibleTreeNodes,
+  type SidebarTreeFolderNode,
+} from "@/components/file-tree/tree-model"
 
 type SidebarFileTreeProps<T> = {
   root: SidebarTreeFolderNode<T>
@@ -39,10 +43,12 @@ export function SidebarFileTree<T>({
   onToggleFolder,
   onSelectFile,
 }: SidebarFileTreeProps<T>) {
-  const expandedPathSet = new Set(expandedPaths)
-  const rows = showRoot
-    ? flattenVisibleTree(root, expandedPathSet)
-    : root.children.flatMap((child) => flattenVisibleTree(child, expandedPathSet, 0))
+  const rows = useMemo(() => {
+    const expandedPathSet = new Set(expandedPaths)
+    return showRoot
+      ? flattenVisibleTree(root, expandedPathSet)
+      : flattenVisibleTreeNodes(root.children, expandedPathSet)
+  }, [expandedPaths, root, showRoot])
 
   const prevSelectedPath = useRef(selectedPath)
   const scrollRef = useCallback(

@@ -145,9 +145,9 @@ export function DiffViewerPage() {
     currentDisplayedDiff,
     diffError,
     isDiffLoading,
-    primePreparedDiff,
   } = useSelectedDiff({
     baseCommit,
+    initialDiff: latestChangedFilesResult?.initialDiff ?? null,
     selectedBaseRef,
     selectedFile,
   })
@@ -184,22 +184,7 @@ export function DiffViewerPage() {
     }
 
     pruneForFiles(latestChangedFilesResult.files)
-
-    const initialDiff = latestChangedFilesResult.initialDiff
-    if (!initialDiff) {
-      return
-    }
-
-    const initialDiffFile =
-      latestChangedFilesResult.files.find((file) => file.path === initialDiff.path) ?? null
-    if (!initialDiffFile) {
-      return
-    }
-
-    void primePreparedDiff(latestChangedFilesResult.baseCommit, initialDiffFile, initialDiff).catch(
-      () => undefined
-    )
-  }, [latestChangedFilesResult, primePreparedDiff, pruneForFiles])
+  }, [latestChangedFilesResult, pruneForFiles])
 
   const gitActions = useGitActionCommands({
     currentBranch: currentRef,
