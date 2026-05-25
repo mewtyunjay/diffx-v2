@@ -6,6 +6,7 @@ import type {
   ConflictFileResult,
   ConflictResolveResult,
   FileDiffResult,
+  HunkActionInput,
   PushResult,
   ReviewStateResult,
   RepoChangedEvent,
@@ -116,6 +117,14 @@ export async function unstageFile(
 
 export async function unstageAll(signal?: AbortSignal) {
   return postJSON<void>("/api/git/unstage-all", undefined, signal)
+}
+
+export async function acceptHunk(input: HunkActionInput, signal?: AbortSignal) {
+  return postJSON<void>("/api/git/hunk/accept", input, signal)
+}
+
+export async function rejectHunk(input: HunkActionInput, signal?: AbortSignal) {
+  return postJSON<void>("/api/git/hunk/reject", input, signal)
 }
 
 export async function commitStaged(message: string, signal?: AbortSignal) {

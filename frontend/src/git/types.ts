@@ -66,6 +66,14 @@ export type PushResult = {
   createdUpstream: boolean
 }
 
+export type HunkActionInput = Pick<
+  FileDiffResult,
+  "path" | "previousPath" | "status"
+> & {
+  hunkIndex: number
+  hunkPatch: string
+}
+
 export type SubmitReviewFeedbackInput = {
   approved: boolean
   feedback: string
@@ -104,6 +112,7 @@ export type FileDiffResult = {
   language?: string
   before: FileVersionResult
   after: FileVersionResult
+  stagedAfter?: FileVersionResult
   binary?: boolean
   tooLarge?: boolean
 }

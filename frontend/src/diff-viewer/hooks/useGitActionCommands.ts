@@ -1,17 +1,19 @@
 import { useCallback, useMemo, useState } from "react"
 
 import {
+  acceptHunk,
   checkoutBranch,
   commitStaged,
   fetchRemote,
   pullCurrentBranch,
   pushCurrentBranch,
+  rejectHunk,
   stageAll,
   stageFile,
   unstageAll,
   unstageFile,
 } from "@/git/api"
-import type { ChangedFileItem } from "@/git/types"
+import type { ChangedFileItem, HunkActionInput } from "@/git/types"
 import { toast } from "@/components/ui/sonner"
 import { getToastErrorDescription } from "@/lib/toast-errors"
 
@@ -29,6 +31,7 @@ export function useGitActionCommands({
   refreshChangedFiles,
 }: UseGitActionCommandsOptions) {
   const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
+  const [hunkActionPendingKey, setHunkActionPendingKey] = useState<string | null>(null)
   const [isBulkStagePending, setIsBulkStagePending] = useState(false)
   const [commitMessage, setCommitMessage] = useState("")
   const [isCommitPending, setIsCommitPending] = useState(false)
@@ -108,6 +111,55 @@ export function useGitActionCommands({
       "unstage"
     )
   }, [files, handleBulkStage])
+
+  const handleHunkAction = useCallback(
+    async (input: HunkActionInput, mode: "accept" | "reject") => {
+      const pendingKey = `${input.path}:${input.hunkIndex}:${mode}`
+      setHunkActionPendingKey(pendingKey)
+
+      try {
+        if (mode === "accept") {
+          await acceptHunk(input)
+        } else {
+          await rejectHunk(input)
+        }
+
+        toast.success(mode === "accept" ? "Accepted hunk." : "Rejected hunk.", {
+          description:
+            mode === "accept"
+              ? "The selected change is staged for commit."
+              : "The selected change was reverted.",
+        })
+        await refreshChangedFiles()
+      } catch (error) {
+        toast.error(mode === "accept" ? "Couldn’t accept hunk." : "Couldn’t reject hunk.", {
+          description: getToastErrorDescription(
+            error,
+            mode === "accept"
+              ? `Unable to stage the selected hunk in ${input.path}.`
+              : `Unable to revert the selected hunk in ${input.path}.`
+          ),
+        })
+      } finally {
+        setHunkActionPendingKey((current) => (current === pendingKey ? null : current))
+      }
+    },
+    [refreshChangedFiles]
+  )
+
+  const handleAcceptHunk = useCallback(
+    (input: HunkActionInput) => {
+      void handleHunkAction(input, "accept")
+    },
+    [handleHunkAction]
+  )
+
+  const handleRejectHunk = useCallback(
+    (input: HunkActionInput) => {
+      void handleHunkAction(input, "reject")
+    },
+    [handleHunkAction]
+  )
 
   const handleCommit = useCallback(async () => {
     setIsCommitPending(true)
@@ -248,11 +300,13 @@ export function useGitActionCommands({
   return useMemo(
     () => ({
       commitMessage,
+      handleAcceptHunk,
       handleCheckoutBranch,
       handleCommit,
       handleFetch,
       handlePull,
       handlePush,
+      handleRejectHunk,
       handleStageAll,
       handleToggleStage,
       handleUnstageAll,
@@ -263,15 +317,18 @@ export function useGitActionCommands({
       isPullPending,
       isPushPending,
       setCommitMessage,
+      hunkActionPendingKey,
       stagePendingPaths,
     }),
     [
       commitMessage,
+      handleAcceptHunk,
       handleCheckoutBranch,
       handleCommit,
       handleFetch,
       handlePull,
       handlePush,
+      handleRejectHunk,
       handleStageAll,
       handleToggleStage,
       handleUnstageAll,
@@ -281,6 +338,7 @@ export function useGitActionCommands({
       isFetchPending,
       isPullPending,
       isPushPending,
+      hunkActionPendingKey,
       stagePendingPaths,
     ]
   )

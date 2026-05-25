@@ -8,6 +8,7 @@ import {
 import { DiffPlaceholder } from "@/components/diff/DiffPlaceholder"
 import DiffPaneRenderer from "@/components/diff/DiffPaneRenderer"
 import type { PreparedFileDiffResult } from "@/diffs/create"
+import type { HunkActionInput } from "@/git/types"
 
 type DiffPaneProps = {
   diff: PreparedFileDiffResult | null
@@ -21,6 +22,10 @@ type DiffPaneProps = {
     comment: string
   ) => void
   onDeleteAnnotation: (target: Pick<SavedDiffAnnotation, "side" | "lineNumber">) => void
+  enableHunkActions: boolean
+  hunkActionPendingKey: string | null
+  onAcceptHunk: (input: HunkActionInput) => void
+  onRejectHunk: (input: HunkActionInput) => void
 }
 
 type RenderablePreparedDiff = PreparedFileDiffResult & {
@@ -36,6 +41,10 @@ export function DiffPane({
   clearDraftToken,
   onSaveAnnotation,
   onDeleteAnnotation,
+  enableHunkActions,
+  hunkActionPendingKey,
+  onAcceptHunk,
+  onRejectHunk,
 }: DiffPaneProps) {
   const [draftsByDiff, setDraftsByDiff] = useState<Record<string, DraftDiffAnnotation | undefined>>({})
 
@@ -94,6 +103,10 @@ export function DiffPane({
       savedAnnotations={savedAnnotations}
       onSaveAnnotation={onSaveAnnotation}
       onDeleteAnnotation={onDeleteAnnotation}
+      enableHunkActions={enableHunkActions}
+      hunkActionPendingKey={hunkActionPendingKey}
+      onAcceptHunk={onAcceptHunk}
+      onRejectHunk={onRejectHunk}
     />
   )
 }

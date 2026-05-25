@@ -1,4 +1,13 @@
-import { Check, ChevronLeft, ChevronRight, ChevronsUpDown, Columns2, Rows3 } from "lucide-react"
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  Columns2,
+  Minus,
+  Plus,
+  Rows3,
+} from "lucide-react"
 
 import type { PreparedFileDiffResult } from "@/diffs/create"
 import type { ChangedFileItem, ComparisonMode } from "@/git/types"
@@ -67,10 +76,46 @@ function getStageTooltipText(stageState: StageState) {
   }
 
   if (stageState === "partial") {
-    return "Toggle staged state"
+    return "Partially staged. Click to unstage file"
   }
 
   return "Stage file"
+}
+
+function getStageButtonLabel(stageState: StageState) {
+  if (stageState === "partial") {
+    return "Partially staged"
+  }
+
+  if (stageState === "staged") {
+    return "Staged"
+  }
+
+  return "Stage"
+}
+
+function PartialStageIcon() {
+  return (
+    <span
+      aria-hidden="true"
+      className="relative inline-flex h-4 w-3.5 shrink-0 items-center justify-center"
+    >
+      <Plus className="absolute left-1/2 top-0 size-2.5 -translate-x-1/2" strokeWidth={2.5} />
+      <Minus className="absolute bottom-0 left-1/2 size-2.5 -translate-x-1/2" strokeWidth={2.5} />
+    </span>
+  )
+}
+
+function StageStateIcon({ state }: { state: StageState }) {
+  if (state === "partial") {
+    return <PartialStageIcon />
+  }
+
+  if (state === "staged") {
+    return <Check className="size-3" />
+  }
+
+  return null
 }
 
 export function DiffViewerToolbar({
@@ -97,6 +142,7 @@ export function DiffViewerToolbar({
   const showStageToggle = comparisonMode === "head" && selectedFile != null
   const stageState = selectedFile ? getStageState(selectedFile) : "unstaged"
   const stageTooltipText = getStageTooltipText(stageState)
+  const stageButtonLabel = getStageButtonLabel(stageState)
   const stageIsActive = stageState !== "unstaged"
   const stageHasAction =
     selectedFile != null && (selectedFile.hasStagedChanges || selectedFile.hasUnstagedChanges)
@@ -238,8 +284,8 @@ export function DiffViewerToolbar({
                 disabled={stageIsDisabled}
                 onClick={() => onToggleStage(selectedFile)}
               >
-                {stageIsActive ? <Check className="size-3" /> : null}
-                <span>{stageIsActive ? "Staged" : "Stage"}</span>
+                <StageStateIcon state={stageState} />
+                <span>{stageButtonLabel}</span>
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

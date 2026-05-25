@@ -23,7 +23,31 @@ func buildContentKey(repoRoot, relPath string) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%d-%d", info.Size(), info.ModTime().UnixNano()), nil
+	indexKey := buildIndexKey(repoRoot, relPath)
+
+	return fmt.Sprintf("%d-%d:%s", info.Size(), info.ModTime().UnixNano(), indexKey), nil
+}
+
+func buildIndexKey(repoRoot, relPath string) string {
+	cmd := exec.Command(
+		"git",
+		"-C",
+		repoRoot,
+		"ls-files",
+		"-s",
+		"-z",
+		"--",
+		relPath,
+	)
+	output, err := cmd.Output()
+	if err != nil {
+		return "index-unavailable"
+	}
+	if len(output) == 0 {
+		return "index-missing"
+	}
+
+	return "index-" + hashContents(output)
 }
 
 func ResolveRepoPath(repoRoot, relPath string) (string, error) {
@@ -274,6 +298,18 @@ func (s *Service) readFileDiffWithComparison(
 
 	result.Binary = beforeResult.binary || afterResult.binary
 	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
+	if comparison.Mode == ComparisonModeHead && status != StatusConflicted {
+		indexResult, ok, err := s.readOptionalIndexVersion(ctx, path)
+		if err != nil {
+			return FileDiffResult{}, err
+		}
+		if ok && indexResult.version.CacheKey != result.Before.CacheKey {
+			stagedAfter := indexResult.version
+			result.StagedAfter = &stagedAfter
+			result.Binary = result.Binary || indexResult.binary
+			result.TooLarge = result.TooLarge || indexResult.tooLarge
+		}
+	}
 
 	return result, nil
 }
@@ -320,6 +356,43 @@ func (s *Service) readWorkingTreeVersion(relPath string) (cachedFileVersion, err
 	s.versionCache.Set(cacheKey, result)
 
 	return result, nil
+}
+
+func (s *Service) readOptionalIndexVersion(
+	ctx context.Context,
+	relPath string,
+) (cachedFileVersion, bool, error) {
+	indexKey := buildIndexKey(s.repoRoot, relPath)
+	if indexKey == "index-missing" {
+		return cachedFileVersion{}, false, nil
+	}
+
+	cacheKey := fmt.Sprintf("index:%s:%s", relPath, indexKey)
+	if cached, ok := s.versionCache.Get(cacheKey); ok {
+		return cached, true, nil
+	}
+
+	cmd := exec.CommandContext(
+		ctx,
+		"git",
+		"-C",
+		s.repoRoot,
+		"show",
+		fmt.Sprintf(":%s", relPath),
+	)
+	contents, err := cmd.Output()
+	if err != nil {
+		if isGitPathMissingError(err) {
+			return cachedFileVersion{}, false, nil
+		}
+
+		return cachedFileVersion{}, false, fmt.Errorf("git show :%s: %w", relPath, err)
+	}
+
+	result := buildCachedFileVersion(relPath, contents)
+	s.versionCache.Set(cacheKey, result)
+
+	return result, true, nil
 }
 
 func (s *Service) readGitVersion(
@@ -372,6 +445,8 @@ func isGitPathMissingError(err error) bool {
 	// `git show <commit>:<path>` emits one of these messages when the path is absent.
 	message := err.Error()
 	return strings.Contains(message, "exists on disk, but not in") ||
+		strings.Contains(message, "not in the index") ||
+		strings.Contains(message, "neither on disk nor in the index") ||
 		strings.Contains(message, "path does not exist in")
 }
 

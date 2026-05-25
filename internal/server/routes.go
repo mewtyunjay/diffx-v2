@@ -12,6 +12,8 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/git/stage-all", a.handleStageAll)
 	mux.HandleFunc("/api/git/unstage", a.handleUnstageFile)
 	mux.HandleFunc("/api/git/unstage-all", a.handleUnstageAll)
+	mux.HandleFunc("/api/git/hunk/accept", a.handleAcceptHunk)
+	mux.HandleFunc("/api/git/hunk/reject", a.handleRejectHunk)
 	mux.HandleFunc("/api/git/commit", a.handleCommit)
 	mux.HandleFunc("/api/git/push", a.handlePush)
 	mux.HandleFunc("/api/git/fetch", a.handleFetch)

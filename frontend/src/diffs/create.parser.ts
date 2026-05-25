@@ -34,6 +34,7 @@ function createFileVersion(
 
 export function prepareFileDiff(diff: FileDiffResult): PreparedFileDiffResult {
   let parsedDiff = null
+  let stagedParsedDiff = null
 
   if (!diff.binary && !diff.tooLarge && !isPureRenameDiff(diff)) {
     const language = toSupportedLanguage(diff.language)
@@ -49,7 +50,26 @@ export function prepareFileDiff(diff: FileDiffResult): PreparedFileDiffResult {
     } catch {
       parsedDiff = null
     }
+
+    if (diff.stagedAfter) {
+      try {
+        stagedParsedDiff = parseDiffFromFile(
+          createFileVersion(diff.before.name, diff.before.contents, diff.before.cacheKey, language),
+          createFileVersion(
+            diff.stagedAfter.name,
+            diff.stagedAfter.contents,
+            diff.stagedAfter.cacheKey,
+            language
+          ),
+          {
+            context: DIFF_CONTEXT_LINES,
+          }
+        )
+      } catch {
+        stagedParsedDiff = null
+      }
+    }
   }
 
-  return finalizePreparedFileDiff(diff, parsedDiff)
+  return finalizePreparedFileDiff(diff, parsedDiff, stagedParsedDiff)
 }

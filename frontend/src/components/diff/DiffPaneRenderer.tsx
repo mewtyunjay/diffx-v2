@@ -4,7 +4,7 @@ import {
   type DiffLineAnnotation,
   type DiffLineEventBaseProps,
 } from "@pierre/diffs/react"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react"
 
 import {
   createAnnotationTargetKey,
@@ -14,7 +14,11 @@ import {
 } from "@/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
-import type { PreparedFileDiffResult } from "@/diffs/create"
+import {
+  syncHunkActionOverlays,
+  type RenderablePreparedDiff,
+} from "@/components/diff/hunk-action-overlays"
+import type { HunkActionInput } from "@/git/types"
 import "@/components/diff/diff-pane-theme.css"
 
 const DIFF_EXPANSION_LINE_COUNT = 20
@@ -26,6 +30,7 @@ type DraftTarget = {
   side: AnnotationSide
 }
 type DiffLinePointerEvent = DiffLineEventBaseProps & { event: PointerEvent }
+type GetHoveredDiffLine = () => DraftTarget | undefined
 
 type RenderedAnnotationMetadata =
   | {
@@ -35,10 +40,6 @@ type RenderedAnnotationMetadata =
     kind: "saved"
     comment: string
   }
-
-type RenderablePreparedDiff = PreparedFileDiffResult & {
-  parsedDiff: NonNullable<PreparedFileDiffResult["parsedDiff"]>
-}
 
 type DiffPaneRendererProps = {
   diff: RenderablePreparedDiff
@@ -52,6 +53,21 @@ type DiffPaneRendererProps = {
     comment: string
   ) => void
   onDeleteAnnotation: (target: Pick<SavedDiffAnnotation, "side" | "lineNumber">) => void
+  enableHunkActions: boolean
+  hunkActionPendingKey: string | null
+  onAcceptHunk: (input: HunkActionInput) => void
+  onRejectHunk: (input: HunkActionInput) => void
+}
+
+function GutterPlusIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" viewBox="0 0 16 16">
+      <path
+        fill="currentColor"
+        d="M8 3a.75.75 0 0 1 .75.75v3.5h3.5a.75.75 0 0 1 0 1.5h-3.5v3.5a.75.75 0 0 1-1.5 0v-3.5h-3.5a.75.75 0 0 1 0-1.5h3.5v-3.5A.75.75 0 0 1 8 3"
+      />
+    </svg>
+  )
 }
 
 function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
@@ -71,8 +87,13 @@ function DiffPaneRendererContent({
   savedAnnotations,
   onSaveAnnotation,
   onDeleteAnnotation,
+  enableHunkActions,
+  hunkActionPendingKey,
+  onAcceptHunk,
+  onRejectHunk,
 }: DiffPaneRendererProps) {
   const [draft, setDraft] = useState<DraftDiffAnnotation | null>(() => initialDraft)
+  const lastHoveredTargetRef = useRef<DraftTarget | null>(null)
 
   const draftTarget = useMemo(
     () =>
@@ -113,6 +134,21 @@ function DiffPaneRendererContent({
     [diff, draftTarget, savedAnnotationMap, setStoredDraft]
   )
 
+  const handleUtilityOpenDraft = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, getHoveredLine: GetHoveredDiffLine) => {
+      event.preventDefault()
+      event.stopPropagation()
+
+      const hoveredLine = getHoveredLine() ?? lastHoveredTargetRef.current
+      if (!hoveredLine) {
+        return
+      }
+
+      handleOpenDraft(hoveredLine)
+    },
+    [handleOpenDraft]
+  )
+
   const options = useMemo(
     () => ({
       diffStyle: viewMode,
@@ -121,6 +157,17 @@ function DiffPaneRendererContent({
       disableFileHeader: true,
       overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
+      onPostRender: (node: HTMLElement) => {
+        syncHunkActionOverlays({
+          node,
+          diff,
+          viewMode,
+          enableHunkActions,
+          hunkActionPendingKey,
+          onAcceptHunk,
+          onRejectHunk,
+        })
+      },
       expandUnchanged: expandAll,
       expansionLineCount: DIFF_EXPANSION_LINE_COUNT,
       maxLineDiffLength: diff.isLargeDiff
@@ -134,8 +181,23 @@ function DiffPaneRendererContent({
           side: line.annotationSide,
         })
       },
+      onLineEnter: (line: DiffLinePointerEvent) => {
+        lastHoveredTargetRef.current = {
+          lineNumber: line.lineNumber,
+          side: line.annotationSide,
+        }
+      },
     }),
-    [diff.isLargeDiff, expandAll, handleOpenDraft, viewMode]
+    [
+      diff,
+      enableHunkActions,
+      expandAll,
+      handleOpenDraft,
+      hunkActionPendingKey,
+      onAcceptHunk,
+      onRejectHunk,
+      viewMode,
+    ]
   )
 
   const lineAnnotations = useMemo<DiffLineAnnotation<RenderedAnnotationMetadata>[]>(
@@ -234,6 +296,21 @@ function DiffPaneRendererContent({
             onSave={handleSaveDraft}
             onEscape={handleCloseDraft}
           />
+        )
+      }}
+      renderGutterUtility={(getHoveredLine) => {
+        return (
+          <div className="flex items-center gap-0.5 rounded-md border border-border/80 bg-popover p-0.5 text-popover-foreground shadow-sm">
+            <button
+              type="button"
+              className="flex size-6 items-center justify-center rounded border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
+              aria-label="Comment on line"
+              title="Comment on line"
+              onClick={(event) => handleUtilityOpenDraft(event, getHoveredLine)}
+            >
+              <GutterPlusIcon />
+            </button>
+          </div>
         )
       }}
       className="diff-pane-theme block h-full min-h-full min-w-0"

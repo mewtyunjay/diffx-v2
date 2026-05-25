@@ -81,6 +81,7 @@ type FileDiffResult struct {
 	Language      string            `json:"language,omitempty"`
 	Before        FileVersion       `json:"before"`
 	After         FileVersion       `json:"after"`
+	StagedAfter   *FileVersion      `json:"stagedAfter,omitempty"`
 	Binary        bool              `json:"binary,omitempty"`
 	TooLarge      bool              `json:"tooLarge,omitempty"`
 }

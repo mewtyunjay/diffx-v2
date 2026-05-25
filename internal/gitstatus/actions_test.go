@@ -91,6 +91,177 @@ func TestStageAndUnstageFile(t *testing.T) {
 	}
 }
 
+func TestStageHunkStagesOnlySelectedPatch(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\ntwo\nthree\nfour\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "expand notes")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nTWO\nthree\nFOUR\n")
+
+	if err := service.StageHunk(context.Background(), HunkAction{
+		Path:      "notes.txt",
+		Status:    StatusModified,
+		HunkIndex: 0,
+		HunkPatch: "@@ -2 +2 @@\n-two\n+TWO",
+	}); err != nil {
+		t.Fatalf("StageHunk returned error: %v", err)
+	}
+
+	cachedDiff := runGitOutput(t, repoRoot, "diff", "--cached", "--", "notes.txt")
+	if !strings.Contains(cachedDiff, "+TWO") {
+		t.Fatalf("expected selected hunk to be staged, got %q", cachedDiff)
+	}
+	if strings.Contains(cachedDiff, "+FOUR") {
+		t.Fatalf("expected unselected hunk to stay out of index, got %q", cachedDiff)
+	}
+
+	worktreeDiff := runGitOutput(t, repoRoot, "diff", "--", "notes.txt")
+	if strings.Contains(worktreeDiff, "+TWO") {
+		t.Fatalf("expected staged hunk to be absent from worktree diff, got %q", worktreeDiff)
+	}
+	if !strings.Contains(worktreeDiff, "+FOUR") {
+		t.Fatalf("expected unselected hunk to remain unstaged, got %q", worktreeDiff)
+	}
+}
+
+func TestRejectHunkRevertsUnstagedPatch(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\ntwo\nthree\nfour\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "expand notes")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nTWO\nthree\nFOUR\n")
+	if err := service.StageHunk(context.Background(), HunkAction{
+		Path:      "notes.txt",
+		Status:    StatusModified,
+		HunkIndex: 0,
+		HunkPatch: "@@ -2 +2 @@\n-two\n+TWO",
+	}); err != nil {
+		t.Fatalf("StageHunk returned error: %v", err)
+	}
+
+	if err := service.RejectHunk(context.Background(), HunkAction{
+		Path:      "notes.txt",
+		Status:    StatusModified,
+		HunkIndex: 1,
+		HunkPatch: "@@ -4 +4 @@\n-four\n+FOUR",
+	}); err != nil {
+		t.Fatalf("RejectHunk returned error: %v", err)
+	}
+
+	contents, err := os.ReadFile(filepath.Join(repoRoot, "notes.txt"))
+	if err != nil {
+		t.Fatalf("read notes.txt: %v", err)
+	}
+	if string(contents) != "base\nTWO\nthree\nfour\n" {
+		t.Fatalf("expected only rejected hunk to be reverted, got %q", string(contents))
+	}
+
+	cachedDiff := runGitOutput(t, repoRoot, "diff", "--cached", "--", "notes.txt")
+	if !strings.Contains(cachedDiff, "+TWO") {
+		t.Fatalf("expected accepted hunk to remain staged, got %q", cachedDiff)
+	}
+	if strings.Contains(cachedDiff, "+FOUR") {
+		t.Fatalf("expected rejected hunk to stay out of index, got %q", cachedDiff)
+	}
+}
+
+func TestRejectHunkRevertsStagedPatch(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\ntwo\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "expand notes")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nTWO\n")
+	action := HunkAction{
+		Path:      "notes.txt",
+		Status:    StatusModified,
+		HunkIndex: 0,
+		HunkPatch: "@@ -2 +2 @@\n-two\n+TWO",
+	}
+
+	if err := service.StageHunk(context.Background(), action); err != nil {
+		t.Fatalf("StageHunk returned error: %v", err)
+	}
+	if err := service.RejectHunk(context.Background(), action); err != nil {
+		t.Fatalf("RejectHunk returned error: %v", err)
+	}
+
+	status := runGitOutput(t, repoRoot, "status", "--porcelain=v1", "--", "notes.txt")
+	if status != "" {
+		t.Fatalf("expected staged hunk rejection to clean file, got %q", status)
+	}
+
+	contents, err := os.ReadFile(filepath.Join(repoRoot, "notes.txt"))
+	if err != nil {
+		t.Fatalf("read notes.txt: %v", err)
+	}
+	if string(contents) != "base\ntwo\n" {
+		t.Fatalf("expected worktree to be reverted, got %q", string(contents))
+	}
+}
+
+func TestStageHunkCanPartiallyStageAddedFile(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "fresh.txt"), "one\ntwo\n")
+	if err := service.StageHunk(context.Background(), HunkAction{
+		Path:      "fresh.txt",
+		Status:    StatusAdded,
+		HunkIndex: 0,
+		HunkPatch: "@@ -0,0 +1 @@\n+one",
+	}); err != nil {
+		t.Fatalf("StageHunk returned error: %v", err)
+	}
+
+	cachedDiff := runGitOutput(t, repoRoot, "diff", "--cached", "--", "fresh.txt")
+	if !strings.Contains(cachedDiff, "+one") {
+		t.Fatalf("expected first added hunk to be staged, got %q", cachedDiff)
+	}
+	if strings.Contains(cachedDiff, "+two") {
+		t.Fatalf("expected second added hunk to stay unstaged, got %q", cachedDiff)
+	}
+
+	worktreeDiff := runGitOutput(t, repoRoot, "diff", "--", "fresh.txt")
+	if !strings.Contains(worktreeDiff, "+two") {
+		t.Fatalf("expected remaining added line to be unstaged, got %q", worktreeDiff)
+	}
+}
+
+func TestRejectHunkRemovesEmptyAddedFile(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "fresh.txt"), "one\ntwo\n")
+	if err := service.RejectHunk(context.Background(), HunkAction{
+		Path:      "fresh.txt",
+		Status:    StatusAdded,
+		HunkIndex: 0,
+		HunkPatch: "@@ -0,0 +1,2 @@\n+one\n+two",
+	}); err != nil {
+		t.Fatalf("RejectHunk returned error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(repoRoot, "fresh.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected fully rejected added file to be removed, got %v", err)
+	}
+}
+
 func TestStageAndUnstageAllAtRepoRoot(t *testing.T) {
 	t.Parallel()
 

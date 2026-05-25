@@ -14,6 +14,38 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useShortcut } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
 
+function isPartiallyStaged(file: ChangedFileItem) {
+  return file.hasStagedChanges && file.hasUnstagedChanges
+}
+
+function PartialStageIcon() {
+  return (
+    <span
+      aria-hidden="true"
+      className="relative inline-flex h-4 w-3.5 shrink-0 items-center justify-center"
+    >
+      <Plus className="absolute left-1/2 top-0 size-2.5 -translate-x-1/2" strokeWidth={2.5} />
+      <Minus className="absolute bottom-0 left-1/2 size-2.5 -translate-x-1/2" strokeWidth={2.5} />
+    </span>
+  )
+}
+
+function StageActionIcon({ file }: { file: ChangedFileItem }) {
+  if (isPartiallyStaged(file)) {
+    return <PartialStageIcon />
+  }
+
+  return file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />
+}
+
+function getStageActionLabel(file: ChangedFileItem) {
+  if (isPartiallyStaged(file)) {
+    return "Partially staged. Unstage file"
+  }
+
+  return file.hasStagedChanges ? "Unstage file" : "Stage file"
+}
+
 type FileTreePanelProps = {
   files: ChangedFileItem[]
   totalFileCount: number
@@ -195,7 +227,7 @@ export function FileTreePanel({
                     const isPending = stagePendingPathSet.has(file.path)
                     const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
                     const isDisabled = !canUseGitActions || !hasAction || isPending
-                    const actionLabel = file.hasStagedChanges ? "Unstage file" : "Stage file"
+                    const actionLabel = getStageActionLabel(file)
 
                     return (
                       <button
@@ -220,7 +252,7 @@ export function FileTreePanel({
                           }
                         }}
                       >
-                        {file.hasStagedChanges ? <Minus className="size-3.5" /> : <Plus className="size-3.5" />}
+                        <StageActionIcon file={file} />
                       </button>
                     )
                   }

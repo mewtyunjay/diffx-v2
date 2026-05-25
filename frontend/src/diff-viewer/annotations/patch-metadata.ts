@@ -16,13 +16,13 @@ function trimTrailingLineBreak(value: string) {
   return value.replace(/\r?\n$/, "")
 }
 
-function renderHunkPatch(
+export function renderHunkPatch(
   hunk: ParsedHunk,
   linesBySide: { additions: string[]; deletions: string[] }
 ) {
   const lines: string[] = []
   if (hunk.hunkSpecs) {
-    lines.push(hunk.hunkSpecs)
+    lines.push(trimTrailingLineBreak(hunk.hunkSpecs))
   }
 
   for (const chunk of hunk.hunkContent) {

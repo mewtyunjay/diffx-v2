@@ -418,6 +418,74 @@ func TestReadFileDiffUsesSelectedBaseRef(t *testing.T) {
 	}
 }
 
+func TestReadFileDiffHandlesUntrackedAddedFileWithoutIndexVersion(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createComparisonRepo(t)
+	service := NewService(repoRoot, ".")
+
+	diff, err := service.ReadFileDiff(context.Background(), "scratch.txt", StatusAdded, "", "HEAD")
+	if err != nil {
+		t.Fatalf("ReadFileDiff returned error: %v", err)
+	}
+
+	if diff.StagedAfter != nil {
+		t.Fatalf("expected no staged index version for untracked file, got %#v", diff.StagedAfter)
+	}
+	if diff.Before.Contents != "" {
+		t.Fatalf("expected empty before contents for added file, got %q", diff.Before.Contents)
+	}
+	if !strings.Contains(diff.After.Contents, "untracked file") {
+		t.Fatalf("expected worktree contents for untracked file, got %q", diff.After.Contents)
+	}
+}
+
+func TestReadFileDiffIncludesStagedIndexVersion(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init")
+	runGit(t, repoRoot, "checkout", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "diffx@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Diffx Tests")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "one\ntwo\nthree\nfour\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "base commit")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "one\nTWO\nthree\nFOUR\n")
+	writeFile(
+		t,
+		filepath.Join(repoRoot, "stage.patch"),
+		"diff --git a/notes.txt b/notes.txt\n"+
+			"--- a/notes.txt\n"+
+			"+++ b/notes.txt\n"+
+			"@@ -2 +2 @@\n"+
+			"-two\n"+
+			"+TWO\n",
+	)
+	runGit(t, repoRoot, "apply", "--cached", "--unidiff-zero", "stage.patch")
+
+	service := NewService(repoRoot, ".")
+	diff, err := service.ReadFileDiff(context.Background(), "notes.txt", StatusModified, "", "HEAD")
+	if err != nil {
+		t.Fatalf("ReadFileDiff returned error: %v", err)
+	}
+
+	if diff.StagedAfter == nil {
+		t.Fatal("expected staged index version")
+	}
+	if !strings.Contains(diff.StagedAfter.Contents, "TWO") {
+		t.Fatalf("expected staged version to include staged hunk, got %q", diff.StagedAfter.Contents)
+	}
+	if strings.Contains(diff.StagedAfter.Contents, "FOUR") {
+		t.Fatalf("expected staged version to exclude unstaged hunk, got %q", diff.StagedAfter.Contents)
+	}
+	if !strings.Contains(diff.After.Contents, "FOUR") {
+		t.Fatalf("expected worktree version to include unstaged hunk, got %q", diff.After.Contents)
+	}
+}
+
 func TestListChangedFilesIncludesInitialDiffForFirstVisibleFile(t *testing.T) {
 	t.Parallel()
 

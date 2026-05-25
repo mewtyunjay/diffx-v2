@@ -6,6 +6,7 @@ export const LARGE_DIFF_CHAR_THRESHOLD = 60_000
 
 export type PreparedFileDiffResult = FileDiffResult & {
   parsedDiff: FileDiffMetadata | null
+  stagedParsedDiff: FileDiffMetadata | null
   isLargeDiff: boolean
   isPureRename: boolean
 }
@@ -35,11 +36,13 @@ export function isLargeDiff(diff: FileDiffResult) {
 
 export function finalizePreparedFileDiff(
   diff: FileDiffResult,
-  parsedDiff: FileDiffMetadata | null
+  parsedDiff: FileDiffMetadata | null,
+  stagedParsedDiff: FileDiffMetadata | null = null
 ): PreparedFileDiffResult {
   return {
     ...diff,
     parsedDiff,
+    stagedParsedDiff,
     isLargeDiff: isLargeDiff(diff),
     isPureRename: isPureRenameDiff(diff),
   }

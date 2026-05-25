@@ -1,10 +1,22 @@
 package server
 
-import "net/http"
+import (
+	"net/http"
+
+	"diffx/internal/gitstatus"
+)
 
 type stageFileRequest struct {
 	Path         string `json:"path"`
 	PreviousPath string `json:"previousPath,omitempty"`
+}
+
+type hunkActionRequest struct {
+	Path         string                      `json:"path"`
+	PreviousPath string                      `json:"previousPath,omitempty"`
+	Status       gitstatus.ChangedFileStatus `json:"status"`
+	HunkIndex    int                         `json:"hunkIndex"`
+	HunkPatch    string                      `json:"hunkPatch"`
 }
 
 type commitRequest struct {
@@ -86,6 +98,44 @@ func (a *App) handleUnstageAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := a.service.UnstageAll(r.Context()); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) handleAcceptHunk(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var request hunkActionRequest
+	if err := readJSONBody(r, &request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := a.service.StageHunk(r.Context(), request.toGitstatusAction()); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *App) handleRejectHunk(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var request hunkActionRequest
+	if err := readJSONBody(r, &request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := a.service.RejectHunk(r.Context(), request.toGitstatusAction()); err != nil {
 		writeAPIError(w, err)
 		return
 	}
@@ -202,6 +252,16 @@ func (a *App) handleConflictFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (r hunkActionRequest) toGitstatusAction() gitstatus.HunkAction {
+	return gitstatus.HunkAction{
+		Path:         r.Path,
+		PreviousPath: r.PreviousPath,
+		Status:       r.Status,
+		HunkIndex:    r.HunkIndex,
+		HunkPatch:    r.HunkPatch,
+	}
 }
 
 func (a *App) handleResolveConflict(w http.ResponseWriter, r *http.Request) {

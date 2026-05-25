@@ -13,7 +13,10 @@ export {
   upsertSavedAnnotation,
 } from "@/diff-viewer/annotations/lifecycle"
 export { formatSavedAnnotationsForCopy } from "@/diff-viewer/annotations/format"
-export { findPatchMetadataForAnnotation } from "@/diff-viewer/annotations/patch-metadata"
+export {
+  findPatchMetadataForAnnotation,
+  renderHunkPatch,
+} from "@/diff-viewer/annotations/patch-metadata"
 export { loadSavedAnnotations, persistSavedAnnotations } from "@/diff-viewer/annotations/storage"
 
 export type {

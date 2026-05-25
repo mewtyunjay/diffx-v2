@@ -542,6 +542,14 @@ export function DiffViewerPage() {
               clearDraftToken={clearDraftToken}
               onSaveAnnotation={saveAnnotation}
               onDeleteAnnotation={deleteAnnotation}
+              enableHunkActions={
+                comparisonMode === "head" &&
+                !mergeState.inProgress &&
+                selectedFile?.hasUnstagedChanges === true
+              }
+              hunkActionPendingKey={gitActions.hunkActionPendingKey}
+              onAcceptHunk={gitActions.handleAcceptHunk}
+              onRejectHunk={gitActions.handleRejectHunk}
             />
           )}
         </div>
