@@ -3,6 +3,8 @@ import { LoaderCircle, RefreshCcw } from "lucide-react"
 
 import type { UseAISettingsResult } from "@/app/ai/hooks/useAISettings"
 import { AI_PROVIDER_IDS, AI_PROVIDER_LABELS, type AIProviderID } from "@/app/ai/types"
+import type { UseDiffViewerPreferencesResult } from "@/app/diff-viewer/useDiffViewerPreferences"
+import type { DiffDetailMode, DiffViewMode } from "@/app/diff-viewer/preferences"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,9 +19,28 @@ type AISettingsModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   settingsState: UseAISettingsResult
+  diffViewerPreferencesState: UseDiffViewerPreferencesResult
 }
 
-export function AISettingsModal({ open, onOpenChange, settingsState }: AISettingsModalProps) {
+const DIFF_VIEW_MODE_OPTIONS: Array<{ value: DiffViewMode; label: string }> = [
+  { value: "split", label: "Split" },
+  { value: "unified", label: "Unified" },
+]
+
+const DIFF_DETAIL_MODE_OPTIONS: Array<{ value: DiffDetailMode; label: string }> = [
+  { value: "stacked", label: "Stacked" },
+  { value: "fullFile", label: "Full file" },
+]
+
+const settingsSelectClassName =
+  "h-9 w-full rounded-md border border-border/70 bg-background/85 px-3 text-sm text-foreground outline-none ring-0 transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-70"
+
+export function AISettingsModal({
+  open,
+  onOpenChange,
+  settingsState,
+  diffViewerPreferencesState,
+}: AISettingsModalProps) {
   const {
     agents,
     draftProviders,
@@ -36,6 +57,18 @@ export function AISettingsModal({ open, onOpenChange, settingsState }: AISetting
     saveProviders,
     refreshAgents,
   } = settingsState
+  const {
+    draftPreferences,
+    isLoading: isDiffViewerPreferencesLoading,
+    isSaving: isDiffViewerPreferencesSaving,
+    hasLocalEdits: hasDiffViewerPreferenceEdits,
+    loadError: diffViewerPreferencesLoadError,
+    saveError: diffViewerPreferencesSaveError,
+    setDraftViewMode,
+    setDraftDiffDetailMode,
+    resetDraftPreferences,
+    saveDraftPreferences,
+  } = diffViewerPreferencesState
 
   const commitFeatureState = featureStateByID.commitMessage
   const selectedProvider = draftProviders.commitMessage
@@ -45,32 +78,103 @@ export function AISettingsModal({ open, onOpenChange, settingsState }: AISetting
   )
 
   const isSelectDisabled = isLoading || isSaving || isCheckingAgents || agents.length === 0
+  const isDiffViewerSelectDisabled =
+    isDiffViewerPreferencesLoading || isDiffViewerPreferencesSaving
+  const isAnySaving = isSaving || isDiffViewerPreferencesSaving
+  const hasAnyLocalEdits = hasLocalEdits || hasDiffViewerPreferenceEdits
   const selectedProviderIsSelectable =
     selectedProvider === ""
       ? false
       : (agents.find((agent) => agent.id === selectedProvider)?.selectable ?? false)
 
+  const handleSaveSettings = async () => {
+    await Promise.all([
+      hasLocalEdits ? saveProviders() : Promise.resolve(true),
+      hasDiffViewerPreferenceEdits ? saveDraftPreferences() : Promise.resolve(true),
+    ])
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[80vh] w-[min(92vw,36rem)] overflow-hidden p-0">
+      <DialogContent className="flex max-h-[80vh] w-[min(92vw,36rem)] flex-col overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-10">
-          <DialogTitle>AI</DialogTitle>
-          <DialogDescription>Configure headless AI provider for commit message generation.</DialogDescription>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>Configure diff viewer and AI defaults.</DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {isLoading ? (
+          {isLoading || isDiffViewerPreferencesLoading ? (
             <div className="flex items-center gap-2 border-b border-border px-5 py-3">
               <LoaderCircle className="size-4 animate-spin" />
-              <p className="type-meta text-muted-foreground">Loading AI settings...</p>
+              <p className="type-meta text-muted-foreground">Loading settings...</p>
             </div>
           ) : null}
 
-          {loadError ? (
+          {loadError || diffViewerPreferencesLoadError ? (
             <div className="border-b border-border bg-destructive/10 px-5 py-3">
-              <p className="type-meta text-destructive">{loadError}</p>
+              <p className="type-meta text-destructive">
+                {loadError ?? diffViewerPreferencesLoadError}
+              </p>
             </div>
           ) : null}
+
+          <section className="space-y-3 border-b border-border px-5 py-4">
+            <div className="space-y-1">
+              <p className="type-meta font-medium text-foreground">Diff viewer</p>
+              <p className="type-meta text-muted-foreground">Defaults for file diffs.</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="diff-view-mode-select" className="type-meta text-muted-foreground">
+                  View
+                </label>
+                <select
+                  id="diff-view-mode-select"
+                  value={draftPreferences.viewMode}
+                  disabled={isDiffViewerSelectDisabled}
+                  onChange={(event) => {
+                    setDraftViewMode(event.target.value as DiffViewMode)
+                  }}
+                  className={settingsSelectClassName}
+                >
+                  {DIFF_VIEW_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="diff-detail-mode-select"
+                  className="type-meta text-muted-foreground"
+                >
+                  Context
+                </label>
+                <select
+                  id="diff-detail-mode-select"
+                  value={draftPreferences.diffDetailMode}
+                  disabled={isDiffViewerSelectDisabled}
+                  onChange={(event) => {
+                    setDraftDiffDetailMode(event.target.value as DiffDetailMode)
+                  }}
+                  className={settingsSelectClassName}
+                >
+                  {DIFF_DETAIL_MODE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {diffViewerPreferencesSaveError ? (
+              <p className="type-meta text-destructive">{diffViewerPreferencesSaveError}</p>
+            ) : null}
+          </section>
 
           <section className="space-y-3 border-b border-border px-5 py-4">
             <div className="flex items-start justify-between gap-3">
@@ -109,7 +213,7 @@ export function AISettingsModal({ open, onOpenChange, settingsState }: AISetting
                   }
                   setCommitProvider(provider)
                 }}
-                className="h-9 w-full rounded-md border border-border/70 bg-background/85 px-3 text-sm text-foreground outline-none ring-0 transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-70"
+                className={settingsSelectClassName}
               >
                 <option value="">Select provider</option>
                 {AI_PROVIDER_IDS.map((providerID) => {
@@ -177,9 +281,10 @@ export function AISettingsModal({ open, onOpenChange, settingsState }: AISetting
             <Button
               type="button"
               variant="outline"
-              disabled={isSaving}
+              disabled={isAnySaving}
               onClick={() => {
                 resetDraftProviders()
+                resetDraftPreferences()
                 onOpenChange(false)
               }}
             >
@@ -187,12 +292,12 @@ export function AISettingsModal({ open, onOpenChange, settingsState }: AISetting
             </Button>
             <Button
               type="button"
-              disabled={!hasLocalEdits || isSaving}
+              disabled={!hasAnyLocalEdits || isAnySaving}
               onClick={() => {
-                void saveProviders()
+                void handleSaveSettings()
               }}
             >
-              {isSaving ? <LoaderCircle className="animate-spin" /> : null}
+              {isAnySaving ? <LoaderCircle className="animate-spin" /> : null}
               Save
             </Button>
           </div>

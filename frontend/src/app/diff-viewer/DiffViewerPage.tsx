@@ -4,6 +4,7 @@ import { FolderTree, LoaderCircle, Settings2 } from "lucide-react"
 import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
+import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
@@ -193,6 +194,9 @@ export function DiffViewerPage() {
     refreshChangedFiles,
   })
   const aiSettingsState = useAISettings()
+  const diffViewerPreferencesState = useDiffViewerPreferences()
+  const { preferences: diffViewerPreferences, updateActivePreferences } =
+    diffViewerPreferencesState
   const commitFeatureState = aiSettingsState.featureStateByID.commitMessage
   const commitProviderStatus = commitFeatureState?.provider
     ? aiSettingsState.agentByID[commitFeatureState.provider]
@@ -222,7 +226,7 @@ export function DiffViewerPage() {
     }
 
     if (!commitFeatureState?.provider) {
-      return "Select a provider for Commit Message in AI settings."
+      return "Select a provider for Commit Message in settings."
     }
 
     if (!commitFeatureState.providerValid) {
@@ -247,15 +251,13 @@ export function DiffViewerPage() {
     if (canSendAnnotations) sendAnnotations()
   })
 
-  const [viewMode, setViewMode] = useState<"unified" | "split">("split")
-  const [expandedDiffKey, setExpandedDiffKey] = useState<string | null>(null)
-  const selectedDiffKey = selectedFile
-    ? `${baseCommit}:${selectedFile.path}:${selectedFile.contentKey}`
-    : null
-  const isCurrentFileExpanded = selectedDiffKey != null && expandedDiffKey === selectedDiffKey
+  const viewMode = diffViewerPreferences.viewMode
+  const isCurrentFileExpanded = diffViewerPreferences.diffDetailMode === "fullFile"
 
   useShortcut("toggleViewMode", () => {
-    setViewMode((current) => (current === "split" ? "unified" : "split"))
+    void updateActivePreferences({
+      viewMode: viewMode === "split" ? "unified" : "split",
+    })
   })
 
   useEffect(() => {
@@ -285,13 +287,18 @@ export function DiffViewerPage() {
   })
 
   const handleToggleCurrentFileExpanded = useCallback(() => {
-    if (!selectedDiffKey) {
-      return
-    }
-
-    setExpandedDiffKey((current) => (current === selectedDiffKey ? null : selectedDiffKey))
-  }, [selectedDiffKey])
+    void updateActivePreferences({
+      diffDetailMode: isCurrentFileExpanded ? "stacked" : "fullFile",
+    })
+  }, [isCurrentFileExpanded, updateActivePreferences])
   useShortcut("toggleExpandFile", handleToggleCurrentFileExpanded)
+
+  const handleViewModeChange = useCallback(
+    (nextViewMode: "split" | "unified") => {
+      void updateActivePreferences({ viewMode: nextViewMode })
+    },
+    [updateActivePreferences]
+  )
 
   const headerError =
     filesError && !isFilesLoading
@@ -407,25 +414,26 @@ export function DiffViewerPage() {
                     type="button"
                     size="icon-sm"
                     variant="outline"
-                    aria-label="AI settings"
+                    aria-label="Settings"
                     onClick={() => setIsAISettingsModalOpen(true)}
                   >
-                    {aiSettingsState.isCheckingAgents ? (
+                    {aiSettingsState.isCheckingAgents || diffViewerPreferencesState.isLoading ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
                       <Settings2 />
                     )}
-                    <span className="sr-only">AI settings</span>
+                    <span className="sr-only">Settings</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  AI settings
+                  Settings
                 </TooltipContent>
               </Tooltip>
               <AISettingsModal
                 open={isAISettingsModalOpen}
                 onOpenChange={setIsAISettingsModalOpen}
                 settingsState={aiSettingsState}
+                diffViewerPreferencesState={diffViewerPreferencesState}
               />
             </>
           }
@@ -501,7 +509,7 @@ export function DiffViewerPage() {
                   totalFiles={totalNavigable}
                   onToggleExpandAll={handleToggleCurrentFileExpanded}
                   onToggleStage={gitActions.handleToggleStage}
-                  onViewModeChange={setViewMode}
+                  onViewModeChange={handleViewModeChange}
                   onGoPrev={goPrevFile}
                   onGoNext={goNextFile}
                 />

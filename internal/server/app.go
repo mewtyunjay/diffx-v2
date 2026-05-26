@@ -12,6 +12,7 @@ import (
 	frontendassets "diffx/frontend"
 	"diffx/internal/ai"
 	"diffx/internal/gitstatus"
+	"diffx/internal/userconfig"
 )
 
 type FrontendConfig struct {
@@ -51,6 +52,7 @@ type App struct {
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
 	reviewFeedback  *reviewFeedbackCoordinator
+	userConfigStore userconfig.Store
 	appConfig       AppConfig
 	assets          fs.FS
 	indexHTML       []byte
@@ -173,12 +175,20 @@ func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, er
 		return nil, err
 	}
 
+	userConfigStore, err := userconfig.NewDefaultStore()
+	if err != nil {
+		_ = repoEvents.Close()
+		_ = watcher.Close()
+		return nil, err
+	}
+
 	return &App{
-		service:     gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
-		aiService:   aiService,
-		repoEvents:  repoEvents,
-		repoWatcher: watcher,
-		logger:      loggerWithComponent(logger, "api"),
+		service:         gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
+		aiService:       aiService,
+		repoEvents:      repoEvents,
+		repoWatcher:     watcher,
+		logger:          loggerWithComponent(logger, "api"),
+		userConfigStore: userConfigStore,
 		reviewFeedback: newReviewFeedbackCoordinator(
 			cfg.Review.Enabled,
 		),

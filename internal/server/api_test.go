@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"diffx/internal/gitstatus"
+	"diffx/internal/userconfig"
 )
 
 func TestHandleStageFileStagesChanges(t *testing.T) {
@@ -226,6 +227,50 @@ func TestHandleAppConfigReturnsConfiguredFont(t *testing.T) {
 	}
 	if got := strings.TrimSpace(recorder.Body.String()); got != `{"fontFamily":"Berkeley Mono Variable"}` {
 		t.Fatalf("unexpected body: %s", got)
+	}
+}
+
+func TestHandleDiffViewerPreferencesPersistsConfig(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+	app.userConfigStore = userconfig.NewStore(t.TempDir())
+
+	requestBody := `{"preferences":{"viewMode":"unified","diffDetailMode":"fullFile"}}`
+	updateRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/settings/diff-viewer/update",
+		strings.NewReader(requestBody),
+	)
+	updateRequest.Header.Set("Content-Type", "application/json")
+	updateRecorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(updateRecorder, updateRequest)
+
+	if updateRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", updateRecorder.Code, updateRecorder.Body.String())
+	}
+
+	getRequest := httptest.NewRequest(http.MethodGet, "/api/settings/diff-viewer", nil)
+	getRecorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(getRecorder, getRequest)
+
+	if getRecorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", getRecorder.Code, getRecorder.Body.String())
+	}
+
+	var preferences userconfig.DiffViewerPreferences
+	if err := json.Unmarshal(getRecorder.Body.Bytes(), &preferences); err != nil {
+		t.Fatalf("decode preferences: %v", err)
+	}
+
+	if preferences.ViewMode != userconfig.DiffViewModeUnified {
+		t.Fatalf("expected unified view mode, got %#v", preferences)
+	}
+	if preferences.DiffDetailMode != userconfig.DiffDetailModeFullFile {
+		t.Fatalf("expected full file detail mode, got %#v", preferences)
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"diffx/internal/userconfig"
 )
 
 type stubRunner struct {
@@ -42,7 +44,7 @@ func TestServiceUpdateSettingsRejectsUnavailableProvider(t *testing.T) {
 		repoRoot:        t.TempDir(),
 		scopePath:       ".",
 		homeDir:         homeDir,
-		store:           configStore{configPath: filepath.Join(homeDir, ".diffx", "config.json")},
+		store:           configStore{store: userconfig.NewStore(homeDir)},
 		runner:          stubRunner{},
 		agentStatusByID: make(map[ProviderID]AgentStatus),
 		specs: []providerSpec{
@@ -98,7 +100,7 @@ func TestServiceSuggestCommitMessageUsesConfiguredProvider(t *testing.T) {
 		t.Fatalf("write codex stub: %v", err)
 	}
 
-	store := configStore{configPath: filepath.Join(homeDir, ".diffx", "config.json")}
+	store := configStore{store: userconfig.NewStore(homeDir)}
 	if err := store.SaveFeatureProviders(FeatureProviders{
 		CommitMessage: ProviderCodex,
 	}); err != nil {
@@ -160,7 +162,7 @@ func TestServiceSuggestCommitMessageUsesClaudeDefaultModel(t *testing.T) {
 		t.Fatalf("write claude stub: %v", err)
 	}
 
-	store := configStore{configPath: filepath.Join(homeDir, ".diffx", "config.json")}
+	store := configStore{store: userconfig.NewStore(homeDir)}
 	if err := store.SaveFeatureProviders(FeatureProviders{
 		CommitMessage: ProviderClaude,
 	}); err != nil {

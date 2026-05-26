@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"diffx/internal/userconfig"
 )
 
 func TestConfigStoreSaveFeatureProvidersPreservesUnknownKeys(t *testing.T) {
@@ -35,7 +37,7 @@ func TestConfigStoreSaveFeatureProvidersPreservesUnknownKeys(t *testing.T) {
 		t.Fatalf("write existing: %v", err)
 	}
 
-	store := newConfigStore(homeDir)
+	store := configStore{store: userconfig.NewStore(homeDir)}
 	if err := store.SaveFeatureProviders(FeatureProviders{
 		CommitMessage: ProviderCodex,
 	}); err != nil {
