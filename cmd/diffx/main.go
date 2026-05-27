@@ -26,10 +26,6 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runRelease(args[1:], stdout, stderr)
 	}
 
-	if len(args) > 0 && args[0] == "setup" {
-		return runSetup(args[1:], stdout, stderr)
-	}
-
 	cfg, err := parseConfig(args, stderr)
 	if err != nil {
 		return err
