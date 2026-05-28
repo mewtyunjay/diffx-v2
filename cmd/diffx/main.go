@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,12 +24,21 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) > 0 && args[0] == "release" {
-		return runRelease(args[1:], stdout, stderr)
+	if len(args) > 0 && args[0] == "setup" {
+		if err := runSetup(args[1:], stdout, stderr); err != nil {
+			if errors.Is(err, flag.ErrHelp) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	}
 
 	cfg, err := parseConfig(args, stderr)
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 

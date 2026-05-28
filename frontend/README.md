@@ -5,7 +5,7 @@ This directory contains the Vite + React UI for `diffx`.
 ## Commands
 
 ```sh
-npm install
+npm ci
 npm run dev
 npm run build
 npm run lint
