@@ -7,10 +7,6 @@ RELEASE_VERSION_DEFAULT="latest"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 DIFFX_BIN_PATH="${LOCAL_BIN_DIR}/diffx"
 
-ASSUME_YES=0
-USE_SYMLINK=1
-LIST_AGENTS=0
-AGENTS_CSV=""
 REPO_SLUG="${REPO_SLUG_DEFAULT}"
 RELEASE_VERSION="${RELEASE_VERSION_DEFAULT}"
 
@@ -31,11 +27,6 @@ Usage:
   bash install.sh [options]
 
 Options:
-  --yes                   Run setup non-interactively
-  --agents <csv>          Comma-separated agent IDs (e.g. universal,claude,codex)
-  --copy                  Copy skill files instead of symlinking
-  --symlink               Symlink skill files (default)
-  --list-agents           Print curated agent targets and exit
   --repo <owner/repo>     GitHub repo slug (default: mewtyunjay/diffx-v2)
   --version <tag|latest>  Release version to install (default: latest)
   -h, --help              Show this help
@@ -45,27 +36,6 @@ TXT
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --yes)
-        ASSUME_YES=1
-        shift
-        ;;
-      --agents)
-        AGENTS_CSV="${2:-}"
-        [[ -z "${AGENTS_CSV}" ]] && fail "--agents requires a comma-separated value"
-        shift 2
-        ;;
-      --copy)
-        USE_SYMLINK=0
-        shift
-        ;;
-      --symlink)
-        USE_SYMLINK=1
-        shift
-        ;;
-      --list-agents)
-        LIST_AGENTS=1
-        shift
-        ;;
       --repo)
         REPO_SLUG="${2:-}"
         [[ -z "${REPO_SLUG}" ]] && fail "--repo requires a value"
@@ -144,41 +114,6 @@ download_and_install_binary() {
   chmod +x "${DIFFX_BIN_PATH}"
 }
 
-run_diffx_setup() {
-  local setup_args=()
-  local setup_check
-
-  if [[ "${LIST_AGENTS}" == "1" ]]; then
-    setup_args+=(--list-agents)
-  fi
-  if [[ "${ASSUME_YES}" == "1" ]]; then
-    setup_args+=(--yes)
-  fi
-  if [[ -n "${AGENTS_CSV}" ]]; then
-    setup_args+=(--agents "${AGENTS_CSV}")
-  fi
-  if [[ "${USE_SYMLINK}" == "0" ]]; then
-    setup_args+=(--copy)
-  fi
-
-  setup_check="$("${DIFFX_BIN_PATH}" setup --list-agents 2>&1 || true)"
-  if ! grep -q "Available agent targets:" <<<"${setup_check}"; then
-    fail "installed release binary does not support 'diffx setup'. Publish a new release from current main, then retry."
-  fi
-
-  if [[ "${LIST_AGENTS}" == "1" || "${ASSUME_YES}" == "1" || -n "${AGENTS_CSV}" ]]; then
-    "${DIFFX_BIN_PATH}" setup "${setup_args[@]}"
-    return
-  fi
-
-  if [[ -r /dev/tty && -w /dev/tty ]]; then
-    "${DIFFX_BIN_PATH}" setup "${setup_args[@]}" </dev/tty >/dev/tty
-    return
-  fi
-
-  "${DIFFX_BIN_PATH}" setup "${setup_args[@]}"
-}
-
 print_path_hint_if_needed() {
   if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
     echo ""
@@ -215,10 +150,8 @@ main() {
   ensure_command tar
 
   download_and_install_binary
-  run_diffx_setup
 
-  if [[ "${LIST_AGENTS}" == "0" ]]; then
-    cat <<TXT
+  cat <<TXT
 [install] Done.
 [install] Installed binary: ${DIFFX_BIN_PATH}
 
@@ -226,7 +159,6 @@ Use:
   diffx
   diffx review
 TXT
-  fi
 
   print_path_hint_if_needed
 }
