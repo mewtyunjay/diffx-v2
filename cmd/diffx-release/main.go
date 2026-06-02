@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,16 @@ import (
 	"strconv"
 	"strings"
 )
+
+func main() {
+	if err := runRelease(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
 
 type releaseConfig struct {
 	yes           bool
@@ -41,11 +52,11 @@ func runRelease(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if branch != "main" && !cfg.allowNonMain {
+	if !cfg.dryRun && branch != "main" && !cfg.allowNonMain {
 		return fmt.Errorf("release must run from branch main (current: %s). Use --allow-non-main to override", branch)
 	}
 
-	if !cfg.allowDirty {
+	if !cfg.dryRun && !cfg.allowDirty {
 		status, err := runGit("status", "--porcelain")
 		if err != nil {
 			return err
@@ -55,7 +66,7 @@ func runRelease(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 
-	if !cfg.skipFetchTags {
+	if !cfg.dryRun && !cfg.skipFetchTags {
 		fmt.Fprintf(stdout, "release: fetching tags from %s...\n", cfg.remote)
 		if _, err := runGit("fetch", "--tags", cfg.remote); err != nil {
 			return err
@@ -139,6 +150,9 @@ func parseReleaseConfig(args []string, stderr io.Writer) (releaseConfig, string,
 			cfg.remote = strings.TrimSpace(args[index])
 		case strings.HasPrefix(arg, "--remote="):
 			cfg.remote = strings.TrimSpace(strings.TrimPrefix(arg, "--remote="))
+		case arg == "-h" || arg == "--help":
+			fmt.Fprintln(stderr, releaseUsageText)
+			return releaseConfig{}, "", flag.ErrHelp
 		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintln(stderr, releaseUsageText)
 			return releaseConfig{}, "", fmt.Errorf("unknown flag: %s", arg)
@@ -221,6 +235,19 @@ func confirmRelease(stdout io.Writer, tag string) (bool, error) {
 	default:
 		return false, nil
 	}
+}
+
+func isInteractiveTerminal() bool {
+	stdinInfo, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	stdoutInfo, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+
+	return (stdinInfo.Mode()&os.ModeCharDevice) != 0 && (stdoutInfo.Mode()&os.ModeCharDevice) != 0
 }
 
 func gitTagExists(tag string) (bool, error) {
@@ -338,6 +365,6 @@ func runGit(args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-const releaseUsageText = "Usage: diffx release <major/minor/patch> [--yes] [--dry-run] [--remote origin] [--allow-dirty] [--allow-non-main]"
+const releaseUsageText = "Usage: diffx-release <major/minor/patch> [--yes] [--dry-run] [--remote origin] [--allow-dirty] [--allow-non-main]"
 
 var semverTagPattern = regexp.MustCompile(`^v([0-9]+)\.([0-9]+)\.([0-9]+)$`)

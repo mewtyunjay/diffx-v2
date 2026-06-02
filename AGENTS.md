@@ -14,12 +14,12 @@ This repository has three primary areas:
 ## Build, Test, and Development Commands
 Run commands from the relevant package directory.
 
-- `cd frontend && npm install`: install frontend dependencies.
+- `cd frontend && npm ci`: install frontend dependencies from the lockfile.
 - `cd frontend && npm run dev`: start the Vite dev server manually when needed.
 - `go run ./cmd/diffx`: start the Go API on `:8080` serving embedded frontend assets.
 - `go run ./cmd/diffx --dev`: start the Go API and the Vite dev server with HMR for frontend development.
 - `go run ./cmd/diffx ./frontend`: scope the app to a nested folder inside the current git repository.
-- `go generate ./frontend`: run the frontend package's `//go:generate` steps (`npm install`, then `npm run build`) and produce the production bundle in `frontend/dist/`.
+- `go generate ./frontend`: run the frontend package's `//go:generate` steps (`npm ci`, then `npm run build`) and produce the production bundle in `frontend/dist/`.
 - `go build ./cmd/diffx`: build the single Go binary after `go generate ./frontend`.
 - `cd frontend && npm run lint`: run ESLint on all `ts` and `tsx` files.
 - `go test ./cmd/... ./internal/...`: run backend tests.
