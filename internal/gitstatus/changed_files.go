@@ -9,7 +9,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+const maxConcurrentChangedFileDiffReads = 4
 
 func (s *Service) HeadCommit(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", s.repoRoot, "rev-parse", "HEAD")
@@ -85,20 +88,14 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		}
 	}
 
-	var initialDiff *FileDiffResult
-	if len(filteredFiles) > 0 {
-		diff, err := s.readFileDiffWithComparison(
-			ctx,
-			comparison,
-			filteredFiles[0].Path,
-			filteredFiles[0].Status,
-			filteredFiles[0].PreviousPath,
-		)
-		if err != nil {
-			return ChangedFilesResult{}, err
-		}
+	fileDiffs, err := s.readChangedFileDiffs(ctx, comparison, filteredFiles)
+	if err != nil {
+		return ChangedFilesResult{}, err
+	}
 
-		initialDiff = &diff
+	var initialDiff *FileDiffResult
+	if len(fileDiffs) > 0 {
+		initialDiff = &fileDiffs[0]
 	}
 
 	return ChangedFilesResult{
@@ -115,8 +112,62 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		ScopePath:             s.scopePath,
 		HiddenStagedFileCount: hiddenStagedFileCount,
 		Files:                 filteredFiles,
+		Diffs:                 fileDiffs,
 		InitialDiff:           initialDiff,
 	}, nil
+}
+
+func (s *Service) readChangedFileDiffs(
+	ctx context.Context,
+	comparison comparisonInfo,
+	files []ChangedFileItem,
+) ([]FileDiffResult, error) {
+	if len(files) == 0 {
+		return []FileDiffResult{}, nil
+	}
+
+	workerCount := min(maxConcurrentChangedFileDiffReads, len(files))
+	diffs := make([]FileDiffResult, len(files))
+	jobs := make(chan int)
+	errCh := make(chan error, len(files))
+
+	var wg sync.WaitGroup
+	wg.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer wg.Done()
+
+			for index := range jobs {
+				file := files[index]
+				diff, err := s.readFileDiffWithComparison(
+					ctx,
+					comparison,
+					file.Path,
+					file.Status,
+					file.PreviousPath,
+				)
+				if err != nil {
+					errCh <- err
+					continue
+				}
+
+				diffs[index] = diff
+			}
+		}()
+	}
+
+	for index := range files {
+		jobs <- index
+	}
+	close(jobs)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		return nil, err
+	}
+
+	return diffs, nil
 }
 
 func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, error) {

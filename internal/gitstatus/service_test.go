@@ -503,8 +503,14 @@ func TestListChangedFilesIncludesInitialDiffForFirstVisibleFile(t *testing.T) {
 	if result.InitialDiff == nil {
 		t.Fatal("expected initial diff to be populated")
 	}
+	if len(result.Diffs) != len(result.Files) {
+		t.Fatalf("expected one diff per changed file, got %d diffs for %d files", len(result.Diffs), len(result.Files))
+	}
 	if result.InitialDiff.Path != result.Files[0].Path {
 		t.Fatalf("expected initial diff for %q, got %q", result.Files[0].Path, result.InitialDiff.Path)
+	}
+	if result.Diffs[0].Path != result.Files[0].Path {
+		t.Fatalf("expected first eager diff for %q, got %q", result.Files[0].Path, result.Diffs[0].Path)
 	}
 	if result.InitialDiff.Status != result.Files[0].Status {
 		t.Fatalf("expected initial diff status %q, got %q", result.Files[0].Status, result.InitialDiff.Status)

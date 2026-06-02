@@ -43,6 +43,7 @@ type ChangedFilesResult struct {
 	ScopePath             string            `json:"scopePath"`
 	HiddenStagedFileCount int               `json:"hiddenStagedFileCount"`
 	Files                 []ChangedFileItem `json:"files"`
+	Diffs                 []FileDiffResult  `json:"diffs,omitempty"`
 	InitialDiff           *FileDiffResult   `json:"initialDiff,omitempty"`
 }
 
