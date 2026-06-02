@@ -4,13 +4,29 @@
 
 ## Install
 
-### Quick Install (macOS/Linux)
+### Homebrew
+
+```sh
+brew install --cask mewtyunjay/tap/diffx
+```
+
+Homebrew owns the install prefix. On Apple Silicon macOS this usually links `diffx` into `/opt/homebrew/bin/diffx`; on Intel macOS this is usually `/usr/local/bin/diffx`; Linuxbrew uses its configured prefix.
+
+### Curl Installer (macOS/Linux)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash
 ```
 
-The installer downloads the latest prebuilt `diffx` binary into `~/.local/bin/diffx`.
+The installer downloads the latest prebuilt `diffx` binary, verifies `SHA256SUMS.txt`, and installs to `~/.local/bin/diffx` by default.
+
+Use `INSTALL_DIR` to choose another writable install directory:
+
+```sh
+INSTALL_DIR=/usr/local/bin bash scripts/install.sh
+```
+
+Use `--version <tag>` to pin the installer to a specific release instead of `latest`.
 
 After install:
 
@@ -21,7 +37,21 @@ diffx review
 
 If `~/.local/bin` is not on your `PATH`, the installer prints exact copy-paste commands for your shell.
 
-Use `--version <tag>` to pin the installer to a specific release instead of `latest`.
+### Optional Agent Setup
+
+Agent skill setup is explicit. Run it after installing the binary:
+
+```sh
+diffx setup
+diffx setup --list-agents
+diffx setup --yes --agents universal,claude,codex
+```
+
+The curl installer can run setup after binary installation when requested:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash -s -- --setup --yes --agents universal,claude
+```
 
 ### Install from Source
 
@@ -37,9 +67,9 @@ Build and install the binary:
 git clone https://github.com/mewtyunjay/diffx-v2.git
 cd diffx-v2
 go generate ./frontend
-go build -o diffx ./cmd/diffx
 mkdir -p "$HOME/.local/bin"
-mv diffx "$HOME/.local/bin/diffx"
+go build -o "$HOME/.local/bin/diffx" ./cmd/diffx
+chmod +x "$HOME/.local/bin/diffx"
 ```
 
 If needed, add local bin to PATH:
@@ -54,10 +84,10 @@ source ~/.zshrc
 If you are developing from a source checkout instead of installing the binary, install frontend dependencies first:
 
 ```sh
-cd frontend && npm install
+cd frontend && npm ci
 ```
 
-`go run ./cmd/diffx` does not run `npm install` for you in dev mode.
+`go run ./cmd/diffx --dev` does not run `npm ci` for you before starting Vite.
 
 Start the app from the repository root:
 
@@ -96,9 +126,17 @@ go generate ./frontend
 go build -o diffx ./cmd/diffx
 ```
 
-`go generate ./frontend` installs frontend dependencies and bundles the frontend into `frontend/dist/`. `go build` then embeds that bundle into the binary.
+`go generate ./frontend` runs `npm ci` and bundles the frontend into `frontend/dist/`. `go build` then embeds that bundle into the binary.
 
 For quick local runs without creating a binary, `go run ./cmd/diffx` also works — it auto-builds the frontend if the bundle is missing.
+
+To smoke-test the release path without replacing your installed binary:
+
+```sh
+go generate ./frontend
+go build -o /tmp/diffx ./cmd/diffx
+/tmp/diffx --no-browser
+```
 
 ### Address and port
 
@@ -108,6 +146,8 @@ go run ./cmd/diffx --address 0.0.0.0 --port 9000
 ```
 
 If you explicitly pass `--port` or `-p`, that port remains strict and `diffx` will fail instead of auto-selecting another port.
+
+Binding to `0.0.0.0` exposes write-capable git API endpoints such as stage, unstage, commit, push, pull, and checkout. Do not treat this as a supported sharing mode without a private tunnel or future auth/read-only controls.
 
 ## Development
 
