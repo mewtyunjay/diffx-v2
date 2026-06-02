@@ -42,6 +42,7 @@ export type ChangedFilesResult = {
   scopePath: string
   hiddenStagedFileCount: number
   files: ChangedFileItem[]
+  diffs?: FileDiffResult[]
   initialDiff?: FileDiffResult
 }
 

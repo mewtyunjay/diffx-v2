@@ -95,6 +95,22 @@ export function DiffViewerPage() {
     filteredVisibleFiles.find((file) => file.path === selectedFilePath) ??
     filteredVisibleFiles[0] ??
     null
+  const initialDiffPreloads = useMemo(() => {
+    if (!latestChangedFilesResult?.diffs) {
+      return null
+    }
+
+    return latestChangedFilesResult.diffs.flatMap((diff) => {
+      const file = latestChangedFilesResult.files.find(
+        (candidate) =>
+          candidate.path === diff.path &&
+          (candidate.previousPath ?? "") === (diff.previousPath ?? "") &&
+          candidate.status === diff.status
+      )
+
+      return file ? [{ file, diff }] : []
+    })
+  }, [latestChangedFilesResult])
   const repoLabel = repoName || workspaceName || "repository"
 
   const {
@@ -148,6 +164,7 @@ export function DiffViewerPage() {
     isDiffLoading,
   } = useSelectedDiff({
     baseCommit,
+    initialDiffs: initialDiffPreloads,
     initialDiff: latestChangedFilesResult?.initialDiff ?? null,
     selectedBaseRef,
     selectedFile,

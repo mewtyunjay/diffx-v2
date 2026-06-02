@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useWorkerPool } from "@pierre/diffs/react"
 
 import { fetchFileDiff } from "@/git/api"
 import type { ChangedFileItem, FileDiffResult } from "@/git/types"
@@ -14,11 +15,17 @@ function createDiffCacheKey(baseCommit: string, file: Pick<ChangedFileItem, "pat
 
 type DiffSelectableFile = Pick<ChangedFileItem, "path" | "previousPath" | "status" | "contentKey">
 
+type InitialDiffPreload = {
+  file: Pick<ChangedFileItem, "path" | "contentKey">
+  diff: FileDiffResult
+}
+
 type UseSelectedDiffOptions = {
   baseCommit: string
   selectedBaseRef: string
   selectedFile: DiffSelectableFile | null
   initialDiff?: FileDiffResult | null
+  initialDiffs?: InitialDiffPreload[] | null
   onDiffLoaded?: (diff: PreparedFileDiffResult) => void
 }
 
@@ -40,8 +47,10 @@ export function useSelectedDiff({
   selectedBaseRef,
   selectedFile,
   initialDiff,
+  initialDiffs,
   onDiffLoaded,
 }: UseSelectedDiffOptions) {
+  const workerPool = useWorkerPool()
   const [displayedDiff, setDisplayedDiff] = useState<PreparedFileDiffResult | null>(null)
   const [diffError, setDiffError] = useState<string | null>(null)
   const [isDiffLoading, setIsDiffLoading] = useState(false)
@@ -50,6 +59,7 @@ export function useSelectedDiff({
   const diffPrepareRequestCacheRef = useRef(new Map<string, Promise<PreparedFileDiffResult>>())
   const diffRequestCacheRef = useRef(new Map<string, Promise<PreparedFileDiffResult>>())
   const diffAbortRef = useRef<AbortController | null>(null)
+  const primedDiffHighlightKeysRef = useRef(new Set<string>())
 
   const readCachedDiff = useCallback((cacheKey: string) => {
     const cachedDiff = diffCacheRef.current.get(cacheKey)
@@ -93,6 +103,24 @@ export function useSelectedDiff({
     [readCachedDiff]
   )
 
+  const primePreparedDiffHighlights = useCallback(
+    (diff: PreparedFileDiffResult) => {
+      const parsedDiffs = [diff.parsedDiff, diff.stagedParsedDiff].filter(
+        (parsedDiff) => parsedDiff?.cacheKey
+      )
+
+      for (const parsedDiff of parsedDiffs) {
+        if (!parsedDiff?.cacheKey || primedDiffHighlightKeysRef.current.has(parsedDiff.cacheKey)) {
+          continue
+        }
+
+        primedDiffHighlightKeysRef.current.add(parsedDiff.cacheKey)
+        workerPool?.primeDiffHighlightCache(parsedDiff)
+      }
+    },
+    [workerPool]
+  )
+
   const loadDiff = useCallback(
     (
       nextBaseRef: string,
@@ -132,6 +160,31 @@ export function useSelectedDiff({
     displayedDiff.status === selectedFile.status
       ? displayedDiff
       : null
+
+  useEffect(() => {
+    if (!baseCommit || !initialDiffs || initialDiffs.length === 0) {
+      return
+    }
+
+    let cancelled = false
+    const preloadRequests = initialDiffs.map(({ file, diff }) =>
+      prepareLoadedDiff(baseCommit, file, diff)
+        .then((preparedDiff) => {
+          if (!cancelled) {
+            primePreparedDiffHighlights(preparedDiff)
+          }
+        })
+        .catch(() => {
+          // Individual preloads should not block the selected-file fallback path.
+        })
+    )
+
+    void Promise.all(preloadRequests)
+
+    return () => {
+      cancelled = true
+    }
+  }, [baseCommit, initialDiffs, prepareLoadedDiff, primePreparedDiffHighlights])
 
   useEffect(() => {
     if (!selectedFile || !baseCommit) {
@@ -182,6 +235,7 @@ export function useSelectedDiff({
 
         setDisplayedDiff(result)
         setIsDiffLoading(false)
+        primePreparedDiffHighlights(result)
         onDiffLoaded?.(result)
       })
       .catch((error: Error) => {
@@ -201,6 +255,7 @@ export function useSelectedDiff({
     loadDiff,
     onDiffLoaded,
     prepareLoadedDiff,
+    primePreparedDiffHighlights,
     readCachedDiff,
     selectedBaseRef,
     selectedFile,
