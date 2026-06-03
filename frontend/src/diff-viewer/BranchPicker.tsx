@@ -183,7 +183,7 @@ export function BranchPicker({
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder="Search branches..."
+            placeholder={isHeader ? "Compare with..." : "Search branches..."}
             autoFocus
             className={cn(
               isHeader

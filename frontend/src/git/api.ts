@@ -2,6 +2,8 @@ import type {
   BranchesResult,
   ChangedFileItem,
   ChangedFilesResult,
+  CommitDetailResult,
+  CommitsResult,
   CommitResult,
   ConflictFileResult,
   ConflictResolveResult,
@@ -69,6 +71,49 @@ export async function fetchBranches(signal?: AbortSignal) {
   return (await response.json()) as BranchesResult
 }
 
+export async function fetchCommits(limit = 100, signal?: AbortSignal) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  const response = await fetch(`/api/commits?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as CommitsResult
+}
+
+export async function fetchCommitDetail(hash: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ hash })
+  const response = await fetch(`/api/commit?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as CommitDetailResult
+}
+
+export async function fetchCommitFileDiff(
+  hash: string,
+  file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({
+    hash,
+    path: file.path,
+    status: file.status,
+  })
+
+  if (file.previousPath) {
+    params.set("previousPath", file.previousPath)
+  }
+
+  const response = await fetch(`/api/commit-file-diff?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as FileDiffResult
+}
+
 export async function fetchFileDiff(
   file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
   baseRef?: string,
@@ -117,6 +162,13 @@ export async function unstageFile(
 
 export async function unstageAll(signal?: AbortSignal) {
   return postJSON<void>("/api/git/unstage-all", undefined, signal)
+}
+
+export async function discardFile(
+  file: Pick<ChangedFileItem, "path" | "previousPath">,
+  signal?: AbortSignal
+) {
+  return postJSON<void>("/api/git/discard", toStageFileRequest(file), signal)
 }
 
 export async function acceptHunk(input: HunkActionInput, signal?: AbortSignal) {

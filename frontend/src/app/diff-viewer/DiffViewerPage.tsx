@@ -1,26 +1,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { FolderTree, LoaderCircle, Settings2 } from "lucide-react"
+import { FolderTree, GitPullRequest, LoaderCircle, Settings2 } from "lucide-react"
 
 import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
+import { ChangeSetDetailPane } from "@/app/diff-viewer/change-set/ChangeSetDetailPane"
+import type { ChangeSetSource } from "@/app/diff-viewer/change-set/types"
+import { useCommitDetailState } from "@/app/diff-viewer/change-set/useCommitDetailState"
 import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
+import { BranchCompareLoading } from "@/diff-viewer/BranchCompareLoading"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
 import { useBranchesState } from "@/diff-viewer/hooks/useBranchesState"
 import { useChangedFilesState } from "@/diff-viewer/hooks/useChangedFilesState"
+import { useCommitsState } from "@/diff-viewer/hooks/useCommitsState"
 import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
-import type { ChangedFilesResult } from "@/git/types"
+import type { ChangedFilesResult, CommitItem } from "@/git/types"
 import { fuzzyFilterChangedFiles } from "@/components/file-tree/fuzzy-search"
 import { AppShell } from "@/components/app-shell"
 import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { MergeConflictPane } from "@/components/diff/MergeConflictPane"
 import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
+import type { SidebarPanelTab } from "@/components/sidebar/SidebarPanelTabs"
 import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -34,6 +40,12 @@ export function DiffViewerPage() {
     useState<ChangedFilesResult | null>(null)
   const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false)
   const [fileSearchQuery, setFileSearchQuery] = useState("")
+  const [sidebarTab, setSidebarTab] = useState<SidebarPanelTab>("current")
+  const [selectedChangeSet, setSelectedChangeSet] =
+    useState<ChangeSetSource>({ kind: "working-tree" })
+  const isWorkingTreeSource = selectedChangeSet.kind === "working-tree"
+  const selectedCommitHash =
+    selectedChangeSet.kind === "commit" ? selectedChangeSet.hash : null
 
   const {
     branches,
@@ -210,6 +222,19 @@ export function DiffViewerPage() {
     refreshBranches,
     refreshChangedFiles,
   })
+  const {
+    commits,
+    commitsError,
+    isCommitsLoading,
+    refreshCommits,
+    setCommitsError,
+  } = useCommitsState({
+    enabled: sidebarTab === "commits",
+    currentRef,
+  })
+  const commitChangeSetState = useCommitDetailState({
+    hash: selectedCommitHash,
+  })
   const aiSettingsState = useAISettings()
   const diffViewerPreferencesState = useDiffViewerPreferences()
   const { preferences: diffViewerPreferences, updateActivePreferences } =
@@ -224,6 +249,27 @@ export function DiffViewerPage() {
       gitActions.setCommitMessage(message)
     },
   })
+
+  const handleSidebarTabChange = useCallback(
+    (tab: SidebarPanelTab) => {
+      setSidebarTab(tab)
+
+      if (tab === "current" || tab === "conflicts") {
+        setSelectedChangeSet({ kind: "working-tree" })
+        return
+      }
+
+      if (tab === "pull-request") {
+        setSelectedChangeSet({ kind: "pull-request", id: "current" })
+      }
+    },
+    []
+  )
+
+  const handleSelectCommit = useCallback((commit: CommitItem) => {
+    setSidebarTab("commits")
+    setSelectedChangeSet({ kind: "commit", hash: commit.hash })
+  }, [])
 
   const suggestCommitDisabledReason = useMemo(() => {
     if (comparisonMode !== "head") {
@@ -262,7 +308,15 @@ export function DiffViewerPage() {
   ])
 
   useShortcut("toggleStage", () => {
-    if (selectedFile) gitActions.handleToggleStage(selectedFile)
+    if (isWorkingTreeSource && selectedFile) gitActions.handleToggleStage(selectedFile)
+  })
+  useShortcut("discardFile", () => {
+    if (isWorkingTreeSource && comparisonMode === "head" && selectedFile) {
+      gitActions.handleDiscardFile(selectedFile)
+    }
+  })
+  useShortcut("copyAnnotations", () => {
+    if (canCopyAnnotations) copyAnnotations()
   })
   useShortcut("sendToAgent", () => {
     if (canSendAnnotations) sendAnnotations()
@@ -282,7 +336,7 @@ export function DiffViewerPage() {
   }, [repoName])
 
   const handleLiveRefreshError = useCallback(
-    (error: Error, phase: "files" | "branches", signal: AbortSignal) => {
+    (error: Error, phase: "files" | "branches" | "commits", signal: AbortSignal) => {
       if (signal.aborted) {
         return
       }
@@ -292,14 +346,23 @@ export function DiffViewerPage() {
         return
       }
 
+      if (phase === "commits") {
+        setCommitsError(error.message)
+        return
+      }
+
       setBranchesError(error.message)
     },
-    [setBranchesError, setFilesError]
+    [setBranchesError, setCommitsError, setFilesError]
   )
+
+  const shouldRefreshCommits = useCallback(() => sidebarTab === "commits", [sidebarTab])
 
   useRepoEventsRefresh({
     refreshChangedFiles,
     refreshBranches,
+    refreshCommits,
+    shouldRefreshCommits,
     onError: handleLiveRefreshError,
   })
 
@@ -322,11 +385,14 @@ export function DiffViewerPage() {
       ? filesError
       : branchesError && !isBranchesLoading
         ? branchesError
-        : selectedFile && diffError && !isDiffLoading
+        : isWorkingTreeSource && selectedFile && diffError && !isDiffLoading
           ? diffError
           : null
   const isSelectedFileStagePending =
     selectedFile != null && gitActions.stagePendingPaths.includes(selectedFile.path)
+  const isSelectedFileDiscardPending =
+    selectedFile != null && gitActions.discardPendingPaths.includes(selectedFile.path)
+  const isBranchCompareLoading = isFilesLoading && selectedBaseRef !== "HEAD"
   const mergeModeSummary =
     mergeState.unresolvedCount === 1
       ? "1 conflicted file remaining"
@@ -357,6 +423,8 @@ export function DiffViewerPage() {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
+              activeTab={sidebarTab}
+              onActiveTabChange={handleSidebarTabChange}
               files={filteredVisibleFiles}
               totalFileCount={visibleFiles.length}
               searchQuery={fileSearchQuery}
@@ -377,6 +445,12 @@ export function DiffViewerPage() {
               onToggleStage={gitActions.handleToggleStage}
               onStageAll={gitActions.handleStageAll}
               onUnstageAll={gitActions.handleUnstageAll}
+              currentRef={currentRef}
+              commits={commits}
+              isCommitsLoading={isCommitsLoading}
+              commitsError={commitsError}
+              selectedCommitHash={selectedCommitHash}
+              onSelectCommit={handleSelectCommit}
             />
 
             <GitActionsPanel
@@ -509,73 +583,120 @@ export function DiffViewerPage() {
           </div>
         ) : null}
 
-        <div ref={fileWindowScrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
-          {selectedFile ? (
-            <div className="sticky top-0 z-20">
-              <div className="relative z-20">
-                <DiffViewerToolbar
-                  diff={currentDisplayedDiff}
-                  comparisonMode={comparisonMode}
-                  selectedFile={selectedFile}
-                  isStagePending={isSelectedFileStagePending}
-                  viewMode={viewMode}
-                  isExpanded={isCurrentFileExpanded}
-                  canGoPrev={prevFile != null}
-                  canGoNext={nextFile != null}
-                  fileIndex={indexOfSelected}
-                  totalFiles={totalNavigable}
-                  onToggleExpandAll={handleToggleCurrentFileExpanded}
-                  onToggleStage={gitActions.handleToggleStage}
-                  onViewModeChange={handleViewModeChange}
-                  onGoPrev={goPrevFile}
-                  onGoNext={goNextFile}
-                />
-              </div>
-              <div className="relative z-10">
-                <DiffFileHeader
-                  file={selectedFile}
-                  diff={currentDisplayedDiff}
-                  isDiffLoading={isDiffLoading}
-                  scopePath={scopePath}
-                  conflictProgressLabel={selectedConflictProgressLabel}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {isConflictMode ? (
-            <MergeConflictPane
-              selectedFilePath={selectedConflictPath}
-              conflictFile={conflictFile}
-              conflictFileError={conflictFileError}
-              isConflictFileLoading={isConflictFileLoading}
-              isResolvePending={isResolvePending}
-              currentDiff={selectedFile ? currentDisplayedDiff : null}
-              clearDraftToken={clearDraftToken}
-              savedAnnotations={visibleSavedAnnotations}
-              onSaveAnnotation={saveAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-              onResolveConflict={resolveSelectedConflict}
-            />
-          ) : (
-            <DiffPane
-              diff={selectedFile ? currentDisplayedDiff : null}
-              hasSelectedFile={!!selectedFile}
-              viewMode={viewMode}
-              expandAll={isCurrentFileExpanded}
-              savedAnnotations={visibleSavedAnnotations}
-              clearDraftToken={clearDraftToken}
-              onSaveAnnotation={saveAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-              enableHunkActions={
-                comparisonMode === "head" &&
-                !mergeState.inProgress &&
-                selectedFile?.hasUnstagedChanges === true
+        <div
+          ref={fileWindowScrollRef}
+          className={
+            isWorkingTreeSource
+              ? "min-h-0 min-w-0 flex-1 overflow-auto px-[2px]"
+              : "min-h-0 min-w-0 flex-1 overflow-hidden"
+          }
+        >
+          {!isWorkingTreeSource ? (
+            <ChangeSetDetailPane
+              detail={selectedChangeSet.kind === "commit" ? commitChangeSetState.detail : null}
+              detailMode={diffViewerPreferences.diffDetailMode}
+              error={selectedChangeSet.kind === "commit" ? commitChangeSetState.error : null}
+              isLoading={
+                selectedChangeSet.kind === "commit" ? commitChangeSetState.isLoading : false
               }
-              hunkActionPendingKey={gitActions.hunkActionPendingKey}
-              onAcceptHunk={gitActions.handleAcceptHunk}
-              onRejectHunk={gitActions.handleRejectHunk}
+              loadFileDiff={commitChangeSetState.loadFileDiff}
+              placeholderTitle={
+                selectedChangeSet.kind === "pull-request"
+                  ? "Pull request review"
+                  : "Select a commit"
+              }
+              placeholderDescription={
+                selectedChangeSet.kind === "pull-request"
+                  ? "Pull request data will use this same change-set review surface when it is added."
+                  : "Choose a commit from the sidebar to review all changed files."
+              }
+              PlaceholderIcon={GitPullRequest}
+              scopePath={scopePath}
+              sourceKey={
+                selectedChangeSet.kind === "commit" && selectedCommitHash
+                  ? `commit:${selectedCommitHash}`
+                  : selectedChangeSet.kind === "pull-request"
+                    ? `pull-request:${selectedChangeSet.id}`
+                    : "change-set"
+              }
+              viewMode={viewMode}
+              onToggleExpandAll={handleToggleCurrentFileExpanded}
+              onViewModeChange={handleViewModeChange}
             />
+          ) : isBranchCompareLoading ? (
+            <BranchCompareLoading baseRef={selectedBaseRef} />
+          ) : (
+            <>
+              {selectedFile ? (
+                <div className="sticky top-0 z-20">
+                  <div className="relative z-20">
+                    <DiffViewerToolbar
+                      diff={currentDisplayedDiff}
+                      comparisonMode={comparisonMode}
+                      selectedFile={selectedFile}
+                      isStagePending={isSelectedFileStagePending}
+                      isDiscardPending={isSelectedFileDiscardPending}
+                      viewMode={viewMode}
+                      isExpanded={isCurrentFileExpanded}
+                      canGoPrev={prevFile != null}
+                      canGoNext={nextFile != null}
+                      fileIndex={indexOfSelected}
+                      totalFiles={totalNavigable}
+                      onToggleExpandAll={handleToggleCurrentFileExpanded}
+                      onToggleStage={gitActions.handleToggleStage}
+                      onDiscardFile={gitActions.handleDiscardFile}
+                      onViewModeChange={handleViewModeChange}
+                      onGoPrev={goPrevFile}
+                      onGoNext={goNextFile}
+                    />
+                  </div>
+                  <div className="relative z-10">
+                    <DiffFileHeader
+                      file={selectedFile}
+                      diff={currentDisplayedDiff}
+                      isDiffLoading={isDiffLoading}
+                      scopePath={scopePath}
+                      conflictProgressLabel={selectedConflictProgressLabel}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {isConflictMode ? (
+                <MergeConflictPane
+                  selectedFilePath={selectedConflictPath}
+                  conflictFile={conflictFile}
+                  conflictFileError={conflictFileError}
+                  isConflictFileLoading={isConflictFileLoading}
+                  isResolvePending={isResolvePending}
+                  currentDiff={selectedFile ? currentDisplayedDiff : null}
+                  clearDraftToken={clearDraftToken}
+                  savedAnnotations={visibleSavedAnnotations}
+                  onSaveAnnotation={saveAnnotation}
+                  onDeleteAnnotation={deleteAnnotation}
+                  onResolveConflict={resolveSelectedConflict}
+                />
+              ) : (
+                <DiffPane
+                  diff={selectedFile ? currentDisplayedDiff : null}
+                  hasSelectedFile={!!selectedFile}
+                  viewMode={viewMode}
+                  expandAll={isCurrentFileExpanded}
+                  savedAnnotations={visibleSavedAnnotations}
+                  clearDraftToken={clearDraftToken}
+                  onSaveAnnotation={saveAnnotation}
+                  onDeleteAnnotation={deleteAnnotation}
+                  enableHunkActions={
+                    comparisonMode === "head" &&
+                    !mergeState.inProgress &&
+                    selectedFile?.hasUnstagedChanges === true
+                  }
+                  hunkActionPendingKey={gitActions.hunkActionPendingKey}
+                  onAcceptHunk={gitActions.handleAcceptHunk}
+                  onRejectHunk={gitActions.handleRejectHunk}
+                />
+              )}
+            </>
           )}
         </div>
       </section>

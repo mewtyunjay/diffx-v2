@@ -5,6 +5,9 @@ import "net/http"
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/app-config", a.handleAppConfig)
 	mux.HandleFunc("/api/branches", a.handleBranches)
+	mux.HandleFunc("/api/commit", a.handleCommitDetail)
+	mux.HandleFunc("/api/commit-file-diff", a.handleCommitFileDiff)
+	mux.HandleFunc("/api/commits", a.handleCommits)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
 	mux.HandleFunc("/api/events", a.handleEvents)
@@ -12,6 +15,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/git/stage-all", a.handleStageAll)
 	mux.HandleFunc("/api/git/unstage", a.handleUnstageFile)
 	mux.HandleFunc("/api/git/unstage-all", a.handleUnstageAll)
+	mux.HandleFunc("/api/git/discard", a.handleDiscardFile)
 	mux.HandleFunc("/api/git/hunk/accept", a.handleAcceptHunk)
 	mux.HandleFunc("/api/git/hunk/reject", a.handleRejectHunk)
 	mux.HandleFunc("/api/git/commit", a.handleCommit)

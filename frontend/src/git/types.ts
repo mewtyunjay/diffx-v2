@@ -67,6 +67,27 @@ export type PushResult = {
   createdUpstream: boolean
 }
 
+export type CommitItem = {
+  hash: string
+  shortHash: string
+  subject: string
+  authorName: string
+  authorDate: string
+}
+
+export type CommitsResult = {
+  currentRef: string
+  commits: CommitItem[]
+}
+
+export type CommitDetailResult = {
+  kind: "commit"
+  commit: CommitItem
+  parentHash: string
+  currentRef: string
+  files: ChangedFileItem[]
+}
+
 export type HunkActionInput = Pick<
   FileDiffResult,
   "path" | "previousPath" | "status"

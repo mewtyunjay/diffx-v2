@@ -4,6 +4,7 @@ import {
   acceptHunk,
   checkoutBranch,
   commitStaged,
+  discardFile,
   fetchRemote,
   pullCurrentBranch,
   pushCurrentBranch,
@@ -31,6 +32,7 @@ export function useGitActionCommands({
   refreshChangedFiles,
 }: UseGitActionCommandsOptions) {
   const [stagePendingPaths, setStagePendingPaths] = useState<string[]>([])
+  const [discardPendingPaths, setDiscardPendingPaths] = useState<string[]>([])
   const [hunkActionPendingKey, setHunkActionPendingKey] = useState<string | null>(null)
   const [isBulkStagePending, setIsBulkStagePending] = useState(false)
   const [commitMessage, setCommitMessage] = useState("")
@@ -111,6 +113,27 @@ export function useGitActionCommands({
       "unstage"
     )
   }, [files, handleBulkStage])
+
+  const handleDiscardFile = useCallback(
+    async (file: ChangedFileItem) => {
+      setDiscardPendingPaths((current) => [...current, file.path])
+
+      try {
+        await discardFile(file)
+        toast.success("Discarded file changes.", {
+          description: file.displayPath,
+        })
+        await refreshChangedFiles()
+      } catch (error) {
+        toast.error("Couldn’t discard file changes.", {
+          description: getToastErrorDescription(error, `Unable to discard ${file.displayPath}.`),
+        })
+      } finally {
+        setDiscardPendingPaths((current) => current.filter((path) => path !== file.path))
+      }
+    },
+    [refreshChangedFiles]
+  )
 
   const handleHunkAction = useCallback(
     async (input: HunkActionInput, mode: "accept" | "reject") => {
@@ -303,6 +326,7 @@ export function useGitActionCommands({
       handleAcceptHunk,
       handleCheckoutBranch,
       handleCommit,
+      handleDiscardFile,
       handleFetch,
       handlePull,
       handlePush,
@@ -318,6 +342,7 @@ export function useGitActionCommands({
       isPushPending,
       setCommitMessage,
       hunkActionPendingKey,
+      discardPendingPaths,
       stagePendingPaths,
     }),
     [
@@ -325,6 +350,7 @@ export function useGitActionCommands({
       handleAcceptHunk,
       handleCheckoutBranch,
       handleCommit,
+      handleDiscardFile,
       handleFetch,
       handlePull,
       handlePush,
@@ -339,6 +365,7 @@ export function useGitActionCommands({
       isPullPending,
       isPushPending,
       hunkActionPendingKey,
+      discardPendingPaths,
       stagePendingPaths,
     ]
   )

@@ -77,6 +77,11 @@ export function matchesShortcut(
     return true
   }
 
+  // `Shift + .` may report as `>` while keeping `code` as `Period`.
+  if (event.code === "Period" && (literal === "." || literal === ">")) {
+    return true
+  }
+
   return false
 }
 

@@ -64,11 +64,18 @@ func (a *App) logAPIMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(recorder, r)
 
+		duration := time.Since(start).Round(time.Millisecond)
 		if recorder.statusCode < http.StatusBadRequest {
+			a.logger.Info(
+				"request completed",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", recorder.statusCode,
+				"duration", duration,
+			)
 			return
 		}
 
-		duration := time.Since(start).Round(time.Millisecond)
 		message := sanitizeLogMessage(recorder.body.String())
 		if message == "" {
 			a.logger.Warn(

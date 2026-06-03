@@ -91,6 +91,90 @@ func TestStageAndUnstageFile(t *testing.T) {
 	}
 }
 
+func TestDiscardFileRevertsStagedAndUnstagedChanges(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nstaged\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nunstaged\n")
+
+	if err := service.DiscardFile(context.Background(), "notes.txt", ""); err != nil {
+		t.Fatalf("DiscardFile returned error: %v", err)
+	}
+
+	status := runGitOutput(t, repoRoot, "status", "--porcelain=v1", "--", "notes.txt")
+	if status != "" {
+		t.Fatalf("expected clean status after discard, got %q", status)
+	}
+
+	contents, err := os.ReadFile(filepath.Join(repoRoot, "notes.txt"))
+	if err != nil {
+		t.Fatalf("read notes.txt: %v", err)
+	}
+	if string(contents) != "base\n" {
+		t.Fatalf("expected file to be restored from HEAD, got %q", string(contents))
+	}
+}
+
+func TestDiscardFileRemovesAddedFile(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "fresh.txt"), "fresh\n")
+	runGit(t, repoRoot, "add", "fresh.txt")
+
+	if err := service.DiscardFile(context.Background(), "fresh.txt", ""); err != nil {
+		t.Fatalf("DiscardFile returned error: %v", err)
+	}
+
+	status := runGitOutput(t, repoRoot, "status", "--porcelain=v1", "--", "fresh.txt")
+	if status != "" {
+		t.Fatalf("expected clean status after discard, got %q", status)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "fresh.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected added file to be removed, got %v", err)
+	}
+}
+
+func TestDiscardFileRestoresRename(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createActionRepo(t)
+	service := NewService(repoRoot, ".")
+
+	if err := os.Rename(
+		filepath.Join(repoRoot, "notes.txt"),
+		filepath.Join(repoRoot, "moved.txt"),
+	); err != nil {
+		t.Fatalf("rename notes.txt: %v", err)
+	}
+
+	if err := service.DiscardFile(context.Background(), "moved.txt", "notes.txt"); err != nil {
+		t.Fatalf("DiscardFile returned error: %v", err)
+	}
+
+	status := runGitOutput(t, repoRoot, "status", "--porcelain=v1")
+	if status != "" {
+		t.Fatalf("expected clean status after discard, got %q", status)
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "moved.txt")); !os.IsNotExist(err) {
+		t.Fatalf("expected renamed destination to be removed, got %v", err)
+	}
+
+	contents, err := os.ReadFile(filepath.Join(repoRoot, "notes.txt"))
+	if err != nil {
+		t.Fatalf("read restored notes.txt: %v", err)
+	}
+	if string(contents) != "base\n" {
+		t.Fatalf("expected renamed source to be restored from HEAD, got %q", string(contents))
+	}
+}
+
 func TestStageHunkStagesOnlySelectedPatch(t *testing.T) {
 	t.Parallel()
 

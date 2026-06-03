@@ -350,6 +350,163 @@ func TestHandleFilesDoesNotPublishRepoEvents(t *testing.T) {
 	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
 }
 
+func TestHandleCommitsReturnsCurrentBranchCommits(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runServerGit(t, repoRoot, "add", "notes.txt")
+	runServerGit(t, repoRoot, "commit", "-m", "second commit")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/commits?limit=1", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload gitstatus.CommitsResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode commits response: %v", err)
+	}
+
+	if payload.CurrentRef != "main" {
+		t.Fatalf("expected current ref main, got %q", payload.CurrentRef)
+	}
+	if len(payload.Commits) != 1 {
+		t.Fatalf("expected one commit, got %#v", payload.Commits)
+	}
+	if payload.Commits[0].Subject != "second commit" {
+		t.Fatalf("expected latest commit subject, got %#v", payload.Commits[0])
+	}
+}
+
+func TestHandleCommitsDoesNotPublishRepoEvents(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+	events, unsubscribe := app.repoEvents.Subscribe()
+	defer unsubscribe()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/commits", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+}
+
+func TestHandleCommitDetailReturnsCommitFiles(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runServerGit(t, repoRoot, "add", "notes.txt")
+	runServerGit(t, repoRoot, "commit", "-m", "second commit")
+	hash := strings.TrimSpace(runServerGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/commit?hash="+hash, nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload gitstatus.CommitDetailResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode commit response: %v", err)
+	}
+
+	if payload.Kind != "commit" || payload.Commit.Subject != "second commit" {
+		t.Fatalf("unexpected commit payload: %#v", payload)
+	}
+	if len(payload.Files) != 1 || payload.Files[0].Path != "notes.txt" || payload.Files[0].Status != gitstatus.StatusModified {
+		t.Fatalf("expected notes.txt modified, got %#v", payload.Files)
+	}
+}
+
+func TestHandleCommitFileDiffReturnsCommitDiff(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runServerGit(t, repoRoot, "add", "notes.txt")
+	runServerGit(t, repoRoot, "commit", "-m", "second commit")
+	hash := strings.TrimSpace(runServerGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "worktree should not appear\n")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/commit-file-diff?hash="+hash+"&path=notes.txt&status=modified",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload gitstatus.FileDiffResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode commit file diff response: %v", err)
+	}
+
+	if payload.Before.Contents != "base\n" || payload.After.Contents != "base\nsecond\n" {
+		t.Fatalf("unexpected commit file diff: %#v", payload)
+	}
+}
+
+func TestHandleCommitDetailRequiresHash(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/commit", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHandleCommitFileDiffRejectsOutOfScopePath(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	hash := strings.TrimSpace(runServerGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	app := newRepoBackedTestApp(t, repoRoot, "frontend")
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/commit-file-diff?hash="+hash+"&path=notes.txt&status=modified",
+		nil,
+	)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestHandleFilesIncludesRepoName(t *testing.T) {
 	t.Parallel()
 

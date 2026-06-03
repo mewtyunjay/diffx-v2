@@ -40,6 +40,231 @@ func TestParsePorcelainStatus(t *testing.T) {
 	}
 }
 
+func TestListCommitsReturnsRecentHeadCommits(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "second commit")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\nthird\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "third commit")
+
+	result, err := service.ListCommits(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("ListCommits returned error: %v", err)
+	}
+
+	if result.CurrentRef != "main" {
+		t.Fatalf("expected current ref main, got %q", result.CurrentRef)
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("expected 2 commits, got %#v", result.Commits)
+	}
+	if result.Commits[0].Subject != "third commit" || result.Commits[1].Subject != "second commit" {
+		t.Fatalf("expected newest commits first, got %#v", result.Commits)
+	}
+	if result.Commits[0].Hash == "" || result.Commits[0].ShortHash == "" {
+		t.Fatalf("expected hashes to be populated, got %#v", result.Commits[0])
+	}
+	if result.Commits[0].AuthorName != "Diffx Tests" || result.Commits[0].AuthorDate == "" {
+		t.Fatalf("expected author fields to be populated, got %#v", result.Commits[0])
+	}
+}
+
+func TestListCommitsUsesDefaultLimitForInvalidLimit(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	result, err := service.ListCommits(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("ListCommits returned error: %v", err)
+	}
+
+	if len(result.Commits) != 1 {
+		t.Fatalf("expected default limit to return existing commit, got %#v", result.Commits)
+	}
+}
+
+func TestParseCommitLogRejectsMalformedRecords(t *testing.T) {
+	_, err := parseCommitLog([]byte("hash\x1fshort\x1fsubject\x1e"))
+	if err == nil {
+		t.Fatal("expected malformed commit log to return an error")
+	}
+}
+
+func TestReadCommitDetailListsChangedFiles(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "mod.txt"), "modify me\n")
+	writeFile(t, filepath.Join(repoRoot, "remove-me.txt"), "remove\n")
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "setup mixed files")
+
+	writeFile(t, filepath.Join(repoRoot, "mod.txt"), "modified\n")
+	runGit(t, repoRoot, "mv", "notes.txt", "renamed.txt")
+	writeFile(t, filepath.Join(repoRoot, "added.txt"), "added\n")
+	if err := os.Remove(filepath.Join(repoRoot, "remove-me.txt")); err != nil {
+		t.Fatalf("remove file: %v", err)
+	}
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "mixed commit")
+
+	mixedHash := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	result, err := service.ReadCommitDetail(context.Background(), mixedHash)
+	if err != nil {
+		t.Fatalf("ReadCommitDetail returned error: %v", err)
+	}
+
+	if result.Kind != "commit" {
+		t.Fatalf("expected commit kind, got %q", result.Kind)
+	}
+	if result.Commit.Subject != "mixed commit" {
+		t.Fatalf("expected mixed commit metadata, got %#v", result.Commit)
+	}
+
+	filesByPath := make(map[string]ChangedFileItem, len(result.Files))
+	for _, file := range result.Files {
+		filesByPath[file.Path] = file
+	}
+
+	if filesByPath["renamed.txt"].Status != StatusRenamed {
+		t.Fatalf("expected renamed.txt rename, got %#v", filesByPath["renamed.txt"])
+	}
+	if filesByPath["renamed.txt"].PreviousPath != "notes.txt" {
+		t.Fatalf("expected previous path notes.txt, got %#v", filesByPath["renamed.txt"])
+	}
+	if filesByPath["added.txt"].Status != StatusAdded {
+		t.Fatalf("expected added.txt add, got %#v", filesByPath["added.txt"])
+	}
+	if filesByPath["mod.txt"].Status != StatusModified {
+		t.Fatalf("expected mod.txt modified, got %#v", filesByPath["mod.txt"])
+	}
+	if filesByPath["remove-me.txt"].Status != StatusDeleted {
+		t.Fatalf("expected remove-me.txt deleted, got %#v", filesByPath["remove-me.txt"])
+	}
+}
+
+func TestReadCommitDetailRootCommitUsesEmptyTree(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+	rootHash := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-list", "--max-parents=0", "HEAD"))
+
+	result, err := service.ReadCommitDetail(context.Background(), rootHash)
+	if err != nil {
+		t.Fatalf("ReadCommitDetail returned error: %v", err)
+	}
+
+	if result.ParentHash != emptyTreeHash {
+		t.Fatalf("expected empty tree parent, got %q", result.ParentHash)
+	}
+	if len(result.Files) != 1 || result.Files[0].Path != "notes.txt" || result.Files[0].Status != StatusAdded {
+		t.Fatalf("expected root commit to add notes.txt, got %#v", result.Files)
+	}
+
+	diff, err := service.ReadCommitFileDiff(context.Background(), rootHash, "notes.txt", StatusAdded, "")
+	if err != nil {
+		t.Fatalf("ReadCommitFileDiff returned error: %v", err)
+	}
+	if diff.Before.Contents != "" || diff.After.Contents != "base\n" {
+		t.Fatalf("unexpected root commit diff: %#v", diff)
+	}
+}
+
+func TestReadCommitDetailMergeUsesFirstParent(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	runGit(t, repoRoot, "checkout", "-b", "side")
+	writeFile(t, filepath.Join(repoRoot, "side.txt"), "side\n")
+	runGit(t, repoRoot, "add", "side.txt")
+	runGit(t, repoRoot, "commit", "-m", "side commit")
+
+	runGit(t, repoRoot, "checkout", "main")
+	writeFile(t, filepath.Join(repoRoot, "main.txt"), "main\n")
+	runGit(t, repoRoot, "add", "main.txt")
+	runGit(t, repoRoot, "commit", "-m", "main commit")
+	firstParent := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	runGit(t, repoRoot, "merge", "--no-ff", "side", "-m", "merge side")
+	mergeHash := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+
+	result, err := service.ReadCommitDetail(context.Background(), mergeHash)
+	if err != nil {
+		t.Fatalf("ReadCommitDetail returned error: %v", err)
+	}
+
+	if result.ParentHash != firstParent {
+		t.Fatalf("expected first parent %q, got %q", firstParent, result.ParentHash)
+	}
+	if len(result.Files) != 1 || result.Files[0].Path != "side.txt" || result.Files[0].Status != StatusAdded {
+		t.Fatalf("expected first-parent diff to include only side.txt, got %#v", result.Files)
+	}
+}
+
+func TestReadCommitDetailRespectsScope(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	if err := os.Mkdir(filepath.Join(repoRoot, "src"), 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	writeFile(t, filepath.Join(repoRoot, "src", "app.txt"), "app\n")
+	writeFile(t, filepath.Join(repoRoot, "outside.txt"), "outside\n")
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "scoped commit")
+	hash := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+
+	service := NewService(repoRoot, "src")
+	result, err := service.ReadCommitDetail(context.Background(), hash)
+	if err != nil {
+		t.Fatalf("ReadCommitDetail returned error: %v", err)
+	}
+
+	if len(result.Files) != 1 || result.Files[0].Path != "src/app.txt" {
+		t.Fatalf("expected only scoped file, got %#v", result.Files)
+	}
+	if result.Files[0].DisplayPath != "app.txt" {
+		t.Fatalf("expected scoped display path, got %#v", result.Files[0])
+	}
+}
+
+func TestReadCommitFileDiffReturnsCommitVersions(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\ncommit\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "change notes")
+	hash := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "worktree should not appear\n")
+
+	diff, err := service.ReadCommitFileDiff(context.Background(), hash, "notes.txt", StatusModified, "")
+	if err != nil {
+		t.Fatalf("ReadCommitFileDiff returned error: %v", err)
+	}
+
+	if diff.Before.Contents != "base\n" {
+		t.Fatalf("expected parent contents, got %q", diff.Before.Contents)
+	}
+	if diff.After.Contents != "base\ncommit\n" {
+		t.Fatalf("expected commit contents, got %q", diff.After.Contents)
+	}
+	if diff.StagedAfter != nil {
+		t.Fatalf("expected commit diff to omit staged version, got %#v", diff.StagedAfter)
+	}
+}
+
+func TestReadCommitFileDiffRejectsConflictedStatus(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+	hash := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+
+	_, err := service.ReadCommitFileDiff(context.Background(), hash, "notes.txt", StatusConflicted, "")
+	if err == nil {
+		t.Fatal("expected conflicted status to be rejected")
+	}
+}
+
 func TestParsePorcelainStatusUnmergedFiles(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeFile(t, filepath.Join(repoRoot, "conflicted.txt"), "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n")
@@ -545,6 +770,22 @@ func createComparisonRepo(t *testing.T) string {
 
 	writeFile(t, filepath.Join(repoRoot, "alpha.txt"), "alpha worktree\n")
 	writeFile(t, filepath.Join(repoRoot, "scratch.txt"), "untracked file\n")
+
+	return repoRoot
+}
+
+func createServiceTestRepo(t *testing.T) string {
+	t.Helper()
+
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init")
+	runGit(t, repoRoot, "checkout", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "diffx@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Diffx Tests")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "initial commit")
 
 	return repoRoot
 }

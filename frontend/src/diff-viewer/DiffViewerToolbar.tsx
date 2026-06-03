@@ -7,6 +7,7 @@ import {
   Minus,
   Plus,
   Rows3,
+  Trash2,
 } from "lucide-react"
 
 import type { PreparedFileDiffResult } from "@/diffs/create"
@@ -22,6 +23,7 @@ type DiffViewerToolbarProps = {
   comparisonMode: ComparisonMode
   selectedFile: ChangedFileItem | null
   isStagePending: boolean
+  isDiscardPending: boolean
   viewMode: "split" | "unified"
   isExpanded: boolean
   canGoPrev: boolean
@@ -30,6 +32,7 @@ type DiffViewerToolbarProps = {
   totalFiles: number
   onToggleExpandAll: () => void
   onToggleStage: (file: ChangedFileItem) => void
+  onDiscardFile: (file: ChangedFileItem) => void
   onViewModeChange: (mode: "split" | "unified") => void
   onGoPrev: () => void
   onGoNext: () => void
@@ -123,6 +126,7 @@ export function DiffViewerToolbar({
   comparisonMode,
   selectedFile,
   isStagePending,
+  isDiscardPending,
   viewMode,
   isExpanded,
   canGoPrev,
@@ -131,6 +135,7 @@ export function DiffViewerToolbar({
   totalFiles,
   onToggleExpandAll,
   onToggleStage,
+  onDiscardFile,
   onViewModeChange,
   onGoPrev,
   onGoNext,
@@ -147,6 +152,7 @@ export function DiffViewerToolbar({
   const stageHasAction =
     selectedFile != null && (selectedFile.hasStagedChanges || selectedFile.hasUnstagedChanges)
   const stageIsDisabled = isStagePending || !stageHasAction
+  const discardIsDisabled = isDiscardPending || isStagePending || !stageHasAction
   const stageAriaLabel = selectedFile
     ? `${stageTooltipText}: ${selectedFile.displayPath}`
     : stageTooltipText
@@ -154,6 +160,13 @@ export function DiffViewerToolbar({
     !stageHasAction && selectedFile
       ? "No stage or unstage action available for this file."
       : stageTooltipText
+  const discardAriaLabel = selectedFile
+    ? `Discard file changes: ${selectedFile.displayPath}`
+    : "Discard file changes"
+  const discardTooltipDescription =
+    !stageHasAction && selectedFile
+      ? "No changes available to discard for this file."
+      : "Discard file changes"
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-background/94 px-4 py-2 backdrop-blur">
       <div className="flex min-w-0 items-center gap-3">
@@ -267,32 +280,55 @@ export function DiffViewerToolbar({
         ) : null}
 
         {showStageToggle && selectedFile ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                aria-label={stageAriaLabel}
-                aria-pressed={stageIsActive}
-                className={cn(
-                  "surface-field shrink-0 gap-1.5 px-2 shadow-none",
-                  stageIsActive
-                    ? "border-[var(--toggle-staged-border)] bg-[var(--toggle-staged-bg)] text-[var(--toggle-staged-text)] hover:bg-[var(--toggle-staged-bg-hover)] hover:text-[var(--toggle-staged-text)]"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                disabled={stageIsDisabled}
-                onClick={() => onToggleStage(selectedFile)}
-              >
-                <StageStateIcon state={stageState} />
-                <span>{stageButtonLabel}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {stageTooltipDescription}
-              <Kbd keys={SHORTCUTS.toggleStage.keys} />
-            </TooltipContent>
-          </Tooltip>
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={stageAriaLabel}
+                  aria-pressed={stageIsActive}
+                  className={cn(
+                    "surface-field shrink-0 gap-1.5 px-2 shadow-none",
+                    stageIsActive
+                      ? "border-[var(--toggle-staged-border)] bg-[var(--toggle-staged-bg)] text-[var(--toggle-staged-text)] hover:bg-[var(--toggle-staged-bg-hover)] hover:text-[var(--toggle-staged-text)]"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  disabled={stageIsDisabled || isDiscardPending}
+                  onClick={() => onToggleStage(selectedFile)}
+                >
+                  <StageStateIcon state={stageState} />
+                  <span>{stageButtonLabel}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {stageTooltipDescription}
+                <Kbd keys={SHORTCUTS.toggleStage.keys} />
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  aria-label={discardAriaLabel}
+                  className="surface-field shrink-0 gap-1.5 px-2 text-muted-foreground shadow-none hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  disabled={discardIsDisabled}
+                  onClick={() => onDiscardFile(selectedFile)}
+                >
+                  <Trash2 className="size-3" />
+                  <span>Discard</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {discardTooltipDescription}
+                <Kbd keys={SHORTCUTS.discardFile.keys} />
+              </TooltipContent>
+            </Tooltip>
+          </>
         ) : null}
       </div>
     </div>

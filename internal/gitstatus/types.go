@@ -64,6 +64,27 @@ type PushResult struct {
 	CreatedUpstream bool   `json:"createdUpstream"`
 }
 
+type CommitItem struct {
+	Hash       string `json:"hash"`
+	ShortHash  string `json:"shortHash"`
+	Subject    string `json:"subject"`
+	AuthorName string `json:"authorName"`
+	AuthorDate string `json:"authorDate"`
+}
+
+type CommitsResult struct {
+	CurrentRef string       `json:"currentRef"`
+	Commits    []CommitItem `json:"commits"`
+}
+
+type CommitDetailResult struct {
+	Kind       string            `json:"kind"`
+	Commit     CommitItem        `json:"commit"`
+	ParentHash string            `json:"parentHash"`
+	CurrentRef string            `json:"currentRef"`
+	Files      []ChangedFileItem `json:"files"`
+}
+
 type FileVersion struct {
 	Name     string `json:"name"`
 	Contents string `json:"contents"`

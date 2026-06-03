@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"diffx/internal/gitstatus"
 )
@@ -13,6 +14,84 @@ func (a *App) handleBranches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := a.service.ListBranches(r.Context())
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) handleCommits(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil {
+		limit = 0
+	}
+
+	result, err := a.service.ListCommits(r.Context(), limit)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) handleCommitDetail(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	hash := r.URL.Query().Get("hash")
+	if hash == "" {
+		http.Error(w, "hash is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := a.service.ReadCommitDetail(r.Context(), hash)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) handleCommitFileDiff(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	query := r.URL.Query()
+	hash := query.Get("hash")
+	if hash == "" {
+		http.Error(w, "hash is required", http.StatusBadRequest)
+		return
+	}
+
+	path := query.Get("path")
+	if path == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+
+	status := gitstatus.ChangedFileStatus(query.Get("status"))
+	if !status.IsValid() {
+		http.Error(w, fmt.Sprintf("invalid status %q", status), http.StatusBadRequest)
+		return
+	}
+
+	previousPath := query.Get("previousPath")
+	if !a.service.AllowsDiff(path, previousPath) {
+		http.Error(w, "path is outside the current workspace scope", http.StatusBadRequest)
+		return
+	}
+
+	result, err := a.service.ReadCommitFileDiff(r.Context(), hash, path, status, previousPath)
 	if err != nil {
 		writeAPIError(w, err)
 		return
