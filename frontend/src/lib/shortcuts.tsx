@@ -132,9 +132,16 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Git actions",
   },
+  copyAnnotations: {
+    id: "copyAnnotations",
+    keys: ["meta", "."],
+    label: "Copy annotations",
+    scope: "diff",
+    group: "Diff actions",
+  },
   sendToAgent: {
     id: "sendToAgent",
-    keys: ["meta", "."],
+    keys: ["shift", "meta", "."],
     label: "Send to agent",
     scope: "diff",
     group: "Diff actions",

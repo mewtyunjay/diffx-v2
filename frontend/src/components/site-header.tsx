@@ -155,6 +155,7 @@ export function SiteHeader({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {copyButton.label}
+              <Kbd keys={SHORTCUTS.copyAnnotations.keys} />
             </TooltipContent>
           </Tooltip>
           {settingsControl ?? null}

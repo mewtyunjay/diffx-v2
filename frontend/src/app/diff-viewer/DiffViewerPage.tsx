@@ -268,6 +268,9 @@ export function DiffViewerPage() {
   useShortcut("discardFile", () => {
     if (comparisonMode === "head" && selectedFile) gitActions.handleDiscardFile(selectedFile)
   })
+  useShortcut("copyAnnotations", () => {
+    if (canCopyAnnotations) copyAnnotations()
+  })
   useShortcut("sendToAgent", () => {
     if (canSendAnnotations) sendAnnotations()
   })
