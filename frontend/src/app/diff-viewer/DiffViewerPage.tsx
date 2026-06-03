@@ -5,6 +5,7 @@ import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
 import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
+import { BranchCompareLoading } from "@/diff-viewer/BranchCompareLoading"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
@@ -332,6 +333,7 @@ export function DiffViewerPage() {
     selectedFile != null && gitActions.stagePendingPaths.includes(selectedFile.path)
   const isSelectedFileDiscardPending =
     selectedFile != null && gitActions.discardPendingPaths.includes(selectedFile.path)
+  const isBranchCompareLoading = isFilesLoading && selectedBaseRef !== "HEAD"
   const mergeModeSummary =
     mergeState.unresolvedCount === 1
       ? "1 conflicted file remaining"
@@ -515,74 +517,80 @@ export function DiffViewerPage() {
         ) : null}
 
         <div ref={fileWindowScrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
-          {selectedFile ? (
-            <div className="sticky top-0 z-20">
-              <div className="relative z-20">
-                <DiffViewerToolbar
-                  diff={currentDisplayedDiff}
-                  comparisonMode={comparisonMode}
-                  selectedFile={selectedFile}
-                  isStagePending={isSelectedFileStagePending}
-                  isDiscardPending={isSelectedFileDiscardPending}
-                  viewMode={viewMode}
-                  isExpanded={isCurrentFileExpanded}
-                  canGoPrev={prevFile != null}
-                  canGoNext={nextFile != null}
-                  fileIndex={indexOfSelected}
-                  totalFiles={totalNavigable}
-                  onToggleExpandAll={handleToggleCurrentFileExpanded}
-                  onToggleStage={gitActions.handleToggleStage}
-                  onDiscardFile={gitActions.handleDiscardFile}
-                  onViewModeChange={handleViewModeChange}
-                  onGoPrev={goPrevFile}
-                  onGoNext={goNextFile}
-                />
-              </div>
-              <div className="relative z-10">
-                <DiffFileHeader
-                  file={selectedFile}
-                  diff={currentDisplayedDiff}
-                  isDiffLoading={isDiffLoading}
-                  scopePath={scopePath}
-                  conflictProgressLabel={selectedConflictProgressLabel}
-                />
-              </div>
-            </div>
-          ) : null}
-
-          {isConflictMode ? (
-            <MergeConflictPane
-              selectedFilePath={selectedConflictPath}
-              conflictFile={conflictFile}
-              conflictFileError={conflictFileError}
-              isConflictFileLoading={isConflictFileLoading}
-              isResolvePending={isResolvePending}
-              currentDiff={selectedFile ? currentDisplayedDiff : null}
-              clearDraftToken={clearDraftToken}
-              savedAnnotations={visibleSavedAnnotations}
-              onSaveAnnotation={saveAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-              onResolveConflict={resolveSelectedConflict}
-            />
+          {isBranchCompareLoading ? (
+            <BranchCompareLoading baseRef={selectedBaseRef} />
           ) : (
-            <DiffPane
-              diff={selectedFile ? currentDisplayedDiff : null}
-              hasSelectedFile={!!selectedFile}
-              viewMode={viewMode}
-              expandAll={isCurrentFileExpanded}
-              savedAnnotations={visibleSavedAnnotations}
-              clearDraftToken={clearDraftToken}
-              onSaveAnnotation={saveAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-              enableHunkActions={
-                comparisonMode === "head" &&
-                !mergeState.inProgress &&
-                selectedFile?.hasUnstagedChanges === true
-              }
-              hunkActionPendingKey={gitActions.hunkActionPendingKey}
-              onAcceptHunk={gitActions.handleAcceptHunk}
-              onRejectHunk={gitActions.handleRejectHunk}
-            />
+            <>
+              {selectedFile ? (
+                <div className="sticky top-0 z-20">
+                  <div className="relative z-20">
+                    <DiffViewerToolbar
+                      diff={currentDisplayedDiff}
+                      comparisonMode={comparisonMode}
+                      selectedFile={selectedFile}
+                      isStagePending={isSelectedFileStagePending}
+                      isDiscardPending={isSelectedFileDiscardPending}
+                      viewMode={viewMode}
+                      isExpanded={isCurrentFileExpanded}
+                      canGoPrev={prevFile != null}
+                      canGoNext={nextFile != null}
+                      fileIndex={indexOfSelected}
+                      totalFiles={totalNavigable}
+                      onToggleExpandAll={handleToggleCurrentFileExpanded}
+                      onToggleStage={gitActions.handleToggleStage}
+                      onDiscardFile={gitActions.handleDiscardFile}
+                      onViewModeChange={handleViewModeChange}
+                      onGoPrev={goPrevFile}
+                      onGoNext={goNextFile}
+                    />
+                  </div>
+                  <div className="relative z-10">
+                    <DiffFileHeader
+                      file={selectedFile}
+                      diff={currentDisplayedDiff}
+                      isDiffLoading={isDiffLoading}
+                      scopePath={scopePath}
+                      conflictProgressLabel={selectedConflictProgressLabel}
+                    />
+                  </div>
+                </div>
+              ) : null}
+
+              {isConflictMode ? (
+                <MergeConflictPane
+                  selectedFilePath={selectedConflictPath}
+                  conflictFile={conflictFile}
+                  conflictFileError={conflictFileError}
+                  isConflictFileLoading={isConflictFileLoading}
+                  isResolvePending={isResolvePending}
+                  currentDiff={selectedFile ? currentDisplayedDiff : null}
+                  clearDraftToken={clearDraftToken}
+                  savedAnnotations={visibleSavedAnnotations}
+                  onSaveAnnotation={saveAnnotation}
+                  onDeleteAnnotation={deleteAnnotation}
+                  onResolveConflict={resolveSelectedConflict}
+                />
+              ) : (
+                <DiffPane
+                  diff={selectedFile ? currentDisplayedDiff : null}
+                  hasSelectedFile={!!selectedFile}
+                  viewMode={viewMode}
+                  expandAll={isCurrentFileExpanded}
+                  savedAnnotations={visibleSavedAnnotations}
+                  clearDraftToken={clearDraftToken}
+                  onSaveAnnotation={saveAnnotation}
+                  onDeleteAnnotation={deleteAnnotation}
+                  enableHunkActions={
+                    comparisonMode === "head" &&
+                    !mergeState.inProgress &&
+                    selectedFile?.hasUnstagedChanges === true
+                  }
+                  hunkActionPendingKey={gitActions.hunkActionPendingKey}
+                  onAcceptHunk={gitActions.handleAcceptHunk}
+                  onRejectHunk={gitActions.handleRejectHunk}
+                />
+              )}
+            </>
           )}
         </div>
       </section>
