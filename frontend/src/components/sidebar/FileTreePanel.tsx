@@ -42,6 +42,8 @@ type FileTreePanelProps = {
   commits: CommitItem[]
   isCommitsLoading: boolean
   commitsError: string | null
+  selectedCommitHash: string | null
+  onSelectCommit: (commit: CommitItem) => void
 }
 
 export function FileTreePanel({
@@ -71,6 +73,8 @@ export function FileTreePanel({
   commits,
   isCommitsLoading,
   commitsError,
+  selectedCommitHash,
+  onSelectCommit,
 }: FileTreePanelProps) {
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const [tabDirection, setTabDirection] = React.useState<"forward" | "backward">("forward")
@@ -143,6 +147,8 @@ export function FileTreePanel({
               commits={commits}
               isLoading={isCommitsLoading}
               error={commitsError}
+              selectedCommitHash={selectedCommitHash}
+              onSelectCommit={onSelectCommit}
             />
           ) : (
             <SidebarPanelEmpty label={activeTabDefinition.label} />

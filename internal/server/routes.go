@@ -5,6 +5,8 @@ import "net/http"
 func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/app-config", a.handleAppConfig)
 	mux.HandleFunc("/api/branches", a.handleBranches)
+	mux.HandleFunc("/api/commit", a.handleCommitDetail)
+	mux.HandleFunc("/api/commit-file-diff", a.handleCommitFileDiff)
 	mux.HandleFunc("/api/commits", a.handleCommits)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)

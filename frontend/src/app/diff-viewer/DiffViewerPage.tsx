@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { FolderTree, LoaderCircle, Settings2 } from "lucide-react"
+import { FolderTree, GitPullRequest, LoaderCircle, Settings2 } from "lucide-react"
 
 import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
+import { ChangeSetDetailPane } from "@/app/diff-viewer/change-set/ChangeSetDetailPane"
+import type { ChangeSetSource } from "@/app/diff-viewer/change-set/types"
+import { useCommitDetailState } from "@/app/diff-viewer/change-set/useCommitDetailState"
 import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
 import { BranchCompareLoading } from "@/diff-viewer/BranchCompareLoading"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
@@ -16,7 +19,7 @@ import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
-import type { ChangedFilesResult } from "@/git/types"
+import type { ChangedFilesResult, CommitItem } from "@/git/types"
 import { fuzzyFilterChangedFiles } from "@/components/file-tree/fuzzy-search"
 import { AppShell } from "@/components/app-shell"
 import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
@@ -38,6 +41,11 @@ export function DiffViewerPage() {
   const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false)
   const [fileSearchQuery, setFileSearchQuery] = useState("")
   const [sidebarTab, setSidebarTab] = useState<SidebarPanelTab>("current")
+  const [selectedChangeSet, setSelectedChangeSet] =
+    useState<ChangeSetSource>({ kind: "working-tree" })
+  const isWorkingTreeSource = selectedChangeSet.kind === "working-tree"
+  const selectedCommitHash =
+    selectedChangeSet.kind === "commit" ? selectedChangeSet.hash : null
 
   const {
     branches,
@@ -224,6 +232,9 @@ export function DiffViewerPage() {
     enabled: sidebarTab === "commits",
     currentRef,
   })
+  const commitChangeSetState = useCommitDetailState({
+    hash: selectedCommitHash,
+  })
   const aiSettingsState = useAISettings()
   const diffViewerPreferencesState = useDiffViewerPreferences()
   const { preferences: diffViewerPreferences, updateActivePreferences } =
@@ -238,6 +249,27 @@ export function DiffViewerPage() {
       gitActions.setCommitMessage(message)
     },
   })
+
+  const handleSidebarTabChange = useCallback(
+    (tab: SidebarPanelTab) => {
+      setSidebarTab(tab)
+
+      if (tab === "current" || tab === "conflicts") {
+        setSelectedChangeSet({ kind: "working-tree" })
+        return
+      }
+
+      if (tab === "pull-request") {
+        setSelectedChangeSet({ kind: "pull-request", id: "current" })
+      }
+    },
+    []
+  )
+
+  const handleSelectCommit = useCallback((commit: CommitItem) => {
+    setSidebarTab("commits")
+    setSelectedChangeSet({ kind: "commit", hash: commit.hash })
+  }, [])
 
   const suggestCommitDisabledReason = useMemo(() => {
     if (comparisonMode !== "head") {
@@ -276,10 +308,12 @@ export function DiffViewerPage() {
   ])
 
   useShortcut("toggleStage", () => {
-    if (selectedFile) gitActions.handleToggleStage(selectedFile)
+    if (isWorkingTreeSource && selectedFile) gitActions.handleToggleStage(selectedFile)
   })
   useShortcut("discardFile", () => {
-    if (comparisonMode === "head" && selectedFile) gitActions.handleDiscardFile(selectedFile)
+    if (isWorkingTreeSource && comparisonMode === "head" && selectedFile) {
+      gitActions.handleDiscardFile(selectedFile)
+    }
   })
   useShortcut("copyAnnotations", () => {
     if (canCopyAnnotations) copyAnnotations()
@@ -351,7 +385,7 @@ export function DiffViewerPage() {
       ? filesError
       : branchesError && !isBranchesLoading
         ? branchesError
-        : selectedFile && diffError && !isDiffLoading
+        : isWorkingTreeSource && selectedFile && diffError && !isDiffLoading
           ? diffError
           : null
   const isSelectedFileStagePending =
@@ -390,7 +424,7 @@ export function DiffViewerPage() {
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
               activeTab={sidebarTab}
-              onActiveTabChange={setSidebarTab}
+              onActiveTabChange={handleSidebarTabChange}
               files={filteredVisibleFiles}
               totalFileCount={visibleFiles.length}
               searchQuery={fileSearchQuery}
@@ -415,6 +449,8 @@ export function DiffViewerPage() {
               commits={commits}
               isCommitsLoading={isCommitsLoading}
               commitsError={commitsError}
+              selectedCommitHash={selectedCommitHash}
+              onSelectCommit={handleSelectCommit}
             />
 
             <GitActionsPanel
@@ -547,8 +583,47 @@ export function DiffViewerPage() {
           </div>
         ) : null}
 
-        <div ref={fileWindowScrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto px-[2px]">
-          {isBranchCompareLoading ? (
+        <div
+          ref={fileWindowScrollRef}
+          className={
+            isWorkingTreeSource
+              ? "min-h-0 min-w-0 flex-1 overflow-auto px-[2px]"
+              : "min-h-0 min-w-0 flex-1 overflow-hidden"
+          }
+        >
+          {!isWorkingTreeSource ? (
+            <ChangeSetDetailPane
+              detail={selectedChangeSet.kind === "commit" ? commitChangeSetState.detail : null}
+              detailMode={diffViewerPreferences.diffDetailMode}
+              error={selectedChangeSet.kind === "commit" ? commitChangeSetState.error : null}
+              isLoading={
+                selectedChangeSet.kind === "commit" ? commitChangeSetState.isLoading : false
+              }
+              loadFileDiff={commitChangeSetState.loadFileDiff}
+              placeholderTitle={
+                selectedChangeSet.kind === "pull-request"
+                  ? "Pull request review"
+                  : "Select a commit"
+              }
+              placeholderDescription={
+                selectedChangeSet.kind === "pull-request"
+                  ? "Pull request data will use this same change-set review surface when it is added."
+                  : "Choose a commit from the sidebar to review all changed files."
+              }
+              PlaceholderIcon={GitPullRequest}
+              scopePath={scopePath}
+              sourceKey={
+                selectedChangeSet.kind === "commit" && selectedCommitHash
+                  ? `commit:${selectedCommitHash}`
+                  : selectedChangeSet.kind === "pull-request"
+                    ? `pull-request:${selectedChangeSet.id}`
+                    : "change-set"
+              }
+              viewMode={viewMode}
+              onToggleExpandAll={handleToggleCurrentFileExpanded}
+              onViewModeChange={handleViewModeChange}
+            />
+          ) : isBranchCompareLoading ? (
             <BranchCompareLoading baseRef={selectedBaseRef} />
           ) : (
             <>

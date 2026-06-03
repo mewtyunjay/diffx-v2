@@ -7,6 +7,8 @@ type CommitsPanelProps = {
   commits: CommitItem[]
   isLoading: boolean
   error: string | null
+  selectedCommitHash: string | null
+  onSelectCommit: (commit: CommitItem) => void
 }
 
 const compactDateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -23,7 +25,14 @@ function formatCommitDate(value: string) {
   return compactDateFormatter.format(date)
 }
 
-export function CommitsPanel({ currentRef, commits, isLoading, error }: CommitsPanelProps) {
+export function CommitsPanel({
+  currentRef,
+  commits,
+  isLoading,
+  error,
+  selectedCommitHash,
+  onSelectCommit,
+}: CommitsPanelProps) {
   const refLabel = currentRef || "HEAD"
 
   return (
@@ -57,7 +66,12 @@ export function CommitsPanel({ currentRef, commits, isLoading, error }: CommitsP
         <ol className="space-y-0.5">
           {commits.map((commit) => (
             <li key={commit.hash}>
-              <div className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-sidebar-hover)]">
+              <button
+                type="button"
+                className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--surface-sidebar-hover)] data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
+                data-active={selectedCommitHash === commit.hash}
+                onClick={() => onSelectCommit(commit)}
+              >
                 <GitCommitHorizontal className="mt-0.5 size-3.5 shrink-0 text-sidebar-foreground/38" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate type-meta font-medium text-sidebar-foreground/86">
@@ -72,7 +86,7 @@ export function CommitsPanel({ currentRef, commits, isLoading, error }: CommitsP
                 <span className="shrink-0 pt-0.5 type-mono-meta text-sidebar-foreground/38">
                   {formatCommitDate(commit.authorDate)}
                 </span>
-              </div>
+              </button>
             </li>
           ))}
         </ol>

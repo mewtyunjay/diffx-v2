@@ -80,6 +80,14 @@ export type CommitsResult = {
   commits: CommitItem[]
 }
 
+export type CommitDetailResult = {
+  kind: "commit"
+  commit: CommitItem
+  parentHash: string
+  currentRef: string
+  files: ChangedFileItem[]
+}
+
 export type HunkActionInput = Pick<
   FileDiffResult,
   "path" | "previousPath" | "status"

@@ -53,6 +53,7 @@ type DiffPaneRendererProps = {
     comment: string
   ) => void
   onDeleteAnnotation: (target: Pick<SavedDiffAnnotation, "side" | "lineNumber">) => void
+  enableAnnotations?: boolean
   enableHunkActions: boolean
   hunkActionPendingKey: string | null
   onAcceptHunk: (input: HunkActionInput) => void
@@ -87,6 +88,7 @@ function DiffPaneRendererContent({
   savedAnnotations,
   onSaveAnnotation,
   onDeleteAnnotation,
+  enableAnnotations = true,
   enableHunkActions,
   hunkActionPendingKey,
   onAcceptHunk,
@@ -153,7 +155,7 @@ function DiffPaneRendererContent({
     () => ({
       diffStyle: viewMode,
       diffIndicators: "bars" as const,
-      enableGutterUtility: true,
+      enableGutterUtility: enableAnnotations,
       disableFileHeader: true,
       overflow: "wrap" as const,
       hunkSeparators: "line-info" as const,
@@ -174,6 +176,10 @@ function DiffPaneRendererContent({
         ? LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH
         : FAST_INLINE_DIFF_MAX_LINE_LENGTH,
       onLineNumberClick: (line: DiffLinePointerEvent) => {
+        if (!enableAnnotations) {
+          return
+        }
+
         line.event.preventDefault()
         line.event.stopPropagation()
         handleOpenDraft({
@@ -190,6 +196,7 @@ function DiffPaneRendererContent({
     }),
     [
       diff,
+      enableAnnotations,
       enableHunkActions,
       expandAll,
       handleOpenDraft,
@@ -270,47 +277,61 @@ function DiffPaneRendererContent({
       fileDiff={diff.parsedDiff}
       options={options}
       lineAnnotations={lineAnnotations}
-      renderAnnotation={(annotation) => {
-        if (annotation.metadata?.kind === "saved") {
-          return <DiffSavedComment comment={annotation.metadata.comment} onOpen={() => handleOpenDraft(annotation)} />
-        }
-
-        const focusKey = draftTarget == null ? "closed" : `${draftTarget.side}:${draftTarget.lineNumber}`
-        const isEditingExisting =
-          draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))
-
-        return (
-          <DiffCommentDraft
-            focusKey={focusKey}
-            value={draftText}
-            canSave={canSaveDraft}
-            isEditingExisting={isEditingExisting}
-            onChange={(value) => {
-              if (!draftTarget) {
-                return
+      renderAnnotation={
+        enableAnnotations
+          ? (annotation) => {
+              if (annotation.metadata?.kind === "saved") {
+                return (
+                  <DiffSavedComment
+                    comment={annotation.metadata.comment}
+                    onOpen={() => handleOpenDraft(annotation)}
+                  />
+                )
               }
 
-              setStoredDraft(createDraftDiffAnnotation(diff, draftTarget, value))
-            }}
-            onDelete={isEditingExisting ? handleDeleteDraft : undefined}
-            onSave={handleSaveDraft}
-            onEscape={handleCloseDraft}
-          />
-        )
-      }}
-      renderGutterUtility={(getHoveredLine) => {
-        return (
-          <button
-            type="button"
-            className="diff-gutter-comment-button"
-            aria-label="Comment on line"
-            title="Comment on line"
-            onClick={(event) => handleUtilityOpenDraft(event, getHoveredLine)}
-          >
-            <GutterPlusIcon />
-          </button>
-        )
-      }}
+              const focusKey =
+                draftTarget == null ? "closed" : `${draftTarget.side}:${draftTarget.lineNumber}`
+              const isEditingExisting =
+                draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))
+
+              return (
+                <DiffCommentDraft
+                  focusKey={focusKey}
+                  value={draftText}
+                  canSave={canSaveDraft}
+                  isEditingExisting={isEditingExisting}
+                  onChange={(value) => {
+                    if (!draftTarget) {
+                      return
+                    }
+
+                    setStoredDraft(createDraftDiffAnnotation(diff, draftTarget, value))
+                  }}
+                  onDelete={isEditingExisting ? handleDeleteDraft : undefined}
+                  onSave={handleSaveDraft}
+                  onEscape={handleCloseDraft}
+                />
+              )
+            }
+          : undefined
+      }
+      renderGutterUtility={
+        enableAnnotations
+          ? (getHoveredLine) => {
+              return (
+                <button
+                  type="button"
+                  className="diff-gutter-comment-button"
+                  aria-label="Comment on line"
+                  title="Comment on line"
+                  onClick={(event) => handleUtilityOpenDraft(event, getHoveredLine)}
+                >
+                  <GutterPlusIcon />
+                </button>
+              )
+            }
+          : undefined
+      }
       className="diff-pane-theme block h-full min-h-full min-w-0"
     />
   )

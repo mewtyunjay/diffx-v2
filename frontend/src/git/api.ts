@@ -2,6 +2,7 @@ import type {
   BranchesResult,
   ChangedFileItem,
   ChangedFilesResult,
+  CommitDetailResult,
   CommitsResult,
   CommitResult,
   ConflictFileResult,
@@ -78,6 +79,39 @@ export async function fetchCommits(limit = 100, signal?: AbortSignal) {
   }
 
   return (await response.json()) as CommitsResult
+}
+
+export async function fetchCommitDetail(hash: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ hash })
+  const response = await fetch(`/api/commit?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as CommitDetailResult
+}
+
+export async function fetchCommitFileDiff(
+  hash: string,
+  file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({
+    hash,
+    path: file.path,
+    status: file.status,
+  })
+
+  if (file.previousPath) {
+    params.set("previousPath", file.previousPath)
+  }
+
+  const response = await fetch(`/api/commit-file-diff?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as FileDiffResult
 }
 
 export async function fetchFileDiff(

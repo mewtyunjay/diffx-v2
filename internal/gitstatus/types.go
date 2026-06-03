@@ -77,6 +77,14 @@ type CommitsResult struct {
 	Commits    []CommitItem `json:"commits"`
 }
 
+type CommitDetailResult struct {
+	Kind       string            `json:"kind"`
+	Commit     CommitItem        `json:"commit"`
+	ParentHash string            `json:"parentHash"`
+	CurrentRef string            `json:"currentRef"`
+	Files      []ChangedFileItem `json:"files"`
+}
+
 type FileVersion struct {
 	Name     string `json:"name"`
 	Contents string `json:"contents"`
