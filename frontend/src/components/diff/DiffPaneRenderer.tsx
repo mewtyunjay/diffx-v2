@@ -300,17 +300,15 @@ function DiffPaneRendererContent({
       }}
       renderGutterUtility={(getHoveredLine) => {
         return (
-          <div className="flex items-center gap-0.5 rounded-md border border-border/80 bg-popover p-0.5 text-popover-foreground shadow-sm">
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground"
-              aria-label="Comment on line"
-              title="Comment on line"
-              onClick={(event) => handleUtilityOpenDraft(event, getHoveredLine)}
-            >
-              <GutterPlusIcon />
-            </button>
-          </div>
+          <button
+            type="button"
+            className="diff-gutter-comment-button"
+            aria-label="Comment on line"
+            title="Comment on line"
+            onClick={(event) => handleUtilityOpenDraft(event, getHoveredLine)}
+          >
+            <GutterPlusIcon />
+          </button>
         )
       }}
       className="diff-pane-theme block h-full min-h-full min-w-0"
