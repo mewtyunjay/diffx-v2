@@ -11,6 +11,7 @@ import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
 import { useBranchesState } from "@/diff-viewer/hooks/useBranchesState"
 import { useChangedFilesState } from "@/diff-viewer/hooks/useChangedFilesState"
+import { useCommitsState } from "@/diff-viewer/hooks/useCommitsState"
 import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
@@ -22,6 +23,7 @@ import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
 import { DiffPane } from "@/components/diff/DiffPane"
 import { MergeConflictPane } from "@/components/diff/MergeConflictPane"
 import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
+import type { SidebarPanelTab } from "@/components/sidebar/SidebarPanelTabs"
 import { GitActionsPanel } from "@/components/sidebar/GitActionsPanel"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -35,6 +37,7 @@ export function DiffViewerPage() {
     useState<ChangedFilesResult | null>(null)
   const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false)
   const [fileSearchQuery, setFileSearchQuery] = useState("")
+  const [sidebarTab, setSidebarTab] = useState<SidebarPanelTab>("current")
 
   const {
     branches,
@@ -211,6 +214,16 @@ export function DiffViewerPage() {
     refreshBranches,
     refreshChangedFiles,
   })
+  const {
+    commits,
+    commitsError,
+    isCommitsLoading,
+    refreshCommits,
+    setCommitsError,
+  } = useCommitsState({
+    enabled: sidebarTab === "commits",
+    currentRef,
+  })
   const aiSettingsState = useAISettings()
   const diffViewerPreferencesState = useDiffViewerPreferences()
   const { preferences: diffViewerPreferences, updateActivePreferences } =
@@ -289,7 +302,7 @@ export function DiffViewerPage() {
   }, [repoName])
 
   const handleLiveRefreshError = useCallback(
-    (error: Error, phase: "files" | "branches", signal: AbortSignal) => {
+    (error: Error, phase: "files" | "branches" | "commits", signal: AbortSignal) => {
       if (signal.aborted) {
         return
       }
@@ -299,14 +312,23 @@ export function DiffViewerPage() {
         return
       }
 
+      if (phase === "commits") {
+        setCommitsError(error.message)
+        return
+      }
+
       setBranchesError(error.message)
     },
-    [setBranchesError, setFilesError]
+    [setBranchesError, setCommitsError, setFilesError]
   )
+
+  const shouldRefreshCommits = useCallback(() => sidebarTab === "commits", [sidebarTab])
 
   useRepoEventsRefresh({
     refreshChangedFiles,
     refreshBranches,
+    refreshCommits,
+    shouldRefreshCommits,
     onError: handleLiveRefreshError,
   })
 
@@ -367,6 +389,8 @@ export function DiffViewerPage() {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
+              activeTab={sidebarTab}
+              onActiveTabChange={setSidebarTab}
               files={filteredVisibleFiles}
               totalFileCount={visibleFiles.length}
               searchQuery={fileSearchQuery}
@@ -387,6 +411,10 @@ export function DiffViewerPage() {
               onToggleStage={gitActions.handleToggleStage}
               onStageAll={gitActions.handleStageAll}
               onUnstageAll={gitActions.handleUnstageAll}
+              currentRef={currentRef}
+              commits={commits}
+              isCommitsLoading={isCommitsLoading}
+              commitsError={commitsError}
             />
 
             <GitActionsPanel

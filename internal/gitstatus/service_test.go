@@ -40,6 +40,60 @@ func TestParsePorcelainStatus(t *testing.T) {
 	}
 }
 
+func TestListCommitsReturnsRecentHeadCommits(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "second commit")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\nthird\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "third commit")
+
+	result, err := service.ListCommits(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("ListCommits returned error: %v", err)
+	}
+
+	if result.CurrentRef != "main" {
+		t.Fatalf("expected current ref main, got %q", result.CurrentRef)
+	}
+	if len(result.Commits) != 2 {
+		t.Fatalf("expected 2 commits, got %#v", result.Commits)
+	}
+	if result.Commits[0].Subject != "third commit" || result.Commits[1].Subject != "second commit" {
+		t.Fatalf("expected newest commits first, got %#v", result.Commits)
+	}
+	if result.Commits[0].Hash == "" || result.Commits[0].ShortHash == "" {
+		t.Fatalf("expected hashes to be populated, got %#v", result.Commits[0])
+	}
+	if result.Commits[0].AuthorName != "Diffx Tests" || result.Commits[0].AuthorDate == "" {
+		t.Fatalf("expected author fields to be populated, got %#v", result.Commits[0])
+	}
+}
+
+func TestListCommitsUsesDefaultLimitForInvalidLimit(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	result, err := service.ListCommits(context.Background(), 0)
+	if err != nil {
+		t.Fatalf("ListCommits returned error: %v", err)
+	}
+
+	if len(result.Commits) != 1 {
+		t.Fatalf("expected default limit to return existing commit, got %#v", result.Commits)
+	}
+}
+
+func TestParseCommitLogRejectsMalformedRecords(t *testing.T) {
+	_, err := parseCommitLog([]byte("hash\x1fshort\x1fsubject\x1e"))
+	if err == nil {
+		t.Fatal("expected malformed commit log to return an error")
+	}
+}
+
 func TestParsePorcelainStatusUnmergedFiles(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeFile(t, filepath.Join(repoRoot, "conflicted.txt"), "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n")
@@ -545,6 +599,22 @@ func createComparisonRepo(t *testing.T) string {
 
 	writeFile(t, filepath.Join(repoRoot, "alpha.txt"), "alpha worktree\n")
 	writeFile(t, filepath.Join(repoRoot, "scratch.txt"), "untracked file\n")
+
+	return repoRoot
+}
+
+func createServiceTestRepo(t *testing.T) string {
+	t.Helper()
+
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init")
+	runGit(t, repoRoot, "checkout", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "diffx@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Diffx Tests")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "initial commit")
 
 	return repoRoot
 }

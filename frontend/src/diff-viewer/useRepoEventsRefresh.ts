@@ -5,21 +5,27 @@ import type { RepoChangedEvent } from "@/git/types"
 import { useEffect, useRef } from "react"
 
 type RefreshFn = (signal?: AbortSignal) => Promise<unknown>
-type RefreshPhase = "files" | "branches"
+type RefreshPhase = "files" | "branches" | "commits"
 
 type UseRepoEventsRefreshOptions = {
   refreshChangedFiles: RefreshFn
   refreshBranches: RefreshFn
+  refreshCommits?: RefreshFn
+  shouldRefreshCommits?: () => boolean
   onError?: (error: Error, phase: RefreshPhase, signal: AbortSignal) => void
 }
 
 export function useRepoEventsRefresh({
   refreshChangedFiles,
   refreshBranches,
+  refreshCommits,
+  shouldRefreshCommits,
   onError,
 }: UseRepoEventsRefreshOptions) {
   const refreshChangedFilesRef = useRef(refreshChangedFiles)
   const refreshBranchesRef = useRef(refreshBranches)
+  const refreshCommitsRef = useRef(refreshCommits)
+  const shouldRefreshCommitsRef = useRef(shouldRefreshCommits)
   const onErrorRef = useRef(onError)
   const queuedKindRef = useRef<RepoChangedEvent["kind"] | null>(null)
   const isRefreshingRef = useRef(false)
@@ -32,6 +38,14 @@ export function useRepoEventsRefresh({
   useEffect(() => {
     refreshBranchesRef.current = refreshBranches
   }, [refreshBranches])
+
+  useEffect(() => {
+    refreshCommitsRef.current = refreshCommits
+  }, [refreshCommits])
+
+  useEffect(() => {
+    shouldRefreshCommitsRef.current = shouldRefreshCommits
+  }, [shouldRefreshCommits])
 
   useEffect(() => {
     onErrorRef.current = onError
@@ -64,6 +78,9 @@ export function useRepoEventsRefresh({
           const refreshes = [refreshChangedFilesRef.current(controller.signal)]
           if (cycleKind === "git") {
             refreshes.push(refreshBranchesRef.current(controller.signal))
+            if (shouldRefreshCommitsRef.current?.() && refreshCommitsRef.current) {
+              refreshes.push(refreshCommitsRef.current(controller.signal))
+            }
           }
           const results = await Promise.allSettled(refreshes)
 
@@ -84,6 +101,18 @@ export function useRepoEventsRefresh({
             handleRefreshError(
               branchesResult.reason,
               "branches",
+              controller.signal,
+              onErrorRef.current,
+              cancelled
+            )
+            break
+          }
+
+          const commitsResult = results[2]
+          if (commitsResult?.status === "rejected") {
+            handleRefreshError(
+              commitsResult.reason,
+              "commits",
               controller.signal,
               onErrorRef.current,
               cancelled

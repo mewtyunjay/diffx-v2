@@ -2,6 +2,7 @@ import type {
   BranchesResult,
   ChangedFileItem,
   ChangedFilesResult,
+  CommitsResult,
   CommitResult,
   ConflictFileResult,
   ConflictResolveResult,
@@ -67,6 +68,16 @@ export async function fetchBranches(signal?: AbortSignal) {
   }
 
   return (await response.json()) as BranchesResult
+}
+
+export async function fetchCommits(limit = 100, signal?: AbortSignal) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  const response = await fetch(`/api/commits?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as CommitsResult
 }
 
 export async function fetchFileDiff(

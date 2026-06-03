@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"diffx/internal/gitstatus"
 )
@@ -13,6 +14,25 @@ func (a *App) handleBranches(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := a.service.ListBranches(r.Context())
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) handleCommits(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil {
+		limit = 0
+	}
+
+	result, err := a.service.ListCommits(r.Context(), limit)
 	if err != nil {
 		writeAPIError(w, err)
 		return

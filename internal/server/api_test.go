@@ -350,6 +350,60 @@ func TestHandleFilesDoesNotPublishRepoEvents(t *testing.T) {
 	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
 }
 
+func TestHandleCommitsReturnsCurrentBranchCommits(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	writeServerTestFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runServerGit(t, repoRoot, "add", "notes.txt")
+	runServerGit(t, repoRoot, "commit", "-m", "second commit")
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/commits?limit=1", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var payload gitstatus.CommitsResult
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode commits response: %v", err)
+	}
+
+	if payload.CurrentRef != "main" {
+		t.Fatalf("expected current ref main, got %q", payload.CurrentRef)
+	}
+	if len(payload.Commits) != 1 {
+		t.Fatalf("expected one commit, got %#v", payload.Commits)
+	}
+	if payload.Commits[0].Subject != "second commit" {
+		t.Fatalf("expected latest commit subject, got %#v", payload.Commits[0])
+	}
+}
+
+func TestHandleCommitsDoesNotPublishRepoEvents(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+	events, unsubscribe := app.repoEvents.Subscribe()
+	defer unsubscribe()
+
+	request := httptest.NewRequest(http.MethodGet, "/api/commits", nil)
+	recorder := httptest.NewRecorder()
+
+	app.Handler().ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
+}
+
 func TestHandleFilesIncludesRepoName(t *testing.T) {
 	t.Parallel()
 

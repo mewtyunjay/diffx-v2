@@ -1,7 +1,9 @@
 import * as React from "react"
 
 import type { ChangedFileItem, ComparisonMode } from "@/git/types"
+import type { CommitItem } from "@/git/types"
 import type { SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
+import { CommitsPanel } from "@/components/sidebar/CommitsPanel"
 import { CurrentFilesPanel } from "@/components/sidebar/CurrentFilesPanel"
 import { SidebarContent } from "@/components/ui/sidebar"
 import { useShortcut } from "@/lib/shortcuts"
@@ -14,6 +16,8 @@ import {
 } from "@/components/sidebar/SidebarPanelTabs"
 
 type FileTreePanelProps = {
+  activeTab: SidebarPanelTab
+  onActiveTabChange: (tab: SidebarPanelTab) => void
   files: ChangedFileItem[]
   totalFileCount: number
   searchQuery: string
@@ -34,9 +38,15 @@ type FileTreePanelProps = {
   onToggleStage: (file: ChangedFileItem) => void
   onStageAll: () => void
   onUnstageAll: () => void
+  currentRef: string
+  commits: CommitItem[]
+  isCommitsLoading: boolean
+  commitsError: string | null
 }
 
 export function FileTreePanel({
+  activeTab,
+  onActiveTabChange,
   files,
   totalFileCount,
   searchQuery,
@@ -57,9 +67,12 @@ export function FileTreePanel({
   onToggleStage,
   onStageAll,
   onUnstageAll,
+  currentRef,
+  commits,
+  isCommitsLoading,
+  commitsError,
 }: FileTreePanelProps) {
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
-  const [activeTab, setActiveTab] = React.useState<SidebarPanelTab>("current")
   const [tabDirection, setTabDirection] = React.useState<"forward" | "backward">("forward")
 
   useShortcut("focusFileSearch", () => {
@@ -79,9 +92,9 @@ export function FileTreePanel({
       const currentIndex = SIDEBAR_PANEL_TABS.findIndex((tab) => tab.id === activeTab)
       const nextIndex = SIDEBAR_PANEL_TABS.findIndex((tab) => tab.id === nextTab)
       setTabDirection(nextIndex > currentIndex ? "forward" : "backward")
-      setActiveTab(nextTab)
+      onActiveTabChange(nextTab)
     },
-    [activeTab]
+    [activeTab, onActiveTabChange]
   )
 
   return (
@@ -123,6 +136,13 @@ export function FileTreePanel({
               onToggleStage={onToggleStage}
               onStageAll={onStageAll}
               onUnstageAll={onUnstageAll}
+            />
+          ) : activeTab === "commits" ? (
+            <CommitsPanel
+              currentRef={currentRef}
+              commits={commits}
+              isLoading={isCommitsLoading}
+              error={commitsError}
             />
           ) : (
             <SidebarPanelEmpty label={activeTabDefinition.label} />
