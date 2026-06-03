@@ -264,6 +264,9 @@ export function DiffViewerPage() {
   useShortcut("toggleStage", () => {
     if (selectedFile) gitActions.handleToggleStage(selectedFile)
   })
+  useShortcut("discardFile", () => {
+    if (comparisonMode === "head" && selectedFile) gitActions.handleDiscardFile(selectedFile)
+  })
   useShortcut("sendToAgent", () => {
     if (canSendAnnotations) sendAnnotations()
   })
@@ -327,6 +330,8 @@ export function DiffViewerPage() {
           : null
   const isSelectedFileStagePending =
     selectedFile != null && gitActions.stagePendingPaths.includes(selectedFile.path)
+  const isSelectedFileDiscardPending =
+    selectedFile != null && gitActions.discardPendingPaths.includes(selectedFile.path)
   const mergeModeSummary =
     mergeState.unresolvedCount === 1
       ? "1 conflicted file remaining"
@@ -518,6 +523,7 @@ export function DiffViewerPage() {
                   comparisonMode={comparisonMode}
                   selectedFile={selectedFile}
                   isStagePending={isSelectedFileStagePending}
+                  isDiscardPending={isSelectedFileDiscardPending}
                   viewMode={viewMode}
                   isExpanded={isCurrentFileExpanded}
                   canGoPrev={prevFile != null}
@@ -526,6 +532,7 @@ export function DiffViewerPage() {
                   totalFiles={totalNavigable}
                   onToggleExpandAll={handleToggleCurrentFileExpanded}
                   onToggleStage={gitActions.handleToggleStage}
+                  onDiscardFile={gitActions.handleDiscardFile}
                   onViewModeChange={handleViewModeChange}
                   onGoPrev={goPrevFile}
                   onGoNext={goNextFile}

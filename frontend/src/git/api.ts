@@ -119,6 +119,13 @@ export async function unstageAll(signal?: AbortSignal) {
   return postJSON<void>("/api/git/unstage-all", undefined, signal)
 }
 
+export async function discardFile(
+  file: Pick<ChangedFileItem, "path" | "previousPath">,
+  signal?: AbortSignal
+) {
+  return postJSON<void>("/api/git/discard", toStageFileRequest(file), signal)
+}
+
 export async function acceptHunk(input: HunkActionInput, signal?: AbortSignal) {
   return postJSON<void>("/api/git/hunk/accept", input, signal)
 }

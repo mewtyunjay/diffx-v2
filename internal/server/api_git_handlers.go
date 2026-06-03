@@ -105,6 +105,25 @@ func (a *App) handleUnstageAll(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (a *App) handleDiscardFile(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodPost) {
+		return
+	}
+
+	var request stageFileRequest
+	if err := readJSONBody(r, &request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := a.service.DiscardFile(r.Context(), request.Path, request.PreviousPath); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *App) handleAcceptHunk(w http.ResponseWriter, r *http.Request) {
 	if !allowMethod(w, r, http.MethodPost) {
 		return

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -88,6 +89,56 @@ func (s *Service) UnstageFile(ctx context.Context, path string, previousPath str
 	}
 
 	_, err := s.runGitCombined(ctx, "", args...)
+	return err
+}
+
+func (s *Service) DiscardFile(ctx context.Context, path string, previousPath string) error {
+	if err := s.ensureScopedDiffPath(path, previousPath); err != nil {
+		return err
+	}
+
+	if previousPath != "" && previousPath != path {
+		if err := s.discardPath(ctx, path); err != nil {
+			return err
+		}
+
+		return s.restorePathFromHead(ctx, previousPath)
+	}
+
+	return s.discardPath(ctx, path)
+}
+
+func (s *Service) discardPath(ctx context.Context, path string) error {
+	existsInHead, err := s.pathExistsInHead(ctx, path)
+	if err != nil {
+		return err
+	}
+	if existsInHead {
+		return s.restorePathFromHead(ctx, path)
+	}
+
+	tracked, err := s.isTrackedPath(ctx, path)
+	if err != nil {
+		return err
+	}
+	if tracked {
+		_, err := s.runGitCombined(ctx, "", "rm", "-f", "--", path)
+		return err
+	}
+
+	absPath, err := ResolveRepoPath(s.repoRoot, path)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(absPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) restorePathFromHead(ctx context.Context, path string) error {
+	_, err := s.runGitCombined(ctx, "", "restore", "--source=HEAD", "--staged", "--worktree", "--", path)
 	return err
 }
 
@@ -344,6 +395,17 @@ func (s *Service) isTrackedPath(ctx context.Context, path string) (bool, error) 
 	}
 
 	return true, nil
+}
+
+func (s *Service) pathExistsInHead(ctx context.Context, path string) (bool, error) {
+	commandArgs := []string{"-C", s.repoRoot, "ls-tree", "--name-only", "-z", "HEAD", "--", path}
+	cmd := exec.CommandContext(ctx, "git", commandArgs...)
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("git ls-tree --name-only HEAD -- %s: %w", path, err)
+	}
+
+	return len(output) > 0, nil
 }
 
 func (s *Service) isIgnoredPath(ctx context.Context, path string) (bool, error) {

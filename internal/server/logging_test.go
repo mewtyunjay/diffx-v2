@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func TestLogAPIMiddlewareLogsStatusCodes(t *testing.T) {
+func TestLogAPIMiddlewareLogsSuccessfulAPIRequests(t *testing.T) {
 	var output bytes.Buffer
 	app := &App{
-		logger: newBackendLogger(FrontendConfig{Debug: true, LogOutput: &output}),
+		logger: loggerWithComponent(newBackendLogger(FrontendConfig{Debug: true, LogOutput: &output}), "api"),
 	}
 
 	handler := app.logAPIMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -27,8 +27,12 @@ func TestLogAPIMiddlewareLogsStatusCodes(t *testing.T) {
 		t.Fatalf("expected 204 response, got %d", recorder.Code)
 	}
 
-	if output.Len() != 0 {
-		t.Fatalf("expected successful request to stay quiet, got %q", output.String())
+	logged := output.String()
+	if !strings.Contains(logged, "[api] INFO request completed") ||
+		!strings.Contains(logged, "POST") ||
+		!strings.Contains(logged, "/api/git/stage-all") ||
+		!strings.Contains(logged, "204") {
+		t.Fatalf("expected successful request in log entry, got %q", logged)
 	}
 }
 

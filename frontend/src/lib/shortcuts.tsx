@@ -96,6 +96,13 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff actions",
   },
+  discardFile: {
+    id: "discardFile",
+    keys: ["d", "d"],
+    label: "Discard file changes",
+    scope: "diff",
+    group: "Diff actions",
+  },
   toggleViewMode: {
     id: "toggleViewMode",
     keys: ["u"],
@@ -160,6 +167,23 @@ type ShortcutsContextValue = {
 }
 
 const ShortcutsContext = createContext<ShortcutsContextValue | null>(null)
+const SEQUENCE_TIMEOUT_MS = 700
+const MODIFIER_KEYS = new Set<ShortcutKey>(["meta", "ctrl", "alt", "shift"])
+
+type PendingSequence = {
+  shortcut: ShortcutDefinition
+  index: number
+  timeoutID: number
+}
+
+function getLiteralKeys(keys: readonly ShortcutKey[]) {
+  return keys.filter((key) => !MODIFIER_KEYS.has(key))
+}
+
+function isSequenceShortcut(keys: readonly ShortcutKey[]) {
+  const literals = getLiteralKeys(keys)
+  return literals.length > 1 && literals.length === keys.length
+}
 
 function useShortcutsContext(): ShortcutsContextValue {
   const context = useContext(ShortcutsContext)
@@ -173,6 +197,26 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
   const [activeModeScope, setActiveModeScope] = useState<ShortcutScope | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const handlersRef = useRef<Map<ShortcutId, () => void>>(new Map())
+  const pendingSequenceRef = useRef<PendingSequence | null>(null)
+
+  const clearPendingSequence = useCallback(() => {
+    const pending = pendingSequenceRef.current
+    if (pending) {
+      window.clearTimeout(pending.timeoutID)
+    }
+    pendingSequenceRef.current = null
+  }, [])
+
+  const startPendingSequence = useCallback(
+    (shortcut: ShortcutDefinition, index: number) => {
+      clearPendingSequence()
+      const timeoutID = window.setTimeout(() => {
+        pendingSequenceRef.current = null
+      }, SEQUENCE_TIMEOUT_MS)
+      pendingSequenceRef.current = { shortcut, index, timeoutID }
+    },
+    [clearPendingSequence]
+  )
 
   const registerHandler = useCallback((id: ShortcutId, handler: () => void) => {
     handlersRef.current.set(id, handler)
@@ -186,16 +230,44 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const isEditableTarget = isEditableElement(event.target)
+      const activeShortcuts = (Object.values(SHORTCUTS) as ShortcutDefinition[]).filter(
+        (shortcut) => {
+          if (isEditableTarget && !shortcut.allowInEditable) {
+            return false
+          }
 
-      for (const shortcut of Object.values(SHORTCUTS) as ShortcutDefinition[]) {
-        if (isEditableTarget && !shortcut.allowInEditable) {
-          continue
+          return shortcut.scope === "global" || shortcut.scope === activeModeScope
+        }
+      )
+      const pending = pendingSequenceRef.current
+      if (pending) {
+        const literalKeys = getLiteralKeys(pending.shortcut.keys)
+        const nextKey = literalKeys[pending.index]
+        if (nextKey && matchesShortcut(event, [nextKey])) {
+          event.preventDefault()
+          if (pending.index === literalKeys.length - 1) {
+            const handler = handlersRef.current.get(pending.shortcut.id as ShortcutId)
+            clearPendingSequence()
+            handler?.()
+            return
+          }
+
+          startPendingSequence(pending.shortcut, pending.index + 1)
+          return
         }
 
-        if (shortcut.scope !== "global" && shortcut.scope !== activeModeScope) {
-          continue
-        }
+        clearPendingSequence()
+      }
 
+      for (const shortcut of activeShortcuts) {
+        if (isSequenceShortcut(shortcut.keys)) {
+          const [firstKey] = getLiteralKeys(shortcut.keys)
+          if (!firstKey || !matchesShortcut(event, [firstKey])) continue
+
+          event.preventDefault()
+          startPendingSequence(shortcut, 1)
+          return
+        }
         if (!matchesShortcut(event, shortcut.keys)) continue
 
         const handler = handlersRef.current.get(shortcut.id as ShortcutId)
@@ -208,8 +280,11 @@ export function ShortcutsProvider({ children }: { children: ReactNode }) {
     }
 
     window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [activeModeScope])
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      clearPendingSequence()
+    }
+  }, [activeModeScope, clearPendingSequence, startPendingSequence])
 
   const value = useMemo<ShortcutsContextValue>(
     () => ({
