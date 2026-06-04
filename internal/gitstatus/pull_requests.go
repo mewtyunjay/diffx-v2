@@ -16,12 +16,16 @@ type PullRequestRefs struct {
 	HeadRepositoryName  string
 }
 
+type PullRequestDiffContext struct {
+	BaseRef    string
+	HeadRef    string
+	MergeBase  string
+	BaseCommit string
+	HeadCommit string
+}
+
 type PullRequestDiffResult struct {
-	BaseRef           string
-	HeadRef           string
-	MergeBase         string
-	BaseCommit        string
-	HeadCommit        string
+	PullRequestDiffContext
 	Files             []ChangedFileItem
 	ScopePath         string
 	OutsideScopeCount int
@@ -36,15 +40,17 @@ func (s *Service) ReadPullRequestDiff(
 		return PullRequestDiffResult{}, err
 	}
 
-	files, outsideScopeCount, err := s.listPullRequestFiles(ctx, localRefs.MergeBase, localRefs.HeadRef)
+	files, outsideScopeCount, err := s.listPullRequestFiles(ctx, localRefs.MergeBase, localRefs.HeadCommit)
 	if err != nil {
 		return PullRequestDiffResult{}, err
 	}
 
-	localRefs.Files = files
-	localRefs.ScopePath = s.scopePath
-	localRefs.OutsideScopeCount = outsideScopeCount
-	return localRefs, nil
+	return PullRequestDiffResult{
+		PullRequestDiffContext: localRefs,
+		Files:                  files,
+		ScopePath:              s.scopePath,
+		OutsideScopeCount:      outsideScopeCount,
+	}, nil
 }
 
 func (s *Service) ReadPullRequestFileDiff(
@@ -80,41 +86,63 @@ func (s *Service) ReadPullRequestFileDiff(
 	)
 }
 
+func (s *Service) ReadPreparedPullRequestFileDiff(
+	ctx context.Context,
+	localRefs PullRequestDiffContext,
+	path string,
+	status ChangedFileStatus,
+	previousPath string,
+) (FileDiffResult, error) {
+	if err := validatePullRequestFileDiffInput(localRefs, path, status); err != nil {
+		return FileDiffResult{}, err
+	}
+
+	return s.readPullRequestObjectDiff(
+		ctx,
+		localRefs.MergeBase,
+		localRefs.HeadRef,
+		localRefs.HeadCommit,
+		path,
+		status,
+		previousPath,
+	)
+}
+
 func (s *Service) preparePullRequestRefs(
 	ctx context.Context,
 	refs PullRequestRefs,
-) (PullRequestDiffResult, error) {
+) (PullRequestDiffContext, error) {
 	if refs.Number <= 0 {
-		return PullRequestDiffResult{}, fmt.Errorf("pull request number is required")
+		return PullRequestDiffContext{}, fmt.Errorf("pull request number is required")
 	}
 
 	baseRef := pullRequestBaseRef(refs.Number)
 	headRef := pullRequestHeadRef(refs.Number)
 	if !s.localPullRequestRefsCurrent(ctx, refs, baseRef, headRef) {
 		if err := s.fetchPullRequestRefs(ctx, refs, baseRef, headRef); err != nil {
-			return PullRequestDiffResult{}, err
+			return PullRequestDiffContext{}, err
 		}
 	}
 
 	baseCommit, err := s.resolveCommit(ctx, baseRef)
 	if err != nil {
-		return PullRequestDiffResult{}, err
+		return PullRequestDiffContext{}, err
 	}
 	headCommit, err := s.resolveCommit(ctx, headRef)
 	if err != nil {
-		return PullRequestDiffResult{}, err
+		return PullRequestDiffContext{}, err
 	}
 
 	mergeBaseOutput, err := s.runGitOutput(ctx, "merge-base", baseRef, headRef)
 	if err != nil {
-		return PullRequestDiffResult{}, fmt.Errorf("git merge-base %s %s: %w", baseRef, headRef, err)
+		return PullRequestDiffContext{}, fmt.Errorf("git merge-base %s %s: %w", baseRef, headRef, err)
 	}
 	mergeBase := strings.TrimSpace(string(mergeBaseOutput))
 	if mergeBase == "" {
-		return PullRequestDiffResult{}, fmt.Errorf("git merge-base returned an empty merge base")
+		return PullRequestDiffContext{}, fmt.Errorf("git merge-base returned an empty merge base")
 	}
 
-	return PullRequestDiffResult{
+	return PullRequestDiffContext{
 		BaseRef:    baseRef,
 		HeadRef:    headRef,
 		MergeBase:  mergeBase,
@@ -151,7 +179,7 @@ func (s *Service) localPullRequestRefsCurrent(
 func (s *Service) listPullRequestFiles(
 	ctx context.Context,
 	mergeBase string,
-	headRef string,
+	headCommit string,
 ) ([]ChangedFileItem, int, error) {
 	output, err := s.runGitOutput(
 		ctx,
@@ -160,11 +188,11 @@ func (s *Service) listPullRequestFiles(
 		"-z",
 		"-M",
 		mergeBase,
-		headRef,
+		headCommit,
 		"--",
 	)
 	if err != nil {
-		return nil, 0, fmt.Errorf("git diff --name-status %s %s: %w", mergeBase, headRef, err)
+		return nil, 0, fmt.Errorf("git diff --name-status %s %s: %w", mergeBase, headCommit, err)
 	}
 
 	files, err := parseNameStatusObjectDiff(output)
@@ -176,7 +204,7 @@ func (s *Service) listPullRequestFiles(
 	outsideScopeCount := 0
 	for _, file := range files {
 		file.DisplayPath = displayPathForScope(file.Path, file.PreviousPath, s.scopePath)
-		file.ContentKey = pullRequestFileContentKey(mergeBase, headRef, file)
+		file.ContentKey = pullRequestFileContentKey(mergeBase, headCommit, file)
 		if s.AllowsDiff(file.Path, file.PreviousPath) {
 			filteredFiles = append(filteredFiles, file)
 		} else {
@@ -185,6 +213,33 @@ func (s *Service) listPullRequestFiles(
 	}
 
 	return filteredFiles, outsideScopeCount, nil
+}
+
+func validatePullRequestFileDiffInput(
+	localRefs PullRequestDiffContext,
+	path string,
+	status ChangedFileStatus,
+) error {
+	if path == "" {
+		return fmt.Errorf("path is required")
+	}
+	if !status.IsValid() {
+		return fmt.Errorf("invalid status %q", status)
+	}
+	if status == StatusConflicted {
+		return fmt.Errorf("invalid pull request file status %q", status)
+	}
+	if localRefs.MergeBase == "" {
+		return fmt.Errorf("pull request merge base is required")
+	}
+	if localRefs.HeadRef == "" {
+		return fmt.Errorf("pull request head ref is required")
+	}
+	if localRefs.HeadCommit == "" {
+		return fmt.Errorf("pull request head commit is required")
+	}
+
+	return nil
 }
 
 func pullRequestBaseRef(number int) string {

@@ -402,6 +402,46 @@ func TestReadPullRequestFileDiffDoesNotUseUnstagedLocalChanges(t *testing.T) {
 	}
 }
 
+func TestReadPreparedPullRequestFileDiffUsesResolvedHeadCommit(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, refs := createPullRequestObjectRepo(t)
+	service := NewService(repoRoot, ".")
+
+	preparedRefs, err := service.ReadPullRequestDiff(context.Background(), refs)
+	if err != nil {
+		t.Fatalf("ReadPullRequestDiff returned error: %v", err)
+	}
+
+	runGit(t, repoRoot, "checkout", "feature/pr")
+	writeFile(t, filepath.Join(repoRoot, "frontend", "app.tsx"), "export const app = 'newer feature'\n")
+	runGit(t, repoRoot, "add", "frontend/app.tsx")
+	runGit(t, repoRoot, "commit", "-m", "newer feature")
+	newHeadSHA := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	runGit(t, repoRoot, "update-ref", "refs/diffx/pr/42/head", newHeadSHA)
+
+	diff, err := service.ReadPreparedPullRequestFileDiff(
+		context.Background(),
+		preparedRefs.PullRequestDiffContext,
+		"frontend/app.tsx",
+		StatusModified,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("ReadPreparedPullRequestFileDiff returned error: %v", err)
+	}
+
+	if diff.CurrentCommit != refs.HeadSHA {
+		t.Fatalf("expected prepared diff to keep original head commit %q, got %q", refs.HeadSHA, diff.CurrentCommit)
+	}
+	if diff.After.Contents != "export const app = 'feature'\n" {
+		t.Fatalf("expected prepared diff to read original head contents, got %q", diff.After.Contents)
+	}
+	if strings.Contains(diff.After.Contents, "newer feature") {
+		t.Fatalf("prepared diff read through mutable PR ref: %#v", diff)
+	}
+}
+
 func TestParsePorcelainStatusUnmergedFiles(t *testing.T) {
 	repoRoot := t.TempDir()
 	writeFile(t, filepath.Join(repoRoot, "conflicted.txt"), "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n")

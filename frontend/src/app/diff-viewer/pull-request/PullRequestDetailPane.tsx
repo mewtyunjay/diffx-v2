@@ -1,4 +1,6 @@
 import { AlertCircle, GitCommitHorizontal, GitPullRequest, LoaderCircle } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 import { StackedChangeSetDiffs } from "@/app/diff-viewer/change-set/StackedChangeSetDiffs"
 import type { ChangeSetFileDiffLoader } from "@/app/diff-viewer/change-set/types"
@@ -22,8 +24,6 @@ type PullRequestDetailPaneProps = {
   onApprove: (body?: string) => Promise<void>
   onMerge: (method?: MergeMethod) => Promise<void>
   onRefresh: () => void
-  onToggleExpandAll: () => void
-  onViewModeChange: (mode: DiffViewMode) => void
 }
 
 const commitDateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -49,10 +49,7 @@ function PullRequestPaneLoadingState() {
           <div className="min-w-0 flex-1">
             <div className="h-4 w-32 rounded-sm bg-muted/70" />
             <div className="mt-3 h-6 w-96 max-w-full rounded-sm bg-muted" />
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="h-12 rounded-md bg-muted/55" />
-              <div className="h-12 rounded-md bg-muted/55" />
-            </div>
+            <div className="mt-3 h-7 w-[34rem] max-w-full rounded-sm bg-muted/55" />
           </div>
         </div>
       </div>
@@ -92,9 +89,9 @@ function PullRequestBody({ detail }: { detail: PullRequestDetailResult }) {
   return (
     <section className="border-b border-border/60 px-5 py-4">
       <h2 className="type-section-label text-muted-foreground/70">Summary</h2>
-      <p className="mt-2 max-w-3xl whitespace-pre-wrap type-meta leading-6 text-foreground/82">
-        {detail.pr.body}
-      </p>
+      <div className="markdown-body mt-3 max-w-3xl">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{detail.pr.body}</ReactMarkdown>
+      </div>
     </section>
   )
 }
@@ -164,8 +161,6 @@ export function PullRequestDetailPane({
   onApprove,
   onMerge,
   onRefresh,
-  onToggleExpandAll,
-  onViewModeChange,
 }: PullRequestDetailPaneProps) {
   if (isLoading) {
     return <PullRequestPaneLoadingState />
@@ -205,16 +200,12 @@ export function PullRequestDetailPane({
     <div className="no-scrollbar flex h-full min-h-0 flex-col overflow-y-auto overscroll-none bg-background">
       <PullRequestHeader
         detail={detail}
-        detailMode={detailMode}
         isApprovePending={isApprovePending}
         isMergePending={isMergePending}
         isRefreshPending={isRefreshPending}
-        viewMode={viewMode}
         onApprove={onApprove}
         onMerge={onMerge}
         onRefresh={onRefresh}
-        onToggleExpandAll={onToggleExpandAll}
-        onViewModeChange={onViewModeChange}
       />
       <PullRequestBody detail={detail} />
       <PullRequestCommitList detail={detail} />

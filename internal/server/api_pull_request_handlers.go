@@ -87,6 +87,7 @@ func (a *App) handlePullRequestDetail(w http.ResponseWriter, r *http.Request) {
 
 	diffResult, err := a.service.ReadPullRequestDiff(r.Context(), metadataToGitstatusRefs(metadata))
 	if err != nil {
+		a.clearPullRequestDiffContext(number)
 		response.LocalDiff = &pullRequestLocalDiffState{
 			Status:  "local_diff_failed",
 			Message: fmt.Sprintf("PR metadata loaded, but DiffX could not fetch local Git objects for the diff. %s", err.Error()),
@@ -98,6 +99,7 @@ func (a *App) handlePullRequestDetail(w http.ResponseWriter, r *http.Request) {
 	response.Files = diffResult.Files
 	response.OutsideScopeCount = diffResult.OutsideScopeCount
 	response.ScopePath = diffResult.ScopePath
+	a.storePullRequestDiffContext(number, diffResult)
 	writeJSON(w, http.StatusOK, response)
 }
 
@@ -130,25 +132,64 @@ func (a *App) handlePullRequestFileDiff(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	metadata, err := a.githubService.ReadPullRequestMetadata(r.Context(), number)
-	if err != nil {
-		writeGitHubAPIError(w, err)
-		return
+	localRefs, ok := a.readPullRequestDiffContext(number)
+	if !ok {
+		metadata, err := a.githubService.ReadPullRequestMetadata(r.Context(), number)
+		if err != nil {
+			writeGitHubAPIError(w, err)
+			return
+		}
+
+		diffResult, err := a.service.ReadPullRequestDiff(r.Context(), metadataToGitstatusRefs(metadata))
+		if err != nil {
+			writeAPIError(w, err)
+			return
+		}
+		localRefs = diffResult.PullRequestDiffContext
+		a.storePullRequestDiffContext(number, diffResult)
 	}
 
-	result, err := a.service.ReadPullRequestFileDiff(
-		r.Context(),
-		metadataToGitstatusRefs(metadata),
-		path,
-		status,
-		previousPath,
-	)
+	result, err := a.service.ReadPreparedPullRequestFileDiff(r.Context(), localRefs, path, status, previousPath)
 	if err != nil {
 		writeAPIError(w, err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) storePullRequestDiffContext(number int, result gitstatus.PullRequestDiffResult) {
+	if number <= 0 {
+		return
+	}
+
+	a.prDiffCacheMu.Lock()
+	defer a.prDiffCacheMu.Unlock()
+	if a.prDiffCache == nil {
+		a.prDiffCache = make(map[int]gitstatus.PullRequestDiffContext)
+	}
+	a.prDiffCache[number] = result.PullRequestDiffContext
+}
+
+func (a *App) readPullRequestDiffContext(number int) (gitstatus.PullRequestDiffContext, bool) {
+	if number <= 0 {
+		return gitstatus.PullRequestDiffContext{}, false
+	}
+
+	a.prDiffCacheMu.RLock()
+	defer a.prDiffCacheMu.RUnlock()
+	context, ok := a.prDiffCache[number]
+	return context, ok
+}
+
+func (a *App) clearPullRequestDiffContext(number int) {
+	if number <= 0 {
+		return
+	}
+
+	a.prDiffCacheMu.Lock()
+	defer a.prDiffCacheMu.Unlock()
+	delete(a.prDiffCache, number)
 }
 
 func (a *App) handleApprovePullRequest(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +238,7 @@ func (a *App) handleMergePullRequest(w http.ResponseWriter, r *http.Request) {
 		writeGitHubAPIError(w, err)
 		return
 	}
+	a.clearPullRequestDiffContext(request.Number)
 
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -686,14 +686,14 @@ export function DiffViewerPage() {
               loadFileDiff={loadPullRequestFileDiff}
               scopePath={pullRequestDetail?.scopePath ?? scopePath}
               sourceKey={
-                selectedPullRequestNumber ? `pull-request:${selectedPullRequestNumber}` : "pull-request"
+                selectedPullRequestNumber
+                  ? `pull-request:${selectedPullRequestNumber}:${pullRequestDetail?.head.sha ?? "pending"}`
+                  : "pull-request"
               }
               viewMode={viewMode}
               onApprove={handleApprovePullRequest}
               onMerge={handleMergePullRequest}
               onRefresh={() => void refreshPullRequestViews()}
-              onToggleExpandAll={handleToggleCurrentFileExpanded}
-              onViewModeChange={handleViewModeChange}
             />
           ) : !isWorkingTreeSource ? (
             selectedChangeSet.kind === "commit" ? (

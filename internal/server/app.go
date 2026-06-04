@@ -50,6 +50,8 @@ type ReviewState struct {
 type App struct {
 	service         *gitstatus.Service
 	githubService   *githubservice.Service
+	prDiffCacheMu   sync.RWMutex
+	prDiffCache     map[int]gitstatus.PullRequestDiffContext
 	aiService       *ai.Service
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
@@ -187,6 +189,7 @@ func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, er
 	return &App{
 		service:         gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
 		githubService:   githubservice.NewService(cfg.Workspace.RepoRoot),
+		prDiffCache:     make(map[int]gitstatus.PullRequestDiffContext),
 		aiService:       aiService,
 		repoEvents:      repoEvents,
 		repoWatcher:     watcher,

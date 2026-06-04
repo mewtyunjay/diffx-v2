@@ -40,7 +40,7 @@ func (s *Service) readPullRequestObjectDiff(
 
 	switch status {
 	case StatusAdded:
-		afterResult, err = s.readGitVersion(ctx, headRef, path)
+		afterResult, err = s.readGitVersion(ctx, headCommit, path)
 		if err != nil {
 			return FileDiffResult{}, err
 		}
@@ -66,7 +66,7 @@ func (s *Service) readPullRequestObjectDiff(
 			},
 			func() error {
 				var readErr error
-				afterResult, readErr = s.readGitVersion(ctx, headRef, path)
+				afterResult, readErr = s.readGitVersion(ctx, headCommit, path)
 				return readErr
 			},
 		)
@@ -84,7 +84,7 @@ func (s *Service) readPullRequestObjectDiff(
 			},
 			func() error {
 				var readErr error
-				afterResult, readErr = s.readGitVersion(ctx, headRef, path)
+				afterResult, readErr = s.readGitVersion(ctx, headCommit, path)
 				return readErr
 			},
 		)
