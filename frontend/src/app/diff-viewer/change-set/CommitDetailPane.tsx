@@ -3,7 +3,6 @@ import {
   AlertCircle,
   CalendarClock,
   Copy,
-  GitBranch,
   GitCommitHorizontal,
   LoaderCircle,
   UserRound,
@@ -201,23 +200,12 @@ export function CommitDetailPane({
     <div className="no-scrollbar flex h-full min-h-0 flex-col overflow-y-auto overscroll-none bg-background">
       <header className="border-b border-border/70 bg-background px-5 py-4">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-1 items-start gap-3">
-            <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-[var(--accent-soft)] text-primary">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-[var(--accent-soft)] text-primary">
               <GitCommitHorizontal className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <span className="inline-flex h-6 items-center rounded-sm border border-primary/25 bg-[var(--accent-soft)] px-2 type-overline text-primary">
-                  Commit
-                </span>
-                <span className="inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 rounded-sm border border-border/65 bg-muted/28 px-2 type-meta text-muted-foreground">
-                  <GitBranch className="size-3.5 shrink-0" />
-                  <span className="truncate font-medium text-foreground/82">
-                    {detail.currentRef || "HEAD"}
-                  </span>
-                </span>
-              </div>
-              <h1 className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 type-page-title text-foreground">
+              <h1 className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 type-title text-foreground">
                 <span className="min-w-0 text-balance">
                   {detail.commit.subject || "(no subject)"}
                 </span>
