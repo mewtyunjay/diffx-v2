@@ -2,6 +2,7 @@ import type {
   BranchesResult,
   ChangedFileItem,
   ChangedFilesResult,
+  ApprovePullRequestInput,
   CommitDetailResult,
   CommitsResult,
   CommitResult,
@@ -9,6 +10,9 @@ import type {
   ConflictResolveResult,
   FileDiffResult,
   HunkActionInput,
+  MergePullRequestInput,
+  PullRequestDetailResult,
+  PullRequestsResult,
   PushResult,
   ReviewStateResult,
   RepoChangedEvent,
@@ -114,6 +118,50 @@ export async function fetchCommitFileDiff(
   return (await response.json()) as FileDiffResult
 }
 
+export async function fetchPullRequests(signal?: AbortSignal) {
+  const response = await fetch("/api/pull-requests", { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as PullRequestsResult
+}
+
+export async function fetchPullRequestDetail(number: number, signal?: AbortSignal) {
+  const params = new URLSearchParams({ number: String(number) })
+  const response = await fetch(`/api/pull-request?${params.toString()}`, { signal })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as PullRequestDetailResult
+}
+
+export async function fetchPullRequestFileDiff(
+  number: number,
+  file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({
+    number: String(number),
+    path: file.path,
+    status: file.status,
+  })
+
+  if (file.previousPath) {
+    params.set("previousPath", file.previousPath)
+  }
+
+  const response = await fetch(`/api/pull-request-file-diff?${params.toString()}`, {
+    signal,
+  })
+  if (!response.ok) {
+    throw new Error(await readError(response))
+  }
+
+  return (await response.json()) as FileDiffResult
+}
+
 export async function fetchFileDiff(
   file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
   baseRef?: string,
@@ -197,6 +245,14 @@ export async function pullCurrentBranch(signal?: AbortSignal) {
 
 export async function checkoutBranch(branch: string, signal?: AbortSignal) {
   return postJSON<void>("/api/git/checkout", { branch }, signal)
+}
+
+export async function approvePullRequest(input: ApprovePullRequestInput, signal?: AbortSignal) {
+  return postJSON<void>("/api/pull-request/approve", input, signal)
+}
+
+export async function mergePullRequest(input: MergePullRequestInput, signal?: AbortSignal) {
+  return postJSON<void>("/api/pull-request/merge", input, signal)
 }
 
 export async function fetchConflictFile(path: string, signal?: AbortSignal) {

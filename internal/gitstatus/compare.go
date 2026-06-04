@@ -358,6 +358,9 @@ func parseUntrackedFiles(output []byte, repoRoot string) ([]ChangedFileItem, err
 		if len(token) == 0 {
 			continue
 		}
+		if isDirectoryToken(repoRoot, string(token)) {
+			continue
+		}
 
 		item, err := buildDiffChangedFileItem(repoRoot, string(token), "", StatusAdded, false)
 		if err != nil {

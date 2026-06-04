@@ -91,6 +91,150 @@ export type CommitDetailResult = {
   files: ChangedFileItem[]
 }
 
+export type GitHubIntegrationStatus =
+  | "ok"
+  | "gh_missing"
+  | "gh_unauthenticated"
+  | "repo_unresolved"
+  | "listing_failed"
+  | "permission_denied"
+  | "merge_blocked"
+  | "not_found"
+  | "unknown"
+
+export type GitHubIntegrationState = {
+  status: GitHubIntegrationStatus
+  message: string
+  action?: string
+}
+
+export type GitHubRepositoryMergeCapabilities = {
+  mergeCommitAllowed: boolean
+  squashMergeAllowed: boolean
+  rebaseMergeAllowed: boolean
+  viewerDefaultMergeMethod?: MergeMethod
+}
+
+export type GitHubRepository = {
+  owner: string
+  name: string
+  url: string
+  mergeCapabilities: GitHubRepositoryMergeCapabilities
+}
+
+export type PullRequestListItem = {
+  number: number
+  title: string
+  url: string
+  author: string
+  isDraft: boolean
+  baseRefName: string
+  headRefName: string
+  headRepositoryOwner?: string
+  headRepositoryName?: string
+  updatedAt: string
+  createdAt: string
+  labels: string[]
+  reviewDecision?: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | ""
+  checkConclusion?: "success" | "failure" | "pending" | "neutral" | "skipped" | "unknown"
+  commentsCount?: number
+  commitsCount?: number
+  changedFilesCount?: number
+}
+
+export type PullRequestsResult = {
+  repo: GitHubRepository
+  prs: PullRequestListItem[]
+  state: GitHubIntegrationState
+}
+
+export type PullRequestRef = {
+  refName: string
+  sha: string
+  repositoryOwner?: string
+  repositoryName?: string
+}
+
+export type PullRequestDetail = {
+  number: number
+  title: string
+  url: string
+  author: string
+  body?: string
+  state: string
+  isDraft: boolean
+  createdAt: string
+  updatedAt: string
+  labels: string[]
+  commentsCount?: number
+  commitsCount?: number
+  changedFilesCount?: number
+}
+
+export type MergeMethod = "merge" | "squash" | "rebase"
+
+export type PullRequestMergeState = {
+  mergeable?: string
+  stateStatus?: string
+  canMerge: boolean
+  blockedReason?: string
+  allowedMethods: MergeMethod[]
+  defaultMethod?: MergeMethod
+}
+
+export type PullRequestChecksSummary = {
+  conclusion: "success" | "failure" | "pending" | "neutral" | "skipped" | "unknown"
+  totalCount: number
+  successCount: number
+  failureCount: number
+  pendingCount: number
+  skippedCount: number
+}
+
+export type PullRequestReview = {
+  author: string
+  state: string
+  submittedAt?: string
+  body?: string
+}
+
+export type PullRequestReviewsSummary = {
+  decision?: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | ""
+  requiredReviewers: string[]
+  latestReviews: PullRequestReview[]
+}
+
+export type PullRequestLocalDiffState = {
+  status: "local_diff_failed"
+  message: string
+}
+
+export type PullRequestDetailResult = {
+  kind: "pull-request"
+  pr: PullRequestDetail
+  repo: GitHubRepository
+  base: PullRequestRef
+  head: PullRequestRef
+  merge: PullRequestMergeState
+  checks: PullRequestChecksSummary
+  reviews: PullRequestReviewsSummary
+  commits: CommitItem[]
+  files: ChangedFileItem[]
+  localDiff?: PullRequestLocalDiffState
+  outsideScopeCount?: number
+  scopePath: string
+}
+
+export type ApprovePullRequestInput = {
+  number: number
+  body?: string
+}
+
+export type MergePullRequestInput = {
+  number: number
+  method?: MergeMethod
+}
+
 export type HunkActionInput = Pick<
   FileDiffResult,
   "path" | "previousPath" | "status"

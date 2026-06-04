@@ -9,3 +9,7 @@ func NewService(repoRoot, scopePath string) *Service {
 		versionCache: newVersionCache(versionCacheLimit),
 	}
 }
+
+func (s *Service) ScopePath() string {
+	return s.scopePath
+}

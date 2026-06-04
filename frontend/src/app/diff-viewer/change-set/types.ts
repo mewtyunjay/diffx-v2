@@ -5,7 +5,7 @@ import type { ChangedFileItem, FileDiffResult } from "@/git/types"
 export type ChangeSetSource =
   | { kind: "working-tree" }
   | { kind: "commit"; hash: string }
-  | { kind: "pull-request"; id: string }
+  | { kind: "pull-request"; number: number }
 
 export type ChangeSetDetailMeta = {
   label: string
@@ -25,4 +25,3 @@ export type ChangeSetFileDiffLoader = (
   file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
   signal?: AbortSignal
 ) => Promise<FileDiffResult>
-

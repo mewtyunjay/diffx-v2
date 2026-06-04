@@ -47,6 +47,7 @@ type FileTreePanelProps = {
   showConflictsTab: boolean
   onSelectCommit: (commit: CommitItem) => void
   onLoadMoreCommits: () => void
+  pullRequestPanel: React.ReactNode
   gitActionsPanel: React.ReactNode
 }
 
@@ -82,6 +83,7 @@ export function FileTreePanel({
   showConflictsTab,
   onSelectCommit,
   onLoadMoreCommits,
+  pullRequestPanel,
   gitActionsPanel,
 }: FileTreePanelProps) {
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
@@ -170,6 +172,8 @@ export function FileTreePanel({
               onSelectCommit={onSelectCommit}
               onLoadMore={onLoadMoreCommits}
             />
+          ) : activeTab === "pull-request" ? (
+            pullRequestPanel
           ) : (
             <SidebarPanelEmpty label={activeTabDefinition.label} />
           )}
