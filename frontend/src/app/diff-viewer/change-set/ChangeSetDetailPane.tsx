@@ -197,7 +197,7 @@ export function ChangeSetDetailPane({
   const Icon = detail.icon
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-background">
+    <div className="no-scrollbar flex h-full min-h-0 flex-col overflow-y-auto overscroll-none bg-background">
       <header className="border-b border-border/70 px-5 py-4">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-start gap-3">

@@ -1,12 +1,11 @@
 import {
-  FileStack,
+  Code2,
   GitCommitHorizontal,
   GitMerge,
   GitPullRequest,
   type LucideIcon,
 } from "lucide-react"
 
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 export type SidebarPanelTab = "current" | "pull-request" | "conflicts" | "commits"
@@ -20,17 +19,17 @@ export type SidebarPanelTabDefinition = {
 export const SIDEBAR_PANEL_TABS: SidebarPanelTabDefinition[] = [
   {
     id: "current",
-    label: "Files",
-    Icon: FileStack,
+    label: "Diff",
+    Icon: Code2,
   },
   {
     id: "pull-request",
-    label: "Pull request",
+    label: "PR",
     Icon: GitPullRequest,
   },
   {
     id: "conflicts",
-    label: "Merge conflicts",
+    label: "Conflicts",
     Icon: GitMerge,
   },
   {
@@ -42,54 +41,38 @@ export const SIDEBAR_PANEL_TABS: SidebarPanelTabDefinition[] = [
 
 type SidebarPanelTabsProps = {
   activeTab: SidebarPanelTab
+  tabs: SidebarPanelTabDefinition[]
   onSelectTab: (tab: SidebarPanelTab) => void
 }
 
-export function SidebarPanelTabs({ activeTab, onSelectTab }: SidebarPanelTabsProps) {
-  const activeIndex = Math.max(
-    SIDEBAR_PANEL_TABS.findIndex((tab) => tab.id === activeTab),
-    0
-  )
-
+export function SidebarPanelTabs({ activeTab, tabs, onSelectTab }: SidebarPanelTabsProps) {
   return (
     <div
-      className="surface-sidebar-field relative mb-3 grid grid-cols-4 gap-0.5 overflow-hidden p-0.5"
+      className="-mx-2 mb-3 flex min-h-11 items-end gap-1 border-b border-sidebar-border/70 px-2"
       role="tablist"
       aria-label="Sidebar panel"
     >
-      <span
-        aria-hidden="true"
-        className="absolute left-0.5 top-0.5 h-7 rounded-md bg-sidebar-accent transition-[transform,background-color] duration-200 ease-out motion-reduce:transition-none"
-        style={{
-          width: "calc((100% - 0.375rem - 0.25rem) / 4)",
-          transform: `translateX(calc(${activeIndex} * (100% + 0.125rem)))`,
-        }}
-      />
-      {SIDEBAR_PANEL_TABS.map(({ id, label, Icon }) => {
+      {tabs.map(({ id, label, Icon }) => {
         const isActive = id === activeTab
 
         return (
-          <Tooltip key={id}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`sidebar-panel-${id}`}
-                className={cn(
-                  "relative z-10 flex h-7 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors duration-150 outline-none hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/60",
-                  isActive && "text-sidebar-accent-foreground"
-                )}
-                onClick={() => onSelectTab(id)}
-              >
-                <Icon className="size-3.5" />
-                <span className="sr-only">{label}</span>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6}>
-              {label}
-            </TooltipContent>
-          </Tooltip>
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-controls={`sidebar-panel-${id}`}
+            className={cn(
+              "relative flex h-10 min-w-0 flex-1 items-center justify-center gap-1 px-1 text-[0.8125rem] font-semibold leading-5 text-sidebar-foreground/62 transition-colors outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring/60",
+              "after:absolute after:bottom-[-1px] after:left-0 after:h-0.5 after:w-full after:origin-center after:scale-x-0 after:bg-sidebar-primary after:transition-transform after:duration-150 after:ease-out",
+              isActive &&
+                "text-sidebar-foreground after:scale-x-100"
+            )}
+            onClick={() => onSelectTab(id)}
+          >
+            <Icon className="size-3.5 shrink-0" />
+            <span className="whitespace-nowrap">{label}</span>
+          </button>
         )
       })}
     </div>

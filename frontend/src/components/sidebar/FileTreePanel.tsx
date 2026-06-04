@@ -44,6 +44,7 @@ type FileTreePanelProps = {
   hasMoreCommits: boolean
   commitsError: string | null
   selectedCommitHash: string | null
+  showConflictsTab: boolean
   onSelectCommit: (commit: CommitItem) => void
   onLoadMoreCommits: () => void
   gitActionsPanel: React.ReactNode
@@ -78,6 +79,7 @@ export function FileTreePanel({
   hasMoreCommits,
   commitsError,
   selectedCommitHash,
+  showConflictsTab,
   onSelectCommit,
   onLoadMoreCommits,
   gitActionsPanel,
@@ -90,8 +92,13 @@ export function FileTreePanel({
     searchInputRef.current?.select()
   })
 
+  const visiblePanelTabs = React.useMemo(
+    () =>
+      SIDEBAR_PANEL_TABS.filter((tab) => tab.id !== "conflicts" || showConflictsTab),
+    [showConflictsTab]
+  )
   const activeTabDefinition =
-    SIDEBAR_PANEL_TABS.find((tab) => tab.id === activeTab) ?? SIDEBAR_PANEL_TABS[0]
+    visiblePanelTabs.find((tab) => tab.id === activeTab) ?? visiblePanelTabs[0]
   const isCurrentTab = activeTab === "current"
 
   const handleSelectTab = React.useCallback(
@@ -100,18 +107,22 @@ export function FileTreePanel({
         return
       }
 
-      const currentIndex = SIDEBAR_PANEL_TABS.findIndex((tab) => tab.id === activeTab)
-      const nextIndex = SIDEBAR_PANEL_TABS.findIndex((tab) => tab.id === nextTab)
+      const currentIndex = visiblePanelTabs.findIndex((tab) => tab.id === activeTab)
+      const nextIndex = visiblePanelTabs.findIndex((tab) => tab.id === nextTab)
       setTabDirection(nextIndex > currentIndex ? "forward" : "backward")
       onActiveTabChange(nextTab)
     },
-    [activeTab, onActiveTabChange]
+    [activeTab, onActiveTabChange, visiblePanelTabs]
   )
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative z-10 shrink-0 bg-sidebar px-2 pb-2 pt-3">
-        <SidebarPanelTabs activeTab={activeTab} onSelectTab={handleSelectTab} />
+        <SidebarPanelTabs
+          activeTab={activeTab}
+          tabs={visiblePanelTabs}
+          onSelectTab={handleSelectTab}
+        />
       </div>
       <SidebarContent>
         <div

@@ -236,6 +236,9 @@ export function DiffViewerPage() {
   const commitChangeSetState = useCommitDetailState({
     hash: selectedCommitHash,
   })
+  const showConflictsTab = mergeState.inProgress && mergeState.unresolvedCount > 0
+  const activeSidebarTab =
+    sidebarTab === "conflicts" && !showConflictsTab ? "current" : sidebarTab
   const aiSettingsState = useAISettings()
   const diffViewerPreferencesState = useDiffViewerPreferences()
   const { preferences: diffViewerPreferences, updateActivePreferences } =
@@ -253,6 +256,10 @@ export function DiffViewerPage() {
 
   const handleSidebarTabChange = useCallback(
     (tab: SidebarPanelTab) => {
+      if (tab === "conflicts" && !showConflictsTab) {
+        return
+      }
+
       setSidebarTab(tab)
 
       if (tab === "current" || tab === "conflicts") {
@@ -264,7 +271,7 @@ export function DiffViewerPage() {
         setSelectedChangeSet({ kind: "pull-request", id: "current" })
       }
     },
-    []
+    [showConflictsTab]
   )
 
   const handleSelectCommit = useCallback((commit: CommitItem) => {
@@ -415,7 +422,7 @@ export function DiffViewerPage() {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <FileTreePanel
-              activeTab={sidebarTab}
+              activeTab={activeSidebarTab}
               onActiveTabChange={handleSidebarTabChange}
               files={filteredVisibleFiles}
               totalFileCount={visibleFiles.length}
@@ -443,6 +450,7 @@ export function DiffViewerPage() {
               hasMoreCommits={hasMoreCommits}
               commitsError={commitsError}
               selectedCommitHash={selectedCommitHash}
+              showConflictsTab={showConflictsTab}
               onSelectCommit={handleSelectCommit}
               onLoadMoreCommits={loadMoreCommits}
               gitActionsPanel={
@@ -583,8 +591,8 @@ export function DiffViewerPage() {
           ref={fileWindowScrollRef}
           className={
             isWorkingTreeSource
-              ? "min-h-0 min-w-0 flex-1 overflow-auto px-[2px]"
-              : "min-h-0 min-w-0 flex-1 overflow-hidden"
+              ? "min-h-0 min-w-0 flex-1 overflow-auto overscroll-none px-[2px]"
+              : "min-h-0 min-w-0 flex-1 overflow-hidden overscroll-none"
           }
         >
           {!isWorkingTreeSource ? (

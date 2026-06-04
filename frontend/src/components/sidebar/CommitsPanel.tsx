@@ -2,6 +2,7 @@ import { AlertCircle, GitBranch, GitCommitHorizontal, LoaderCircle } from "lucid
 import * as React from "react"
 
 import type { CommitItem } from "@/git/types"
+import { SidebarPanelStickyHeader } from "@/components/sidebar/SidebarPanelStickyHeader"
 import { cn } from "@/lib/utils"
 
 type CommitsPanelProps = {
@@ -67,10 +68,12 @@ export function CommitsPanel({
 
   return (
     <div className="flex min-h-0 flex-col">
-      <div className="mb-2 flex shrink-0 items-center gap-2 px-1 text-sidebar-foreground/72">
-        <GitBranch className="size-3.5 shrink-0 text-sidebar-foreground/45" />
-        <p className="min-w-0 truncate type-meta font-medium">Commits on {refLabel}</p>
-      </div>
+      <SidebarPanelStickyHeader>
+        <div className="flex items-center gap-2 px-1 text-sidebar-foreground/72">
+          <GitBranch className="size-3.5 shrink-0 text-sidebar-foreground/45" />
+          <p className="min-w-0 truncate type-meta font-medium">Commits on {refLabel}</p>
+        </div>
+      </SidebarPanelStickyHeader>
 
       {isLoading && commits.length === 0 ? (
         <div className="flex min-h-32 items-center justify-center gap-2 px-4 py-8 text-sidebar-foreground/50">

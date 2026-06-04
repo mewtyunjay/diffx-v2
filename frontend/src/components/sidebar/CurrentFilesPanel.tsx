@@ -6,6 +6,7 @@ import { SidebarFileTree } from "@/components/file-tree/SidebarFileTree"
 import { fileStatusIndicatorClassNames } from "@/components/file-tree/status-indicator"
 import type { SidebarTreeFolderNode } from "@/components/file-tree/tree-model"
 import { Button } from "@/components/ui/button"
+import { SidebarPanelStickyHeader } from "@/components/sidebar/SidebarPanelStickyHeader"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
@@ -99,12 +100,7 @@ function CurrentFilesPanelControls({
   onToggleAllFolders,
 }: CurrentFilesPanelControlsProps) {
   return (
-    <div
-      className={cn(
-        "sticky top-0 z-20 -mx-2 mb-2 border-b bg-sidebar px-2 pb-2 transition-colors",
-        hasScrolledFiles ? "border-sidebar-border/50" : "border-transparent"
-      )}
-    >
+    <SidebarPanelStickyHeader showDivider={hasScrolledFiles}>
       <div className="flex items-center justify-between gap-2 px-1">
         <p className="whitespace-nowrap type-meta font-medium text-sidebar-foreground/72">
           {visibleFileCountLabel}
@@ -188,7 +184,7 @@ function CurrentFilesPanelControls({
           </button>
         ) : null}
       </div>
-    </div>
+    </SidebarPanelStickyHeader>
   )
 }
 
