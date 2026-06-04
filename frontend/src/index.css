@@ -411,6 +411,13 @@ body {
     letter-spacing: -0.005em;
   }
 
+  .type-mono-meta {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
   .type-section-label {
     font-size: 0.75rem;
     line-height: 1.15;

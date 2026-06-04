@@ -71,6 +71,7 @@ type CurrentFilesPanelControlsProps = {
   bulkActionLabel: string
   folderToggleLabel: string
   hasExpandableFolders: boolean
+  hasScrolledFiles: boolean
   isBulkStagePending: boolean
   searchInputRef: React.RefObject<HTMLInputElement | null>
   searchQuery: string
@@ -87,6 +88,7 @@ function CurrentFilesPanelControls({
   bulkActionLabel,
   folderToggleLabel,
   hasExpandableFolders,
+  hasScrolledFiles,
   isBulkStagePending,
   searchInputRef,
   searchQuery,
@@ -97,7 +99,12 @@ function CurrentFilesPanelControls({
   onToggleAllFolders,
 }: CurrentFilesPanelControlsProps) {
   return (
-    <div className="sticky top-0 z-20 -mx-2 mb-2 border-b border-sidebar-border/50 bg-sidebar px-2 pb-2">
+    <div
+      className={cn(
+        "sticky top-0 z-20 -mx-2 mb-2 border-b bg-sidebar px-2 pb-2 transition-colors",
+        hasScrolledFiles ? "border-sidebar-border/50" : "border-transparent"
+      )}
+    >
       <div className="flex items-center justify-between gap-2 px-1">
         <p className="whitespace-nowrap type-meta font-medium text-sidebar-foreground/72">
           {visibleFileCountLabel}
@@ -232,6 +239,23 @@ export function CurrentFilesPanel({
     (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
   const folderToggleLabel = areAllFoldersExpanded ? "Collapse all folders" : "Expand all folders"
   const handleBulkAction = showUnstageAll ? onUnstageAll : onStageAll
+  const [hasScrolledFiles, setHasScrolledFiles] = React.useState(false)
+
+  React.useEffect(() => {
+    const scrollContainer = searchInputRef.current?.closest('[data-sidebar="content"]')
+    if (!(scrollContainer instanceof HTMLElement)) {
+      return
+    }
+
+    const updateScrolledState = () => {
+      setHasScrolledFiles(scrollContainer.scrollTop > 0)
+    }
+
+    updateScrolledState()
+    scrollContainer.addEventListener("scroll", updateScrolledState, { passive: true })
+
+    return () => scrollContainer.removeEventListener("scroll", updateScrolledState)
+  }, [searchInputRef])
 
   return (
     <>
@@ -241,6 +265,7 @@ export function CurrentFilesPanel({
         bulkActionLabel={bulkActionLabel}
         folderToggleLabel={folderToggleLabel}
         hasExpandableFolders={hasExpandableFolders}
+        hasScrolledFiles={hasScrolledFiles}
         isBulkStagePending={isBulkStagePending}
         searchInputRef={searchInputRef}
         searchQuery={searchQuery}

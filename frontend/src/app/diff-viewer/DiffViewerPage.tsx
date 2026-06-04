@@ -5,6 +5,7 @@ import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
 import { ChangeSetDetailPane } from "@/app/diff-viewer/change-set/ChangeSetDetailPane"
+import { CommitDetailPane } from "@/app/diff-viewer/change-set/CommitDetailPane"
 import type { ChangeSetSource } from "@/app/diff-viewer/change-set/types"
 import { useCommitDetailState } from "@/app/diff-viewer/change-set/useCommitDetailState"
 import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
@@ -587,37 +588,36 @@ export function DiffViewerPage() {
           }
         >
           {!isWorkingTreeSource ? (
-            <ChangeSetDetailPane
-              detail={selectedChangeSet.kind === "commit" ? commitChangeSetState.detail : null}
-              detailMode={diffViewerPreferences.diffDetailMode}
-              error={selectedChangeSet.kind === "commit" ? commitChangeSetState.error : null}
-              isLoading={
-                selectedChangeSet.kind === "commit" ? commitChangeSetState.isLoading : false
-              }
-              loadFileDiff={commitChangeSetState.loadFileDiff}
-              placeholderTitle={
-                selectedChangeSet.kind === "pull-request"
-                  ? "Pull request review"
-                  : "Select a commit"
-              }
-              placeholderDescription={
-                selectedChangeSet.kind === "pull-request"
-                  ? "Pull request data will use this same change-set review surface when it is added."
-                  : "Choose a commit from the sidebar to review all changed files."
-              }
-              PlaceholderIcon={GitPullRequest}
-              scopePath={scopePath}
-              sourceKey={
-                selectedChangeSet.kind === "commit" && selectedCommitHash
-                  ? `commit:${selectedCommitHash}`
-                  : selectedChangeSet.kind === "pull-request"
-                    ? `pull-request:${selectedChangeSet.id}`
-                    : "change-set"
-              }
-              viewMode={viewMode}
-              onToggleExpandAll={handleToggleCurrentFileExpanded}
-              onViewModeChange={handleViewModeChange}
-            />
+            selectedChangeSet.kind === "commit" ? (
+              <CommitDetailPane
+                detail={commitChangeSetState.detail}
+                detailMode={diffViewerPreferences.diffDetailMode}
+                error={commitChangeSetState.error}
+                isLoading={commitChangeSetState.isLoading}
+                loadFileDiff={commitChangeSetState.loadFileDiff}
+                scopePath={scopePath}
+                sourceKey={selectedCommitHash ? `commit:${selectedCommitHash}` : "commit"}
+                viewMode={viewMode}
+                onToggleExpandAll={handleToggleCurrentFileExpanded}
+                onViewModeChange={handleViewModeChange}
+              />
+            ) : (
+              <ChangeSetDetailPane
+                detail={null}
+                detailMode={diffViewerPreferences.diffDetailMode}
+                error={null}
+                isLoading={false}
+                loadFileDiff={commitChangeSetState.loadFileDiff}
+                placeholderTitle="Pull request review"
+                placeholderDescription="Pull request data will load in its own review screen."
+                PlaceholderIcon={GitPullRequest}
+                scopePath={scopePath}
+                sourceKey={`pull-request:${selectedChangeSet.id}`}
+                viewMode={viewMode}
+                onToggleExpandAll={handleToggleCurrentFileExpanded}
+                onViewModeChange={handleViewModeChange}
+              />
+            )
           ) : isBranchCompareLoading ? (
             <BranchCompareLoading baseRef={selectedBaseRef} />
           ) : (

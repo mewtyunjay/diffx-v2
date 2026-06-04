@@ -89,6 +89,11 @@ export function StackedDiffFileSection({
   const diff = state.status === "loaded" ? state.diff : null
   const counts = useMemo(() => getDiffFileChangeCounts(diff), [diff])
 
+  function handleViewedCheckboxChange(viewed: boolean) {
+    onViewedChange(viewed)
+    setIsCollapsed(viewed)
+  }
+
   useEffect(() => {
     if (state.status !== "idle") {
       return
@@ -146,7 +151,7 @@ export function StackedDiffFileSection({
                 type="checkbox"
                 className="size-3.5 rounded border-border/70 accent-primary"
                 checked={isViewed}
-                onChange={(event) => onViewedChange(event.currentTarget.checked)}
+                onChange={(event) => handleViewedCheckboxChange(event.currentTarget.checked)}
               />
               <span>Viewed</span>
             </label>
