@@ -2,9 +2,9 @@ import type { LucideIcon } from "lucide-react"
 import {
   AlertCircle,
   CalendarClock,
+  Copy,
   GitBranch,
   GitCommitHorizontal,
-  Hash,
   LoaderCircle,
   UserRound,
 } from "lucide-react"
@@ -14,6 +14,8 @@ import { StackedChangeSetDiffs } from "@/app/diff-viewer/change-set/StackedChang
 import type { DiffDetailMode, DiffViewMode } from "@/app/diff-viewer/preferences"
 import type { ChangeSetFileDiffLoader } from "@/app/diff-viewer/change-set/types"
 import type { CommitDetailResult } from "@/git/types"
+import { toast } from "@/components/ui/sonner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 type CommitDetailPaneProps = {
   detail: CommitDetailResult | null
@@ -49,6 +51,15 @@ function formatCommitDate(value: string) {
   }
 
   return commitDateFormatter.format(date)
+}
+
+async function copyFullCommitHash(fullHash: string, shortHash: string) {
+  try {
+    await navigator.clipboard.writeText(fullHash)
+    toast.success(`Copied ${shortHash}.`)
+  } catch {
+    toast.error("Couldn’t copy commit hash.")
+  }
 }
 
 function CommitPaneLoadingState() {
@@ -118,6 +129,33 @@ function CommitFact({ Icon, label, value, isMono = false }: CommitFactProps) {
   )
 }
 
+function CopyableCommitShortHash({
+  fullHash,
+  shortHash,
+}: {
+  fullHash: string
+  shortHash: string
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-6 translate-y-[-0.0625rem] items-center gap-1.5 rounded-sm border border-border/70 bg-muted/35 px-2 align-baseline type-mono-meta font-medium text-muted-foreground transition-colors hover:border-primary/35 hover:bg-[var(--accent-soft)] hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          aria-label={`Copy full commit hash ${fullHash}`}
+          onClick={() => void copyFullCommitHash(fullHash, shortHash)}
+        >
+          {shortHash}
+          <Copy className="size-3" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        Copy full commit hash
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function CommitDetailPane({
   detail,
   detailMode,
@@ -179,15 +217,15 @@ export function CommitDetailPane({
                   </span>
                 </span>
               </div>
-              <h1 className="min-w-0 text-balance type-page-title text-foreground">
-                {detail.commit.subject || "(no subject)"}
-              </h1>
-              <div className="mt-2 flex min-w-0 items-center gap-1.5 type-mono-meta text-muted-foreground">
-                <Hash className="size-3.5 shrink-0" />
-                <span className="truncate" title={detail.commit.hash}>
-                  {detail.commit.hash}
+              <h1 className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 type-page-title text-foreground">
+                <span className="min-w-0 text-balance">
+                  {detail.commit.subject || "(no subject)"}
                 </span>
-              </div>
+                <CopyableCommitShortHash
+                  fullHash={detail.commit.hash}
+                  shortHash={detail.commit.shortHash}
+                />
+              </h1>
             </div>
           </div>
           <CommitReviewOptions
@@ -199,7 +237,6 @@ export function CommitDetailPane({
         </div>
 
         <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2">
-          <CommitFact Icon={Hash} label="Short Hash" value={detail.commit.shortHash} isMono />
           <CommitFact Icon={UserRound} label="Author" value={detail.commit.authorName || "Unknown"} />
           <CommitFact Icon={CalendarClock} label="Date" value={formattedDate || "Unknown"} />
           <CommitFact Icon={GitCommitHorizontal} label="Files" value={fileCountLabel} />
