@@ -71,8 +71,8 @@ export async function fetchBranches(signal?: AbortSignal) {
   return (await response.json()) as BranchesResult
 }
 
-export async function fetchCommits(limit = 100, signal?: AbortSignal) {
-  const params = new URLSearchParams({ limit: String(limit) })
+export async function fetchCommits(limit = 100, offset = 0, signal?: AbortSignal) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
   const response = await fetch(`/api/commits?${params.toString()}`, { signal })
   if (!response.ok) {
     throw new Error(await readError(response))

@@ -51,7 +51,7 @@ func TestListCommitsReturnsRecentHeadCommits(t *testing.T) {
 	runGit(t, repoRoot, "add", "notes.txt")
 	runGit(t, repoRoot, "commit", "-m", "third commit")
 
-	result, err := service.ListCommits(context.Background(), 2)
+	result, err := service.ListCommits(context.Background(), 2, 0)
 	if err != nil {
 		t.Fatalf("ListCommits returned error: %v", err)
 	}
@@ -65,6 +65,9 @@ func TestListCommitsReturnsRecentHeadCommits(t *testing.T) {
 	if result.Commits[0].Subject != "third commit" || result.Commits[1].Subject != "second commit" {
 		t.Fatalf("expected newest commits first, got %#v", result.Commits)
 	}
+	if !result.HasMore || result.NextOffset != 2 {
+		t.Fatalf("expected pagination metadata for another page, got %#v", result)
+	}
 	if result.Commits[0].Hash == "" || result.Commits[0].ShortHash == "" {
 		t.Fatalf("expected hashes to be populated, got %#v", result.Commits[0])
 	}
@@ -77,13 +80,40 @@ func TestListCommitsUsesDefaultLimitForInvalidLimit(t *testing.T) {
 	repoRoot := createServiceTestRepo(t)
 	service := NewService(repoRoot, ".")
 
-	result, err := service.ListCommits(context.Background(), 0)
+	result, err := service.ListCommits(context.Background(), 0, 0)
 	if err != nil {
 		t.Fatalf("ListCommits returned error: %v", err)
 	}
 
 	if len(result.Commits) != 1 {
 		t.Fatalf("expected default limit to return existing commit, got %#v", result.Commits)
+	}
+}
+
+func TestListCommitsUsesOffset(t *testing.T) {
+	repoRoot := createServiceTestRepo(t)
+	service := NewService(repoRoot, ".")
+
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "second commit")
+	writeFile(t, filepath.Join(repoRoot, "notes.txt"), "base\nsecond\nthird\n")
+	runGit(t, repoRoot, "add", "notes.txt")
+	runGit(t, repoRoot, "commit", "-m", "third commit")
+
+	result, err := service.ListCommits(context.Background(), 1, 1)
+	if err != nil {
+		t.Fatalf("ListCommits returned error: %v", err)
+	}
+
+	if len(result.Commits) != 1 {
+		t.Fatalf("expected one commit, got %#v", result.Commits)
+	}
+	if result.Commits[0].Subject != "second commit" {
+		t.Fatalf("expected offset page to start at second commit, got %#v", result.Commits[0])
+	}
+	if result.Offset != 1 || result.NextOffset != 2 || !result.HasMore {
+		t.Fatalf("unexpected pagination metadata: %#v", result)
 	}
 }
 

@@ -75,6 +75,9 @@ type CommitItem struct {
 type CommitsResult struct {
 	CurrentRef string       `json:"currentRef"`
 	Commits    []CommitItem `json:"commits"`
+	Offset     int          `json:"offset"`
+	NextOffset int          `json:"nextOffset"`
+	HasMore    bool         `json:"hasMore"`
 }
 
 type CommitDetailResult struct {

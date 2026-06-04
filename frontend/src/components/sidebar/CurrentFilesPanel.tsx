@@ -65,6 +65,126 @@ type CurrentFilesPanelProps = {
   onUnstageAll: () => void
 }
 
+type CurrentFilesPanelControlsProps = {
+  areAllFoldersExpanded: boolean
+  bulkActionDisabled: boolean
+  bulkActionLabel: string
+  folderToggleLabel: string
+  hasExpandableFolders: boolean
+  isBulkStagePending: boolean
+  searchInputRef: React.RefObject<HTMLInputElement | null>
+  searchQuery: string
+  showBulkStageActions: boolean
+  visibleFileCountLabel: string
+  onBulkAction: () => void
+  onSearchQueryChange: (query: string) => void
+  onToggleAllFolders: () => void
+}
+
+function CurrentFilesPanelControls({
+  areAllFoldersExpanded,
+  bulkActionDisabled,
+  bulkActionLabel,
+  folderToggleLabel,
+  hasExpandableFolders,
+  isBulkStagePending,
+  searchInputRef,
+  searchQuery,
+  showBulkStageActions,
+  visibleFileCountLabel,
+  onBulkAction,
+  onSearchQueryChange,
+  onToggleAllFolders,
+}: CurrentFilesPanelControlsProps) {
+  return (
+    <div className="sticky top-0 z-20 -mx-2 mb-2 border-b border-sidebar-border/50 bg-sidebar px-2 pb-2">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <p className="whitespace-nowrap type-meta font-medium text-sidebar-foreground/72">
+          {visibleFileCountLabel}
+        </p>
+        <div className="flex shrink-0 items-center gap-1">
+          {hasExpandableFolders ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  className="text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  aria-label={folderToggleLabel}
+                  onClick={onToggleAllFolders}
+                >
+                  {areAllFoldersExpanded ? (
+                    <Folder className="size-3.5" />
+                  ) : (
+                    <FolderOpen className="size-3.5" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {folderToggleLabel}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {showBulkStageActions ? (
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              className={cn(
+                "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                isBulkStagePending && "disabled:opacity-100"
+              )}
+              disabled={bulkActionDisabled}
+              onClick={onBulkAction}
+            >
+              {bulkActionLabel}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div className="relative mt-2">
+        <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-sidebar-foreground/45" />
+        <input
+          ref={searchInputRef}
+          type="search"
+          value={searchQuery}
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") {
+              return
+            }
+
+            event.preventDefault()
+            if (searchQuery) {
+              onSearchQueryChange("")
+              return
+            }
+
+            searchInputRef.current?.blur()
+          }}
+          placeholder="Search files"
+          aria-label="Search changed files"
+          className="h-8 w-full rounded-md border border-sidebar-border/70 bg-sidebar/70 pl-7 pr-7 type-meta text-sidebar-foreground outline-none transition-colors placeholder:text-sidebar-foreground/45 focus:border-sidebar-ring/70 focus:bg-sidebar"
+        />
+        {searchQuery ? (
+          <button
+            type="button"
+            className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            aria-label="Clear file search"
+            onClick={() => {
+              onSearchQueryChange("")
+              searchInputRef.current?.focus()
+            }}
+          >
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export function CurrentFilesPanel({
   files,
   totalFileCount,
@@ -111,94 +231,25 @@ export function CurrentFilesPanel({
     isBulkStagePending ||
     (showUnstageAll ? unstageAllCount === 0 : stageAllCount === 0)
   const folderToggleLabel = areAllFoldersExpanded ? "Collapse all folders" : "Expand all folders"
+  const handleBulkAction = showUnstageAll ? onUnstageAll : onStageAll
 
   return (
     <>
-      <div className="mb-2">
-        <div className="flex items-center justify-between gap-2 px-1">
-          <p className="whitespace-nowrap type-meta font-medium text-sidebar-foreground/72">
-            {visibleFileCountLabel}
-          </p>
-          <div className="flex shrink-0 items-center gap-1">
-            {hasExpandableFolders ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="ghost"
-                    className="text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    aria-label={folderToggleLabel}
-                    onClick={onToggleAllFolders}
-                  >
-                    {areAllFoldersExpanded ? (
-                      <Folder className="size-3.5" />
-                    ) : (
-                      <FolderOpen className="size-3.5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={6}>
-                  {folderToggleLabel}
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
-            {showBulkStageActions ? (
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                className={cn(
-                  "min-w-[5.75rem] border-sidebar-border/70 bg-sidebar/60 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  isBulkStagePending && "disabled:opacity-100"
-                )}
-                disabled={bulkActionDisabled}
-                onClick={showUnstageAll ? onUnstageAll : onStageAll}
-              >
-                {bulkActionLabel}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        <div className="relative mt-2">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-sidebar-foreground/45" />
-          <input
-            ref={searchInputRef}
-            type="search"
-            value={searchQuery}
-            onChange={(event) => onSearchQueryChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== "Escape") {
-                return
-              }
-
-              event.preventDefault()
-              if (searchQuery) {
-                onSearchQueryChange("")
-                return
-              }
-
-              searchInputRef.current?.blur()
-            }}
-            placeholder="Search files"
-            aria-label="Search changed files"
-            className="h-8 w-full rounded-md border border-sidebar-border/70 bg-sidebar/70 pl-7 pr-7 type-meta text-sidebar-foreground outline-none transition-colors placeholder:text-sidebar-foreground/45 focus:border-sidebar-ring/70 focus:bg-sidebar"
-          />
-          {searchQuery ? (
-            <button
-              type="button"
-              className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              aria-label="Clear file search"
-              onClick={() => {
-                onSearchQueryChange("")
-                searchInputRef.current?.focus()
-              }}
-            >
-              <X className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
-      </div>
+      <CurrentFilesPanelControls
+        areAllFoldersExpanded={areAllFoldersExpanded}
+        bulkActionDisabled={bulkActionDisabled}
+        bulkActionLabel={bulkActionLabel}
+        folderToggleLabel={folderToggleLabel}
+        hasExpandableFolders={hasExpandableFolders}
+        isBulkStagePending={isBulkStagePending}
+        searchInputRef={searchInputRef}
+        searchQuery={searchQuery}
+        showBulkStageActions={showBulkStageActions}
+        visibleFileCountLabel={visibleFileCountLabel}
+        onBulkAction={handleBulkAction}
+        onSearchQueryChange={onSearchQueryChange}
+        onToggleAllFolders={onToggleAllFolders}
+      />
       <SidebarFileTree
         root={tree}
         expandedPaths={expandedPaths}

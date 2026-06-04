@@ -31,8 +31,12 @@ func (a *App) handleCommits(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		limit = 0
 	}
+	offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+	if err != nil {
+		offset = 0
+	}
 
-	result, err := a.service.ListCommits(r.Context(), limit)
+	result, err := a.service.ListCommits(r.Context(), limit, offset)
 	if err != nil {
 		writeAPIError(w, err)
 		return

@@ -41,9 +41,12 @@ type FileTreePanelProps = {
   currentRef: string
   commits: CommitItem[]
   isCommitsLoading: boolean
+  hasMoreCommits: boolean
   commitsError: string | null
   selectedCommitHash: string | null
   onSelectCommit: (commit: CommitItem) => void
+  onLoadMoreCommits: () => void
+  gitActionsPanel: React.ReactNode
 }
 
 export function FileTreePanel({
@@ -72,9 +75,12 @@ export function FileTreePanel({
   currentRef,
   commits,
   isCommitsLoading,
+  hasMoreCommits,
   commitsError,
   selectedCommitHash,
   onSelectCommit,
+  onLoadMoreCommits,
+  gitActionsPanel,
 }: FileTreePanelProps) {
   const searchInputRef = React.useRef<HTMLInputElement | null>(null)
   const [tabDirection, setTabDirection] = React.useState<"forward" | "backward">("forward")
@@ -86,6 +92,7 @@ export function FileTreePanel({
 
   const activeTabDefinition =
     SIDEBAR_PANEL_TABS.find((tab) => tab.id === activeTab) ?? SIDEBAR_PANEL_TABS[0]
+  const isCurrentTab = activeTab === "current"
 
   const handleSelectTab = React.useCallback(
     (nextTab: SidebarPanelTab) => {
@@ -103,7 +110,7 @@ export function FileTreePanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-2 pb-2 pt-3">
+      <div className="relative z-10 shrink-0 bg-sidebar px-2 pb-2 pt-3">
         <SidebarPanelTabs activeTab={activeTab} onSelectTab={handleSelectTab} />
       </div>
       <SidebarContent>
@@ -146,15 +153,18 @@ export function FileTreePanel({
               currentRef={currentRef}
               commits={commits}
               isLoading={isCommitsLoading}
+              hasMore={hasMoreCommits}
               error={commitsError}
               selectedCommitHash={selectedCommitHash}
               onSelectCommit={onSelectCommit}
+              onLoadMore={onLoadMoreCommits}
             />
           ) : (
             <SidebarPanelEmpty label={activeTabDefinition.label} />
           )}
         </div>
       </SidebarContent>
+      <div className={cn(!isCurrentTab && "hidden")}>{gitActionsPanel}</div>
     </div>
   )
 }

@@ -225,9 +225,9 @@ export function DiffViewerPage() {
   const {
     commits,
     commitsError,
+    hasMoreCommits,
     isCommitsLoading,
-    refreshCommits,
-    setCommitsError,
+    loadMoreCommits,
   } = useCommitsState({
     enabled: sidebarTab === "commits",
     currentRef,
@@ -346,23 +346,14 @@ export function DiffViewerPage() {
         return
       }
 
-      if (phase === "commits") {
-        setCommitsError(error.message)
-        return
-      }
-
       setBranchesError(error.message)
     },
-    [setBranchesError, setCommitsError, setFilesError]
+    [setBranchesError, setFilesError]
   )
-
-  const shouldRefreshCommits = useCallback(() => sidebarTab === "commits", [sidebarTab])
 
   useRepoEventsRefresh({
     refreshChangedFiles,
     refreshBranches,
-    refreshCommits,
-    shouldRefreshCommits,
     onError: handleLiveRefreshError,
   })
 
@@ -448,37 +439,41 @@ export function DiffViewerPage() {
               currentRef={currentRef}
               commits={commits}
               isCommitsLoading={isCommitsLoading}
+              hasMoreCommits={hasMoreCommits}
               commitsError={commitsError}
               selectedCommitHash={selectedCommitHash}
               onSelectCommit={handleSelectCommit}
-            />
-
-            <GitActionsPanel
-              branchName={currentRef}
-              branches={branches}
-              isBranchesLoading={isBranchesLoading}
-              comparisonMode={comparisonMode}
-              files={visibleFiles}
-              hasUpstream={branchSync.hasUpstream}
-              aheadCount={branchSync.aheadCount}
-              hiddenStagedFileCount={hiddenStagedFileCount}
-              commitMessage={gitActions.commitMessage}
-              isCommitPending={gitActions.isCommitPending}
-              onCommitMessageChange={gitActions.setCommitMessage}
-              isSuggestCommitPending={commitSuggestion.isPending}
-              onSuggestCommitMessage={commitSuggestion.suggest}
-              isCommitMessageProviderValid={commitFeatureState?.providerValid ?? false}
-              isCheckingAIProviders={aiSettingsState.isCheckingAgents}
-              suggestCommitDisabledReason={suggestCommitDisabledReason}
-              onCommit={gitActions.handleCommit}
-              isPushPending={gitActions.isPushPending}
-              onPush={gitActions.handlePush}
-              isFetchPending={gitActions.isFetchPending}
-              onFetch={gitActions.handleFetch}
-              isPullPending={gitActions.isPullPending}
-              onPull={gitActions.handlePull}
-              isCheckoutPending={gitActions.isCheckoutPending}
-              onCheckoutBranch={gitActions.handleCheckoutBranch}
+              onLoadMoreCommits={loadMoreCommits}
+              gitActionsPanel={
+                <GitActionsPanel
+                  branchName={currentRef}
+                  branches={branches}
+                  isBranchesLoading={isBranchesLoading}
+                  comparisonMode={comparisonMode}
+                  files={visibleFiles}
+                  hasUpstream={branchSync.hasUpstream}
+                  aheadCount={branchSync.aheadCount}
+                  hiddenStagedFileCount={hiddenStagedFileCount}
+                  commitMessage={gitActions.commitMessage}
+                  isCommitPending={gitActions.isCommitPending}
+                  onCommitMessageChange={gitActions.setCommitMessage}
+                  isSuggestCommitPending={commitSuggestion.isPending}
+                  onSuggestCommitMessage={commitSuggestion.suggest}
+                  isCommitMessageProviderValid={commitFeatureState?.providerValid ?? false}
+                  isCheckingAIProviders={aiSettingsState.isCheckingAgents}
+                  suggestCommitDisabledReason={suggestCommitDisabledReason}
+                  onCommit={gitActions.handleCommit}
+                  isPushPending={gitActions.isPushPending}
+                  onPush={gitActions.handlePush}
+                  isFetchPending={gitActions.isFetchPending}
+                  onFetch={gitActions.handleFetch}
+                  isPullPending={gitActions.isPullPending}
+                  onPull={gitActions.handlePull}
+                  isCheckoutPending={gitActions.isCheckoutPending}
+                  onCheckoutBranch={gitActions.handleCheckoutBranch}
+                  isVisible={sidebarTab === "current"}
+                />
+              }
             />
           </div>
         </>

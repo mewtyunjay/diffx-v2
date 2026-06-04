@@ -16,18 +16,20 @@ const (
 	emptyTreeHash      = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 )
 
-func (s *Service) ListCommits(ctx context.Context, limit int) (CommitsResult, error) {
+func (s *Service) ListCommits(ctx context.Context, limit int, offset int) (CommitsResult, error) {
 	currentRef, err := s.CurrentRef(ctx)
 	if err != nil {
 		return CommitsResult{}, err
 	}
 
 	commitLimit := normalizeCommitLimit(limit)
+	commitOffset := normalizeCommitOffset(offset)
 	output, err := s.runGitOutput(
 		ctx,
 		"log",
 		"HEAD",
-		"--max-count="+strconv.Itoa(commitLimit),
+		"--max-count="+strconv.Itoa(commitLimit+1),
+		"--skip="+strconv.Itoa(commitOffset),
 		"--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI%x1e",
 	)
 	if err != nil {
@@ -39,9 +41,17 @@ func (s *Service) ListCommits(ctx context.Context, limit int) (CommitsResult, er
 		return CommitsResult{}, err
 	}
 
+	hasMore := len(commits) > commitLimit
+	if hasMore {
+		commits = commits[:commitLimit]
+	}
+
 	return CommitsResult{
 		CurrentRef: currentRef,
 		Commits:    commits,
+		Offset:     commitOffset,
+		NextOffset: commitOffset + len(commits),
+		HasMore:    hasMore,
 	}, nil
 }
 
@@ -291,6 +301,14 @@ func normalizeCommitLimit(limit int) int {
 	}
 
 	return limit
+}
+
+func normalizeCommitOffset(offset int) int {
+	if offset < 0 {
+		return 0
+	}
+
+	return offset
 }
 
 func shortCommitHash(hash string) string {

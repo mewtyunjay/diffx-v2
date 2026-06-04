@@ -78,6 +78,9 @@ export type CommitItem = {
 export type CommitsResult = {
   currentRef: string
   commits: CommitItem[]
+  offset: number
+  nextOffset: number
+  hasMore: boolean
 }
 
 export type CommitDetailResult = {

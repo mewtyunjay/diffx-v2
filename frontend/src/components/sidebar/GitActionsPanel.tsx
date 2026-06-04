@@ -36,6 +36,7 @@ type GitActionsPanelProps = {
   onPull: () => void
   isCheckoutPending: boolean
   onCheckoutBranch: (branch: string) => void
+  isVisible?: boolean
 }
 
 export function GitActionsPanel({
@@ -64,6 +65,7 @@ export function GitActionsPanel({
   onPull,
   isCheckoutPending,
   onCheckoutBranch,
+  isVisible = true,
 }: GitActionsPanelProps) {
   const { open, setOpen } = useSidebar()
   const commitMessageRef = useRef<HTMLTextAreaElement>(null)
@@ -94,6 +96,10 @@ export function GitActionsPanel({
   const canTriggerBranchSwitch = canUseGitActions && !isCheckoutPending && !isPullPending
 
   const focusCommitMessage = useCallback(() => {
+    if (!isVisible) {
+      return
+    }
+
     if (open) {
       commitMessageRef.current?.focus()
       return
@@ -103,16 +109,20 @@ export function GitActionsPanel({
     requestAnimationFrame(() => {
       commitMessageRef.current?.focus()
     })
-  }, [open, setOpen])
+  }, [isVisible, open, setOpen])
 
   useShortcut("focusCommitMessage", focusCommitMessage)
   useShortcut("blurCommitMessage", () => {
+    if (!isVisible) {
+      return
+    }
+
     if (document.activeElement === commitMessageRef.current) {
       commitMessageRef.current?.blur()
     }
   })
   useShortcut("pushBranch", () => {
-    if (canTriggerPush) {
+    if (isVisible && canTriggerPush) {
       onPush()
     }
   })
