@@ -48,6 +48,51 @@
   height: 0.875rem;
 }
 
+.diff-merge-conflict-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  border-radius: 8px;
+  background: color-mix(in oklab, var(--popover) 88%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.22);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  line-height: 1;
+  padding: 0.25rem;
+  white-space: nowrap;
+}
+
+.diff-hunk-overlay-button {
+  min-height: 1.75rem;
+  appearance: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 0.625rem;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+  font: inherit;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.diff-hunk-overlay-button-accept {
+  color: var(--background);
+  background: color-mix(in oklab, var(--diff-add) 82%, var(--foreground));
+}
+
+.diff-hunk-overlay-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.diff-hunk-overlay-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 .diff-annotation-wrap {
   padding: 0.375rem 0.5rem;
 }

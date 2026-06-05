@@ -746,6 +746,65 @@ func TestListBranchesDedupesMatchingRemote(t *testing.T) {
 	}
 }
 
+func TestListBranchesSortsBranchesByNewestCommitTime(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServiceTestRepo(t)
+	runGitWithEnv(
+		t,
+		repoRoot,
+		[]string{
+			"GIT_AUTHOR_DATE=2026-01-01T00:00:00Z",
+			"GIT_COMMITTER_DATE=2026-01-01T00:00:00Z",
+		},
+		"commit",
+		"--amend",
+		"--no-edit",
+	)
+
+	runGit(t, repoRoot, "checkout", "-b", "a-older")
+	writeFile(t, filepath.Join(repoRoot, "older.txt"), "older branch\n")
+	runGit(t, repoRoot, "add", "older.txt")
+	runGitWithEnv(
+		t,
+		repoRoot,
+		[]string{
+			"GIT_AUTHOR_DATE=2026-01-02T00:00:00Z",
+			"GIT_COMMITTER_DATE=2026-01-02T00:00:00Z",
+		},
+		"commit",
+		"-m",
+		"older branch",
+	)
+
+	runGit(t, repoRoot, "checkout", "main")
+	runGit(t, repoRoot, "checkout", "-b", "z-newer")
+	writeFile(t, filepath.Join(repoRoot, "newer.txt"), "newer branch\n")
+	runGit(t, repoRoot, "add", "newer.txt")
+	runGitWithEnv(
+		t,
+		repoRoot,
+		[]string{
+			"GIT_AUTHOR_DATE=2026-01-03T00:00:00Z",
+			"GIT_COMMITTER_DATE=2026-01-03T00:00:00Z",
+		},
+		"commit",
+		"-m",
+		"newer branch",
+	)
+
+	service := NewService(repoRoot, ".")
+	result, err := service.ListBranches(context.Background())
+	if err != nil {
+		t.Fatalf("ListBranches returned error: %v", err)
+	}
+
+	names := []string{result.Branches[0].Name, result.Branches[1].Name, result.Branches[2].Name}
+	if !slices.Equal(names, []string{"z-newer", "a-older", "main"}) {
+		t.Fatalf("unexpected branch order: %#v", names)
+	}
+}
+
 func TestListChangedFilesAgainstBaseIncludesBranchAndUntrackedChanges(t *testing.T) {
 	t.Parallel()
 
@@ -1020,8 +1079,17 @@ func writeFile(t *testing.T, path string, contents string) {
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
+	runGitWithEnv(t, dir, nil, args...)
+}
+
+func runGitWithEnv(t *testing.T, dir string, env []string, args ...string) {
+	t.Helper()
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(output))
 	}

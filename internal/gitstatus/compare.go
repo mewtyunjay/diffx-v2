@@ -181,6 +181,8 @@ func (s *Service) listRefs(
 		"-C",
 		s.repoRoot,
 		"for-each-ref",
+		"--sort=refname",
+		"--sort=-committerdate",
 		"--format=%(refname:short)\t%(objectname)",
 		namespace,
 	)
