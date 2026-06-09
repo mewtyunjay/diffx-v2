@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { FolderTree, GitPullRequest, LoaderCircle, Settings2 } from "lucide-react"
+import { FolderTree, LoaderCircle, Settings2 } from "lucide-react"
 
 import { AISettingsModal } from "@/app/ai/components/AISettingsModal"
 import { useCommitMessageSuggestion } from "@/app/ai/hooks/useCommitMessageSuggestion"
 import { useAISettings } from "@/app/ai/hooks/useAISettings"
-import { ChangeSetDetailPane } from "@/app/diff-viewer/change-set/ChangeSetDetailPane"
 import { CommitDetailPane } from "@/app/diff-viewer/change-set/CommitDetailPane"
 import type { ChangeSetSource } from "@/app/diff-viewer/change-set/types"
 import { useCommitDetailState } from "@/app/diff-viewer/change-set/useCommitDetailState"
+import { PullRequestDetailPane } from "@/app/diff-viewer/pull-request/PullRequestDetailPane"
+import { PullRequestListPanel } from "@/app/diff-viewer/pull-request/PullRequestListPanel"
+import { usePullRequestActions } from "@/app/diff-viewer/pull-request/usePullRequestActions"
+import { usePullRequestDetailState } from "@/app/diff-viewer/pull-request/usePullRequestDetailState"
+import { usePullRequestsState } from "@/app/diff-viewer/pull-request/usePullRequestsState"
 import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
 import { BranchCompareLoading } from "@/diff-viewer/BranchCompareLoading"
 import { DiffViewerToolbar } from "@/diff-viewer/DiffViewerToolbar"
@@ -20,7 +24,7 @@ import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
-import type { ChangedFilesResult, CommitItem } from "@/git/types"
+import type { ChangedFilesResult, CommitItem, MergeMethod, PullRequestListItem } from "@/git/types"
 import { fuzzyFilterChangedFiles } from "@/components/file-tree/fuzzy-search"
 import { AppShell } from "@/components/app-shell"
 import { DiffFileHeader } from "@/components/diff/DiffFileHeader"
@@ -44,9 +48,13 @@ export function DiffViewerPage() {
   const [sidebarTab, setSidebarTab] = useState<SidebarPanelTab>("current")
   const [selectedChangeSet, setSelectedChangeSet] =
     useState<ChangeSetSource>({ kind: "working-tree" })
-  const isWorkingTreeSource = selectedChangeSet.kind === "working-tree"
+  const isPullRequestSurface = sidebarTab === "pull-request" || selectedChangeSet.kind === "pull-request"
+  const isWorkingTreeSource =
+    selectedChangeSet.kind === "working-tree" && !isPullRequestSurface
   const selectedCommitHash =
     selectedChangeSet.kind === "commit" ? selectedChangeSet.hash : null
+  const selectedPullRequestNumber =
+    selectedChangeSet.kind === "pull-request" ? selectedChangeSet.number : null
 
   const {
     branches,
@@ -239,6 +247,36 @@ export function DiffViewerPage() {
   const showConflictsTab = mergeState.inProgress && mergeState.unresolvedCount > 0
   const activeSidebarTab =
     sidebarTab === "conflicts" && !showConflictsTab ? "current" : sidebarTab
+  const {
+    repo: pullRequestRepo,
+    prs: pullRequests,
+    state: pullRequestsIntegrationState,
+    error: pullRequestsError,
+    isLoading: isPullRequestsLoading,
+    refresh: refreshPullRequests,
+  } = usePullRequestsState({
+    enabled: activeSidebarTab === "pull-request",
+  })
+  const {
+    detail: pullRequestDetail,
+    error: pullRequestDetailError,
+    isLoading: isPullRequestDetailLoading,
+    loadFileDiff: loadPullRequestFileDiff,
+    refresh: refreshPullRequestDetail,
+  } = usePullRequestDetailState({
+    number: selectedPullRequestNumber,
+  })
+  const refreshPullRequestViews = useCallback(async () => {
+    await Promise.all([refreshPullRequests(), refreshPullRequestDetail()])
+  }, [refreshPullRequestDetail, refreshPullRequests])
+  const {
+    approve: approveSelectedPullRequest,
+    approvePendingNumber,
+    merge: mergeSelectedPullRequest,
+    mergePendingNumber,
+  } = usePullRequestActions({
+    onSuccess: refreshPullRequestViews,
+  })
   const aiSettingsState = useAISettings()
   const diffViewerPreferencesState = useDiffViewerPreferences()
   const { preferences: diffViewerPreferences, updateActivePreferences } =
@@ -264,11 +302,6 @@ export function DiffViewerPage() {
 
       if (tab === "current" || tab === "conflicts") {
         setSelectedChangeSet({ kind: "working-tree" })
-        return
-      }
-
-      if (tab === "pull-request") {
-        setSelectedChangeSet({ kind: "pull-request", id: "current" })
       }
     },
     [showConflictsTab]
@@ -278,6 +311,33 @@ export function DiffViewerPage() {
     setSidebarTab("commits")
     setSelectedChangeSet({ kind: "commit", hash: commit.hash })
   }, [])
+
+  const handleSelectPullRequest = useCallback((pr: PullRequestListItem) => {
+    setSidebarTab("pull-request")
+    setSelectedChangeSet({ kind: "pull-request", number: pr.number })
+  }, [])
+
+  const handleApprovePullRequest = useCallback(
+    (body?: string) => {
+      if (selectedPullRequestNumber == null) {
+        return Promise.reject(new Error("No pull request selected."))
+      }
+
+      return approveSelectedPullRequest(selectedPullRequestNumber, body)
+    },
+    [approveSelectedPullRequest, selectedPullRequestNumber]
+  )
+
+  const handleMergePullRequest = useCallback(
+    (method?: MergeMethod) => {
+      if (selectedPullRequestNumber == null) {
+        return Promise.reject(new Error("No pull request selected."))
+      }
+
+      return mergeSelectedPullRequest(selectedPullRequestNumber, method)
+    },
+    [mergeSelectedPullRequest, selectedPullRequestNumber]
+  )
 
   const suggestCommitDisabledReason = useMemo(() => {
     if (comparisonMode !== "head") {
@@ -453,6 +513,18 @@ export function DiffViewerPage() {
               showConflictsTab={showConflictsTab}
               onSelectCommit={handleSelectCommit}
               onLoadMoreCommits={loadMoreCommits}
+              pullRequestPanel={
+                <PullRequestListPanel
+                  repo={pullRequestRepo}
+                  prs={pullRequests}
+                  state={pullRequestsIntegrationState}
+                  error={pullRequestsError}
+                  isLoading={isPullRequestsLoading}
+                  selectedNumber={selectedPullRequestNumber}
+                  onRefresh={() => void refreshPullRequests()}
+                  onSelectPullRequest={handleSelectPullRequest}
+                />
+              }
               gitActionsPanel={
                 <GitActionsPanel
                   branchName={currentRef}
@@ -595,7 +667,35 @@ export function DiffViewerPage() {
               : "min-h-0 min-w-0 flex-1 overflow-hidden overscroll-none"
           }
         >
-          {!isWorkingTreeSource ? (
+          {isPullRequestSurface ? (
+            <PullRequestDetailPane
+              selectedNumber={selectedPullRequestNumber}
+              detail={pullRequestDetail}
+              detailMode={diffViewerPreferences.diffDetailMode}
+              error={pullRequestDetailError}
+              isApprovePending={
+                selectedPullRequestNumber != null &&
+                approvePendingNumber === selectedPullRequestNumber
+              }
+              isLoading={isPullRequestDetailLoading}
+              isMergePending={
+                selectedPullRequestNumber != null &&
+                mergePendingNumber === selectedPullRequestNumber
+              }
+              isRefreshPending={isPullRequestDetailLoading || isPullRequestsLoading}
+              loadFileDiff={loadPullRequestFileDiff}
+              scopePath={pullRequestDetail?.scopePath ?? scopePath}
+              sourceKey={
+                selectedPullRequestNumber
+                  ? `pull-request:${selectedPullRequestNumber}:${pullRequestDetail?.head.sha ?? "pending"}`
+                  : "pull-request"
+              }
+              viewMode={viewMode}
+              onApprove={handleApprovePullRequest}
+              onMerge={handleMergePullRequest}
+              onRefresh={() => void refreshPullRequestViews()}
+            />
+          ) : !isWorkingTreeSource ? (
             selectedChangeSet.kind === "commit" ? (
               <CommitDetailPane
                 detail={commitChangeSetState.detail}
@@ -609,23 +709,7 @@ export function DiffViewerPage() {
                 onToggleExpandAll={handleToggleCurrentFileExpanded}
                 onViewModeChange={handleViewModeChange}
               />
-            ) : (
-              <ChangeSetDetailPane
-                detail={null}
-                detailMode={diffViewerPreferences.diffDetailMode}
-                error={null}
-                isLoading={false}
-                loadFileDiff={commitChangeSetState.loadFileDiff}
-                placeholderTitle="Pull request review"
-                placeholderDescription="Pull request data will load in its own review screen."
-                PlaceholderIcon={GitPullRequest}
-                scopePath={scopePath}
-                sourceKey={`pull-request:${selectedChangeSet.id}`}
-                viewMode={viewMode}
-                onToggleExpandAll={handleToggleCurrentFileExpanded}
-                onViewModeChange={handleViewModeChange}
-              />
-            )
+            ) : null
           ) : isBranchCompareLoading ? (
             <BranchCompareLoading baseRef={selectedBaseRef} />
           ) : (

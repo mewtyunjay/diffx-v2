@@ -181,6 +181,8 @@ func (s *Service) listRefs(
 		"-C",
 		s.repoRoot,
 		"for-each-ref",
+		"--sort=refname",
+		"--sort=-committerdate",
 		"--format=%(refname:short)\t%(objectname)",
 		namespace,
 	)
@@ -356,6 +358,9 @@ func parseUntrackedFiles(output []byte, repoRoot string) ([]ChangedFileItem, err
 
 	for _, token := range tokens {
 		if len(token) == 0 {
+			continue
+		}
+		if isDirectoryToken(repoRoot, string(token)) {
 			continue
 		}
 

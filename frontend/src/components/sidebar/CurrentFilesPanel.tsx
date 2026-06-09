@@ -281,23 +281,19 @@ export function CurrentFilesPanel({
         getFileIndicatorClassName={(file) => fileStatusIndicatorClassNames[file.status]}
         getFileLanguage={(file) => file.language}
         renderFileAction={
-          isMergeInProgress
+          isMergeInProgress || !canUseGitActions
             ? undefined
             : (file) => {
                 const isPending = stagePendingPathSet.has(file.path)
                 const hasAction = file.hasStagedChanges || file.hasUnstagedChanges
-                const isDisabled = !canUseGitActions || !hasAction || isPending
+                const isDisabled = !hasAction || isPending
                 const actionLabel = getStageActionLabel(file)
 
                 return (
                   <button
                     type="button"
                     aria-label={`${actionLabel}: ${file.displayPath}`}
-                    title={
-                      !canUseGitActions
-                        ? "Switch comparison back to HEAD to stage files"
-                        : actionLabel
-                    }
+                    title={actionLabel}
                     className={cn(
                       "flex size-5 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors",
                       isDisabled

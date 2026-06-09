@@ -16,7 +16,7 @@ import {
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
 import { DiffPlaceholder } from "@/components/diff/DiffPlaceholder"
 import { DiffSavedComment } from "@/components/diff/DiffSavedComment"
-import { Button } from "@/components/ui/button"
+import { resolveMergeConflictContents } from "@/components/diff/merge-conflict-resolution"
 import type { PreparedFileDiffResult } from "@/diffs/create"
 import type { ConflictFileResult } from "@/git/types"
 import "@/components/diff/diff-pane-theme.css"
@@ -195,7 +195,7 @@ function MergeConflictResolver({
 
   return (
     <UnresolvedFile<RenderedAnnotationMetadata>
-      key={`${clearDraftToken}:merge:${file.path}`}
+      key={`${clearDraftToken}:merge:${file.path}:${file.contentKey}`}
       file={{
         name: file.path,
         contents: file.contents,
@@ -211,50 +211,46 @@ function MergeConflictResolver({
           })
         },
       }}
-      renderMergeConflictUtility={(action, getInstance) => {
+      renderMergeConflictUtility={(action) => {
         const handleResolve = (resolution: MergeConflictResolution) => {
-          const instance = getInstance()
-          if (!instance) {
+          if (isResolvePending) {
             return
           }
 
-          const result = instance.resolveConflict(action.conflictIndex, resolution)
-          if (!result) {
-            return
-          }
-
+          const contents = resolveMergeConflictContents(file.contents, action.conflict, resolution)
           setDraft(null)
-          void onResolveConflict(result.file.contents)
+          void onResolveConflict(contents)
         }
 
         return (
-          <div className="flex items-center gap-1.5 rounded-md border border-border/70 bg-background/90 p-1 shadow-sm">
-            <Button
+          <div className="diff-merge-conflict-actions">
+            <button
               type="button"
-              size="xs"
-              variant="outline"
+              className="diff-hunk-overlay-button diff-hunk-overlay-button-reject"
               disabled={isResolvePending}
+              aria-label="Use current conflict changes"
               onClick={() => handleResolve("current")}
             >
               Current
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              size="xs"
+              className="diff-hunk-overlay-button diff-hunk-overlay-button-accept"
               disabled={isResolvePending}
+              aria-label="Use incoming recommended conflict changes"
               onClick={() => handleResolve("incoming")}
             >
               Incoming (Rec)
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              size="xs"
-              variant="outline"
+              className="diff-hunk-overlay-button diff-hunk-overlay-button-reject"
               disabled={isResolvePending}
+              aria-label="Use both conflict changes"
               onClick={() => handleResolve("both")}
             >
               Both
-            </Button>
+            </button>
           </div>
         )
       }}

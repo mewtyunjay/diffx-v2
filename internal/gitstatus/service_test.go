@@ -40,6 +40,21 @@ func TestParsePorcelainStatus(t *testing.T) {
 	}
 }
 
+func TestParsePorcelainStatusSkipsUntrackedDirectories(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoRoot, "nested-repo"), 0o755); err != nil {
+		t.Fatalf("mkdir nested repo: %v", err)
+	}
+
+	files, err := parsePorcelainStatus([]byte("?? nested-repo/\x00"), repoRoot)
+	if err != nil {
+		t.Fatalf("parsePorcelainStatus returned error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected untracked directory to be skipped, got %#v", files)
+	}
+}
+
 func TestListCommitsReturnsRecentHeadCommits(t *testing.T) {
 	repoRoot := createServiceTestRepo(t)
 	service := NewService(repoRoot, ".")
@@ -292,6 +307,138 @@ func TestReadCommitFileDiffRejectsConflictedStatus(t *testing.T) {
 	_, err := service.ReadCommitFileDiff(context.Background(), hash, "notes.txt", StatusConflicted, "")
 	if err == nil {
 		t.Fatal("expected conflicted status to be rejected")
+	}
+}
+
+func TestReadPullRequestDiffUsesMergeBaseAndScope(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, refs := createPullRequestObjectRepo(t)
+	service := NewService(repoRoot, "frontend")
+	expectedMergeBase := strings.TrimSpace(runGitOutput(
+		t,
+		repoRoot,
+		"merge-base",
+		"refs/diffx/pr/42/base",
+		"refs/diffx/pr/42/head",
+	))
+
+	result, err := service.ReadPullRequestDiff(context.Background(), refs)
+	if err != nil {
+		t.Fatalf("ReadPullRequestDiff returned error: %v", err)
+	}
+
+	if result.MergeBase != expectedMergeBase {
+		t.Fatalf("expected merge base %q, got %q", expectedMergeBase, result.MergeBase)
+	}
+	if result.BaseCommit != refs.BaseSHA || result.BaseCommit == result.MergeBase {
+		t.Fatalf("expected base ref commit to be base tip and newer than merge base, got %#v", result)
+	}
+	if result.HeadCommit != refs.HeadSHA {
+		t.Fatalf("expected head commit %q, got %q", refs.HeadSHA, result.HeadCommit)
+	}
+	if result.ScopePath != "frontend" {
+		t.Fatalf("expected frontend scope, got %q", result.ScopePath)
+	}
+	if result.OutsideScopeCount != 1 {
+		t.Fatalf("expected one outside-scope PR file, got %#v", result)
+	}
+	if len(result.Files) != 1 {
+		t.Fatalf("expected one scoped file, got %#v", result.Files)
+	}
+
+	file := result.Files[0]
+	if file.Path != "frontend/app.tsx" || file.DisplayPath != "app.tsx" || file.Status != StatusModified {
+		t.Fatalf("unexpected scoped PR file: %#v", file)
+	}
+	if file.HasStagedChanges || file.HasUnstagedChanges {
+		t.Fatalf("expected PR object file to ignore local stage/worktree state, got %#v", file)
+	}
+}
+
+func TestReadPullRequestFileDiffDoesNotUseUnstagedLocalChanges(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, refs := createPullRequestObjectRepo(t)
+	service := NewService(repoRoot, ".")
+	expectedMergeBase := strings.TrimSpace(runGitOutput(
+		t,
+		repoRoot,
+		"merge-base",
+		"refs/diffx/pr/42/base",
+		"refs/diffx/pr/42/head",
+	))
+
+	writeFile(t, filepath.Join(repoRoot, "frontend", "app.tsx"), "local worktree should not appear\n")
+
+	diff, err := service.ReadPullRequestFileDiff(
+		context.Background(),
+		refs,
+		"frontend/app.tsx",
+		StatusModified,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("ReadPullRequestFileDiff returned error: %v", err)
+	}
+
+	if diff.BaseCommit != expectedMergeBase {
+		t.Fatalf("expected before side to use merge base %q, got %q", expectedMergeBase, diff.BaseCommit)
+	}
+	if diff.CurrentCommit != refs.HeadSHA {
+		t.Fatalf("expected current commit to use PR head %q, got %q", refs.HeadSHA, diff.CurrentCommit)
+	}
+	if diff.Before.Contents != "export const app = 'base'\n" {
+		t.Fatalf("expected merge-base contents, got %q", diff.Before.Contents)
+	}
+	if diff.After.Contents != "export const app = 'feature'\n" {
+		t.Fatalf("expected PR head contents, got %q", diff.After.Contents)
+	}
+	if strings.Contains(diff.After.Contents, "local worktree") {
+		t.Fatalf("unstaged local changes leaked into PR diff: %#v", diff)
+	}
+	if diff.StagedAfter != nil {
+		t.Fatalf("expected PR object diff to omit staged version, got %#v", diff.StagedAfter)
+	}
+}
+
+func TestReadPreparedPullRequestFileDiffUsesResolvedHeadCommit(t *testing.T) {
+	t.Parallel()
+
+	repoRoot, refs := createPullRequestObjectRepo(t)
+	service := NewService(repoRoot, ".")
+
+	preparedRefs, err := service.ReadPullRequestDiff(context.Background(), refs)
+	if err != nil {
+		t.Fatalf("ReadPullRequestDiff returned error: %v", err)
+	}
+
+	runGit(t, repoRoot, "checkout", "feature/pr")
+	writeFile(t, filepath.Join(repoRoot, "frontend", "app.tsx"), "export const app = 'newer feature'\n")
+	runGit(t, repoRoot, "add", "frontend/app.tsx")
+	runGit(t, repoRoot, "commit", "-m", "newer feature")
+	newHeadSHA := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+	runGit(t, repoRoot, "update-ref", "refs/diffx/pr/42/head", newHeadSHA)
+
+	diff, err := service.ReadPreparedPullRequestFileDiff(
+		context.Background(),
+		preparedRefs.PullRequestDiffContext,
+		"frontend/app.tsx",
+		StatusModified,
+		"",
+	)
+	if err != nil {
+		t.Fatalf("ReadPreparedPullRequestFileDiff returned error: %v", err)
+	}
+
+	if diff.CurrentCommit != refs.HeadSHA {
+		t.Fatalf("expected prepared diff to keep original head commit %q, got %q", refs.HeadSHA, diff.CurrentCommit)
+	}
+	if diff.After.Contents != "export const app = 'feature'\n" {
+		t.Fatalf("expected prepared diff to read original head contents, got %q", diff.After.Contents)
+	}
+	if strings.Contains(diff.After.Contents, "newer feature") {
+		t.Fatalf("prepared diff read through mutable PR ref: %#v", diff)
 	}
 }
 
@@ -599,6 +746,65 @@ func TestListBranchesDedupesMatchingRemote(t *testing.T) {
 	}
 }
 
+func TestListBranchesSortsBranchesByNewestCommitTime(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServiceTestRepo(t)
+	runGitWithEnv(
+		t,
+		repoRoot,
+		[]string{
+			"GIT_AUTHOR_DATE=2026-01-01T00:00:00Z",
+			"GIT_COMMITTER_DATE=2026-01-01T00:00:00Z",
+		},
+		"commit",
+		"--amend",
+		"--no-edit",
+	)
+
+	runGit(t, repoRoot, "checkout", "-b", "a-older")
+	writeFile(t, filepath.Join(repoRoot, "older.txt"), "older branch\n")
+	runGit(t, repoRoot, "add", "older.txt")
+	runGitWithEnv(
+		t,
+		repoRoot,
+		[]string{
+			"GIT_AUTHOR_DATE=2026-01-02T00:00:00Z",
+			"GIT_COMMITTER_DATE=2026-01-02T00:00:00Z",
+		},
+		"commit",
+		"-m",
+		"older branch",
+	)
+
+	runGit(t, repoRoot, "checkout", "main")
+	runGit(t, repoRoot, "checkout", "-b", "z-newer")
+	writeFile(t, filepath.Join(repoRoot, "newer.txt"), "newer branch\n")
+	runGit(t, repoRoot, "add", "newer.txt")
+	runGitWithEnv(
+		t,
+		repoRoot,
+		[]string{
+			"GIT_AUTHOR_DATE=2026-01-03T00:00:00Z",
+			"GIT_COMMITTER_DATE=2026-01-03T00:00:00Z",
+		},
+		"commit",
+		"-m",
+		"newer branch",
+	)
+
+	service := NewService(repoRoot, ".")
+	result, err := service.ListBranches(context.Background())
+	if err != nil {
+		t.Fatalf("ListBranches returned error: %v", err)
+	}
+
+	names := []string{result.Branches[0].Name, result.Branches[1].Name, result.Branches[2].Name}
+	if !slices.Equal(names, []string{"z-newer", "a-older", "main"}) {
+		t.Fatalf("unexpected branch order: %#v", names)
+	}
+}
+
 func TestListChangedFilesAgainstBaseIncludesBranchAndUntrackedChanges(t *testing.T) {
 	t.Parallel()
 
@@ -820,6 +1026,48 @@ func createServiceTestRepo(t *testing.T) string {
 	return repoRoot
 }
 
+func createPullRequestObjectRepo(t *testing.T) (string, PullRequestRefs) {
+	t.Helper()
+
+	repoRoot := t.TempDir()
+	runGit(t, repoRoot, "init")
+	runGit(t, repoRoot, "checkout", "-b", "main")
+	runGit(t, repoRoot, "config", "user.email", "diffx@example.com")
+	runGit(t, repoRoot, "config", "user.name", "Diffx Tests")
+
+	if err := os.MkdirAll(filepath.Join(repoRoot, "frontend"), 0o755); err != nil {
+		t.Fatalf("mkdir frontend: %v", err)
+	}
+	writeFile(t, filepath.Join(repoRoot, "frontend", "app.tsx"), "export const app = 'base'\n")
+	writeFile(t, filepath.Join(repoRoot, "outside.txt"), "outside base\n")
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "base")
+
+	runGit(t, repoRoot, "checkout", "-b", "feature/pr")
+	writeFile(t, filepath.Join(repoRoot, "frontend", "app.tsx"), "export const app = 'feature'\n")
+	writeFile(t, filepath.Join(repoRoot, "outside.txt"), "outside feature\n")
+	runGit(t, repoRoot, "add", ".")
+	runGit(t, repoRoot, "commit", "-m", "feature")
+	headSHA := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+
+	runGit(t, repoRoot, "checkout", "main")
+	writeFile(t, filepath.Join(repoRoot, "base-only.txt"), "base tip only\n")
+	runGit(t, repoRoot, "add", "base-only.txt")
+	runGit(t, repoRoot, "commit", "-m", "base tip")
+	baseSHA := strings.TrimSpace(runGitOutput(t, repoRoot, "rev-parse", "HEAD"))
+
+	runGit(t, repoRoot, "update-ref", "refs/diffx/pr/42/base", baseSHA)
+	runGit(t, repoRoot, "update-ref", "refs/diffx/pr/42/head", headSHA)
+
+	return repoRoot, PullRequestRefs{
+		Number:      42,
+		BaseRefName: "main",
+		BaseSHA:     baseSHA,
+		HeadRefName: "feature/pr",
+		HeadSHA:     headSHA,
+	}
+}
+
 func writeFile(t *testing.T, path string, contents string) {
 	t.Helper()
 
@@ -831,8 +1079,17 @@ func writeFile(t *testing.T, path string, contents string) {
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 
+	runGitWithEnv(t, dir, nil, args...)
+}
+
+func runGitWithEnv(t *testing.T, dir string, env []string, args ...string) {
+	t.Helper()
+
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v failed: %v\n%s", args, err, string(output))
 	}

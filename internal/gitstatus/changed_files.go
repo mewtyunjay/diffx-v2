@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -192,6 +193,9 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 		if path == "" {
 			return nil, fmt.Errorf("missing path for status token %q", string(token))
 		}
+		if code == "??" && isDirectoryToken(repoRoot, path) {
+			continue
+		}
 
 		previousPath := ""
 		if code[0] == 'R' || code[1] == 'R' {
@@ -234,6 +238,16 @@ func parsePorcelainStatus(output []byte, repoRoot string) ([]ChangedFileItem, er
 	}
 
 	return files, nil
+}
+
+func isDirectoryToken(repoRoot string, path string) bool {
+	absPath, err := ResolveRepoPath(repoRoot, path)
+	if err != nil {
+		return false
+	}
+
+	info, err := os.Stat(absPath)
+	return err == nil && info.IsDir()
 }
 
 func mapChangedStatus(code string) ChangedFileStatus {
