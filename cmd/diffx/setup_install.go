@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,12 @@ import (
 	"strings"
 	"time"
 )
+
+//go:embed skills/SKILL.md
+var diffxSkillContent string
+
+//go:embed skills/claude-command.md
+var diffxClaudeCommandContent string
 
 func canonicalSkillDir(homeDir string) string {
 	dataHome := os.Getenv("XDG_DATA_HOME")
@@ -169,35 +176,3 @@ func parseSelectionCSV(csv string, targets []setupTarget) (map[string]bool, erro
 
 	return selected, nil
 }
-
-const diffxSkillContent = "---\n" +
-	"name: diffx\n" +
-	"description: Launch Diffx interactive review, receive annotation feedback via stdout, and continue implementation in the same Codex thread.\n" +
-	"allowed-tools: Bash(diffx:*)\n" +
-	"---\n\n" +
-	"# Diffx Review\n\n" +
-	"Use this skill when the user wants interactive annotation-based code review with Diffx and expects feedback to return into the current thread.\n\n" +
-	"## Workflow\n\n" +
-	"1. Run `diffx review` with any explicit arguments provided by the user.\n" +
-	"2. Wait for the UI review to be submitted via \"Send to agent\".\n" +
-	"3. Read stdout from the command. Diffx exits after feedback is submitted.\n" +
-	"4. Route by user intent:\n" +
-	"   - If the user is asking a question or asking why something changed, answer directly and do not edit files.\n" +
-	"   - Only make code edits when the user explicitly asks for an edit or implementation.\n" +
-	"5. If the user explicitly asked for edits and stdout includes requested fixes, implement them now.\n" +
-	"6. If stdout says no changes were requested, acknowledge and continue.\n\n" +
-	"## Notes\n\n" +
-	"- Diffx review mode is one-shot: after feedback submission, the process exits.\n" +
-	"- Treat returned review feedback as blocking only when the user explicitly asked for edits.\n"
-
-const diffxClaudeCommandContent = "---\n" +
-	"description: Open interactive Diffx review and send annotations back to this chat\n" +
-	"argument-hint: [optional diffx review args]\n" +
-	"allowed-tools: Bash(diffx:*)\n" +
-	"---\n\n" +
-	"## Diffx Review\n\n" +
-	"!`diffx review $ARGUMENTS`\n\n" +
-	"## Your task\n\n" +
-	"If the user is asking a question or asking why something changed, answer directly and do not edit files.\n" +
-	"Only make code edits when the user explicitly asks for an edit or implementation.\n" +
-	"If the user explicitly asks for edits and the review output above contains requested changes, address them in this session.\n"

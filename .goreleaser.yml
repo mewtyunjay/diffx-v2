@@ -36,17 +36,3 @@ checksum:
   name_template: SHA256SUMS.txt
   algorithm: sha256
 
-homebrew_casks:
-  - name: diffx
-    ids:
-      - diffx
-    binaries:
-      - diffx
-    repository:
-      owner: mewtyunjay
-      name: homebrew-tap
-      branch: main
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    directory: Casks
-    homepage: https://github.com/mewtyunjay/diffx-v2
-    description: Local git diff review app with a browser UI
