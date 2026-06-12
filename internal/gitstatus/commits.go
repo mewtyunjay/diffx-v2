@@ -98,7 +98,7 @@ func (s *Service) ReadCommitFileDiff(
 	previousPath string,
 ) (FileDiffResult, error) {
 	if path == "" {
-		return FileDiffResult{}, fmt.Errorf("path is required")
+		return FileDiffResult{}, ErrPathRequired
 	}
 	if !status.IsValid() {
 		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
@@ -117,10 +117,7 @@ func (s *Service) ReadCommitFileDiff(
 		return FileDiffResult{}, err
 	}
 
-	beforeName := path
-	if previousPath != "" {
-		beforeName = previousPath
-	}
+	beforePath := resolveBeforePath(path, previousPath)
 
 	result := FileDiffResult{
 		Mode:          ComparisonModeBranch,
@@ -132,72 +129,32 @@ func (s *Service) ReadCommitFileDiff(
 		PreviousPath:  previousPath,
 		Status:        status,
 		Language:      detectLanguage(path),
-		Before:        emptyFileVersion(beforeName),
+		Before:        emptyFileVersion(beforePath),
 		After:         emptyFileVersion(path),
 	}
-
-	var beforeResult cachedFileVersion
-	var afterResult cachedFileVersion
-
-	switch status {
-	case StatusAdded:
-		afterResult, err = s.readGitVersion(ctx, commitHash, path)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		result.After = afterResult.version
-	case StatusDeleted:
-		beforeResult, err = s.readGitVersion(ctx, parentHash, path)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		result.Before = beforeResult.version
-	case StatusRenamed:
-		beforePath := previousPath
-		if beforePath == "" {
-			beforePath = path
-			result.PreviousPath = beforePath
-		}
-
-		err = runParallel(
-			func() error {
-				var readErr error
-				beforeResult, readErr = s.readGitVersion(ctx, parentHash, beforePath)
-				return readErr
-			},
-			func() error {
-				var readErr error
-				afterResult, readErr = s.readGitVersion(ctx, commitHash, path)
-				return readErr
-			},
-		)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		result.Before = beforeResult.version
-		result.After = afterResult.version
-	default:
-		err = runParallel(
-			func() error {
-				var readErr error
-				beforeResult, readErr = s.readGitVersion(ctx, parentHash, path)
-				return readErr
-			},
-			func() error {
-				var readErr error
-				afterResult, readErr = s.readGitVersion(ctx, commitHash, path)
-				return readErr
-			},
-		)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		result.Before = beforeResult.version
-		result.After = afterResult.version
+	if status == StatusRenamed && previousPath == "" {
+		result.PreviousPath = path
 	}
 
-	result.Binary = beforeResult.binary || afterResult.binary
-	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
+	versions, err := assembleFileDiffVersions(
+		status,
+		result.Before,
+		result.After,
+		func() (cachedFileVersion, error) {
+			return s.readGitVersion(ctx, parentHash, beforePath)
+		},
+		func() (cachedFileVersion, error) {
+			return s.readGitVersion(ctx, commitHash, path)
+		},
+	)
+	if err != nil {
+		return FileDiffResult{}, err
+	}
+
+	result.Before = versions.before
+	result.After = versions.after
+	result.Binary = versions.binary
+	result.TooLarge = versions.tooLarge
 
 	return result, nil
 }

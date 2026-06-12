@@ -61,7 +61,7 @@ func (s *Service) ReadPullRequestFileDiff(
 	previousPath string,
 ) (FileDiffResult, error) {
 	if path == "" {
-		return FileDiffResult{}, fmt.Errorf("path is required")
+		return FileDiffResult{}, ErrPathRequired
 	}
 	if !status.IsValid() {
 		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
@@ -221,7 +221,7 @@ func validatePullRequestFileDiffInput(
 	status ChangedFileStatus,
 ) error {
 	if path == "" {
-		return fmt.Errorf("path is required")
+		return ErrPathRequired
 	}
 	if !status.IsValid() {
 		return fmt.Errorf("invalid status %q", status)

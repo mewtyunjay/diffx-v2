@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 
-import { fetchCommitDetail, fetchCommitFileDiff } from "@/git/api"
+import { fetchCommitDetail, fetchDiffForSource } from "@/git/api"
 import type { CommitDetailResult } from "@/git/types"
 import type { ChangeSetFileDiffLoader } from "@/app/diff-viewer/change-set/types"
 
@@ -64,7 +64,7 @@ export function useCommitDetailState({ hash }: UseCommitDetailStateOptions) {
         return Promise.reject(new Error("No commit selected."))
       }
 
-      return fetchCommitFileDiff(hash, file, signal)
+      return fetchDiffForSource({ kind: "commit", hash }, file, signal)
     },
     [hash]
   )

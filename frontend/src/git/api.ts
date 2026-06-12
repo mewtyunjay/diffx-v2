@@ -95,29 +95,6 @@ export async function fetchCommitDetail(hash: string, signal?: AbortSignal) {
   return (await response.json()) as CommitDetailResult
 }
 
-export async function fetchCommitFileDiff(
-  hash: string,
-  file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
-  signal?: AbortSignal
-) {
-  const params = new URLSearchParams({
-    hash,
-    path: file.path,
-    status: file.status,
-  })
-
-  if (file.previousPath) {
-    params.set("previousPath", file.previousPath)
-  }
-
-  const response = await fetch(`/api/commit-file-diff?${params.toString()}`, { signal })
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
-
-  return (await response.json()) as FileDiffResult
-}
-
 export async function fetchPullRequests(signal?: AbortSignal) {
   const response = await fetch("/api/pull-requests", { signal })
   if (!response.ok) {
@@ -137,52 +114,52 @@ export async function fetchPullRequestDetail(number: number, signal?: AbortSigna
   return (await response.json()) as PullRequestDetailResult
 }
 
-export async function fetchPullRequestFileDiff(
-  number: number,
-  file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
-  signal?: AbortSignal
-) {
-  const params = new URLSearchParams({
-    number: String(number),
-    path: file.path,
-    status: file.status,
-  })
+export type DiffSource =
+  | { kind: "working-tree"; baseRef?: string }
+  | { kind: "commit"; hash: string }
+  | { kind: "pull-request"; number: number }
 
-  if (file.previousPath) {
-    params.set("previousPath", file.previousPath)
+const DIFF_SOURCE_ENDPOINTS = {
+  "working-tree": "/api/file-diff",
+  commit: "/api/commit-file-diff",
+  "pull-request": "/api/pull-request-file-diff",
+} as const
+
+function diffSourceParams(source: DiffSource) {
+  const params = new URLSearchParams()
+  switch (source.kind) {
+    case "working-tree":
+      if (source.baseRef) {
+        params.set("baseRef", source.baseRef)
+      }
+      break
+    case "commit":
+      params.set("hash", source.hash)
+      break
+    case "pull-request":
+      params.set("number", String(source.number))
+      break
   }
 
-  const response = await fetch(`/api/pull-request-file-diff?${params.toString()}`, {
-    signal,
-  })
-  if (!response.ok) {
-    throw new Error(await readError(response))
-  }
-
-  return (await response.json()) as FileDiffResult
+  return params
 }
 
-export async function fetchFileDiff(
+export async function fetchDiffForSource(
+  source: DiffSource,
   file: Pick<ChangedFileItem, "path" | "previousPath" | "status">,
-  baseRef?: string,
   signal?: AbortSignal
 ) {
-  const params = new URLSearchParams({
-    path: file.path,
-    status: file.status,
-  })
-
+  const params = diffSourceParams(source)
+  params.set("path", file.path)
+  params.set("status", file.status)
   if (file.previousPath) {
     params.set("previousPath", file.previousPath)
   }
 
-  if (baseRef) {
-    params.set("baseRef", baseRef)
-  }
-
-  const response = await fetch(`/api/file-diff?${params.toString()}`, {
-    signal,
-  })
+  const response = await fetch(
+    `${DIFF_SOURCE_ENDPOINTS[source.kind]}?${params.toString()}`,
+    { signal }
+  )
   if (!response.ok) {
     throw new Error(await readError(response))
   }

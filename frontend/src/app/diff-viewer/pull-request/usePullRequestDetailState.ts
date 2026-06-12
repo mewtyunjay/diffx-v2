@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 
 import type { ChangeSetFileDiffLoader } from "@/app/diff-viewer/change-set/types"
-import { fetchPullRequestDetail, fetchPullRequestFileDiff } from "@/git/api"
+import { fetchDiffForSource, fetchPullRequestDetail } from "@/git/api"
 import type { PullRequestDetailResult } from "@/git/types"
 
 type UsePullRequestDetailStateOptions = {
@@ -67,7 +67,7 @@ export function usePullRequestDetailState({ number }: UsePullRequestDetailStateO
         return Promise.reject(new Error("No pull request selected."))
       }
 
-      return fetchPullRequestFileDiff(number, file, signal)
+      return fetchDiffForSource({ kind: "pull-request", number }, file, signal)
     },
     [number]
   )

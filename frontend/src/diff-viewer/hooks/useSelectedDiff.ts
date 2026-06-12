@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useWorkerPool } from "@pierre/diffs/react"
 
-import { fetchFileDiff } from "@/git/api"
+import { fetchDiffForSource } from "@/git/api"
 import type { ChangedFileItem, FileDiffResult } from "@/git/types"
 import {
   clonePreparedFileDiff,
@@ -139,7 +139,7 @@ export function useSelectedDiff({
         return inFlightRequest
       }
 
-      const request = fetchFileDiff(file, nextBaseRef, signal)
+      const request = fetchDiffForSource({ kind: "working-tree", baseRef: nextBaseRef }, file, signal)
         .then((result) => prepareLoadedDiff(nextBaseCommit, file, result))
         .finally(() => {
           diffRequestCacheRef.current.delete(cacheKey)

@@ -48,11 +48,10 @@ type ReviewState struct {
 }
 
 type App struct {
-	service         *gitstatus.Service
-	githubService   *githubservice.Service
-	prDiffCacheMu   sync.RWMutex
-	prDiffCache     map[int]gitstatus.PullRequestDiffContext
-	aiService       *ai.Service
+	service           *gitstatus.Service
+	githubService     *githubservice.Service
+	pullRequestReview *pullRequestReview
+	aiService         *ai.Service
 	repoEvents      *repoEventHub
 	repoWatcher     *repoWatcher
 	reviewFeedback  *reviewFeedbackCoordinator
@@ -186,15 +185,18 @@ func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, er
 		return nil, err
 	}
 
+	service := gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath)
+	githubService := githubservice.NewService(cfg.Workspace.RepoRoot)
+
 	return &App{
-		service:         gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath),
-		githubService:   githubservice.NewService(cfg.Workspace.RepoRoot),
-		prDiffCache:     make(map[int]gitstatus.PullRequestDiffContext),
-		aiService:       aiService,
-		repoEvents:      repoEvents,
-		repoWatcher:     watcher,
-		logger:          loggerWithComponent(logger, "api"),
-		userConfigStore: userConfigStore,
+		service:           service,
+		githubService:     githubService,
+		pullRequestReview: newPullRequestReview(githubService, service),
+		aiService:         aiService,
+		repoEvents:        repoEvents,
+		repoWatcher:       watcher,
+		logger:            loggerWithComponent(logger, "api"),
+		userConfigStore:   userConfigStore,
 		reviewFeedback: newReviewFeedbackCoordinator(
 			cfg.Review.Enabled,
 		),

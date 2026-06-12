@@ -1,15 +1,11 @@
-import {
-  FileDiff,
-  type AnnotationSide,
-  type DiffLineAnnotation,
-  type DiffLineEventBaseProps,
-} from "@pierre/diffs/react"
-import { useCallback, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react"
+import { FileDiff, type DiffLineEventBaseProps } from "@pierre/diffs/react"
+import { useCallback, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "react"
 
 import {
-  createAnnotationTargetKey,
-  createDraftDiffAnnotation,
+  useAnnotationDraftState,
   type DraftDiffAnnotation,
+  type DraftTarget,
+  type RenderedAnnotationMetadata,
   type SavedDiffAnnotation,
 } from "@/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
@@ -25,21 +21,8 @@ const DIFF_EXPANSION_LINE_COUNT = 20
 const FAST_INLINE_DIFF_MAX_LINE_LENGTH = 300
 const LARGE_DIFF_INLINE_DIFF_MAX_LINE_LENGTH = 120
 
-type DraftTarget = {
-  lineNumber: number
-  side: AnnotationSide
-}
 type DiffLinePointerEvent = DiffLineEventBaseProps & { event: PointerEvent }
 type GetHoveredDiffLine = () => DraftTarget | undefined
-
-type RenderedAnnotationMetadata =
-  | {
-    kind: "draft"
-  }
-  | {
-    kind: "saved"
-    comment: string
-  }
 
 type DiffPaneRendererProps = {
   diff: RenderablePreparedDiff
@@ -71,15 +54,7 @@ function GutterPlusIcon() {
   )
 }
 
-function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
-  if (a == null || b == null) {
-    return false
-  }
-
-  return a.lineNumber === b.lineNumber && a.side === b.side
-}
-
-function DiffPaneRendererContent({
+function DiffPaneRenderer({
   diff,
   initialDraft,
   onDraftChange,
@@ -94,47 +69,27 @@ function DiffPaneRendererContent({
   onAcceptHunk,
   onRejectHunk,
 }: DiffPaneRendererProps) {
-  const [draft, setDraft] = useState<DraftDiffAnnotation | null>(() => initialDraft)
   const lastHoveredTargetRef = useRef<DraftTarget | null>(null)
 
-  const draftTarget = useMemo(
-    () =>
-      draft
-        ? {
-            lineNumber: draft.lineNumber,
-            side: draft.side,
-          }
-        : null,
-    [draft]
-  )
-  const draftText = draft?.comment ?? ""
-
-  const savedAnnotationMap = useMemo(
-    () =>
-      new Map(savedAnnotations.map((annotation) => [createAnnotationTargetKey(annotation), annotation])),
-    [savedAnnotations]
-  )
-
-  const setStoredDraft = useCallback(
-    (nextDraft: DraftDiffAnnotation | null) => {
-      setDraft(nextDraft)
-      onDraftChange(nextDraft)
-    },
-    [onDraftChange]
-  )
-
-  const handleOpenDraft = useCallback(
-    (target: DraftTarget) => {
-      if (isSameDraftTarget(draftTarget, target)) {
-        setStoredDraft(null)
-        return
-      }
-
-      const existingAnnotation = savedAnnotationMap.get(createAnnotationTargetKey(target))
-      setStoredDraft(createDraftDiffAnnotation(diff, target, existingAnnotation?.comment ?? ""))
-    },
-    [diff, draftTarget, savedAnnotationMap, setStoredDraft]
-  )
+  const {
+    draftText,
+    lineAnnotations,
+    canSaveDraft,
+    isEditingExisting,
+    focusKey,
+    openDraft,
+    closeDraft,
+    changeDraft,
+    saveDraft,
+    deleteDraft,
+  } = useAnnotationDraftState({
+    diff,
+    savedAnnotations,
+    onSaveAnnotation,
+    onDeleteAnnotation,
+    initialDraft,
+    onDraftChange,
+  })
 
   const handleUtilityOpenDraft = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>, getHoveredLine: GetHoveredDiffLine) => {
@@ -146,9 +101,9 @@ function DiffPaneRendererContent({
         return
       }
 
-      handleOpenDraft(hoveredLine)
+      openDraft(hoveredLine)
     },
-    [handleOpenDraft]
+    [openDraft]
   )
 
   const options = useMemo(
@@ -182,7 +137,7 @@ function DiffPaneRendererContent({
 
         line.event.preventDefault()
         line.event.stopPropagation()
-        handleOpenDraft({
+        openDraft({
           lineNumber: line.lineNumber,
           side: line.annotationSide,
         })
@@ -199,78 +154,13 @@ function DiffPaneRendererContent({
       enableAnnotations,
       enableHunkActions,
       expandAll,
-      handleOpenDraft,
+      openDraft,
       hunkActionPendingKey,
       onAcceptHunk,
       onRejectHunk,
       viewMode,
     ]
   )
-
-  const lineAnnotations = useMemo<DiffLineAnnotation<RenderedAnnotationMetadata>[]>(
-    () => {
-      const draftKey = draftTarget ? createAnnotationTargetKey(draftTarget) : null
-      const annotations: DiffLineAnnotation<RenderedAnnotationMetadata>[] = savedAnnotations
-        .filter((annotation) => createAnnotationTargetKey(annotation) !== draftKey)
-        .map((annotation) => ({
-          side: annotation.side,
-          lineNumber: annotation.lineNumber,
-          metadata: {
-            kind: "saved",
-            comment: annotation.comment,
-          },
-        }))
-
-      if (draftTarget) {
-        annotations.push({
-          side: draftTarget.side,
-          lineNumber: draftTarget.lineNumber,
-          metadata: {
-            kind: "draft",
-          },
-        })
-      }
-
-      return annotations
-    },
-    [draftTarget, savedAnnotations]
-  )
-
-  const canSaveDraft = useMemo(() => {
-    const trimmed = draftText.trim()
-    return trimmed.length > 0 || (draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget)))
-  }, [draftTarget, draftText, savedAnnotationMap])
-
-  const handleCloseDraft = () => {
-    setStoredDraft(null)
-  }
-
-  const handleSaveDraft = () => {
-    if (!draftTarget) {
-      return
-    }
-
-    const trimmed = draftText.trim()
-    if (trimmed.length === 0) {
-      if (savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))) {
-        onDeleteAnnotation(draftTarget)
-      }
-      handleCloseDraft()
-      return
-    }
-
-    onSaveAnnotation(draftTarget, trimmed)
-    handleCloseDraft()
-  }
-
-  const handleDeleteDraft = () => {
-    if (!draftTarget) {
-      return
-    }
-
-    onDeleteAnnotation(draftTarget)
-    handleCloseDraft()
-  }
 
   return (
     <FileDiff<RenderedAnnotationMetadata>
@@ -284,15 +174,10 @@ function DiffPaneRendererContent({
                 return (
                   <DiffSavedComment
                     comment={annotation.metadata.comment}
-                    onOpen={() => handleOpenDraft(annotation)}
+                    onOpen={() => openDraft(annotation)}
                   />
                 )
               }
-
-              const focusKey =
-                draftTarget == null ? "closed" : `${draftTarget.side}:${draftTarget.lineNumber}`
-              const isEditingExisting =
-                draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))
 
               return (
                 <DiffCommentDraft
@@ -300,16 +185,10 @@ function DiffPaneRendererContent({
                   value={draftText}
                   canSave={canSaveDraft}
                   isEditingExisting={isEditingExisting}
-                  onChange={(value) => {
-                    if (!draftTarget) {
-                      return
-                    }
-
-                    setStoredDraft(createDraftDiffAnnotation(diff, draftTarget, value))
-                  }}
-                  onDelete={isEditingExisting ? handleDeleteDraft : undefined}
-                  onSave={handleSaveDraft}
-                  onEscape={handleCloseDraft}
+                  onChange={changeDraft}
+                  onDelete={isEditingExisting ? deleteDraft : undefined}
+                  onSave={saveDraft}
+                  onEscape={closeDraft}
                 />
               )
             }
@@ -337,6 +216,4 @@ function DiffPaneRendererContent({
   )
 }
 
-export default function DiffPaneRenderer(props: DiffPaneRendererProps) {
-  return <DiffPaneRendererContent {...props} />
-}
+export default DiffPaneRenderer

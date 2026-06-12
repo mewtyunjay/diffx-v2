@@ -53,10 +53,10 @@ func buildIndexKey(repoRoot, relPath string) string {
 func ResolveRepoPath(repoRoot, relPath string) (string, error) {
 	cleanPath := filepath.Clean(relPath)
 	if cleanPath == "." || cleanPath == "" {
-		return "", fmt.Errorf("path is required")
+		return "", ErrPathRequired
 	}
 	if filepath.IsAbs(cleanPath) {
-		return "", fmt.Errorf("absolute paths are not allowed")
+		return "", ErrAbsolutePath
 	}
 
 	absPath := filepath.Join(repoRoot, cleanPath)
@@ -70,7 +70,7 @@ func ResolveRepoPath(repoRoot, relPath string) (string, error) {
 		return "", fmt.Errorf("resolve path: %w", err)
 	}
 	if relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q escapes repo root", relPath)
+		return "", fmt.Errorf("%w: %q", ErrPathEscapesRepo, relPath)
 	}
 
 	return absPath, nil
@@ -87,7 +87,7 @@ func (s *Service) ReadFileContent(relPath string) (string, string, error) {
 
 func (s *Service) ReadConflictFile(relPath string) (ConflictFileResult, error) {
 	if strings.TrimSpace(relPath) == "" {
-		return ConflictFileResult{}, fmt.Errorf("path is required")
+		return ConflictFileResult{}, ErrPathRequired
 	}
 
 	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
@@ -110,7 +110,7 @@ func (s *Service) ReadConflictFile(relPath string) (ConflictFileResult, error) {
 		return ConflictFileResult{}, err
 	}
 	if info.IsDir() {
-		return ConflictFileResult{}, fmt.Errorf("path %q is not a file", relPath)
+		return ConflictFileResult{}, fmt.Errorf("%w: %q", ErrNotAFile, relPath)
 	}
 
 	result, err := s.readWorkingTreeVersion(relPath)
@@ -131,7 +131,7 @@ func (s *Service) ReadConflictFile(relPath string) (ConflictFileResult, error) {
 
 func (s *Service) ResolveConflictFile(relPath string, contents string) (ConflictResolveResult, error) {
 	if strings.TrimSpace(relPath) == "" {
-		return ConflictResolveResult{}, fmt.Errorf("path is required")
+		return ConflictResolveResult{}, ErrPathRequired
 	}
 
 	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
@@ -167,7 +167,7 @@ func (s *Service) ReadFileDiff(
 	baseRef string,
 ) (FileDiffResult, error) {
 	if path == "" {
-		return FileDiffResult{}, fmt.Errorf("path is required")
+		return FileDiffResult{}, ErrPathRequired
 	}
 	if !status.IsValid() {
 		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
@@ -189,16 +189,13 @@ func (s *Service) readFileDiffWithComparison(
 	previousPath string,
 ) (FileDiffResult, error) {
 	if path == "" {
-		return FileDiffResult{}, fmt.Errorf("path is required")
+		return FileDiffResult{}, ErrPathRequired
 	}
 	if !status.IsValid() {
 		return FileDiffResult{}, fmt.Errorf("invalid status %q", status)
 	}
 
-	beforeName := path
-	if previousPath != "" {
-		beforeName = previousPath
-	}
+	beforePath := resolveBeforePath(path, previousPath)
 
 	result := FileDiffResult{
 		Mode:          comparison.Mode,
@@ -210,94 +207,37 @@ func (s *Service) readFileDiffWithComparison(
 		PreviousPath:  previousPath,
 		Status:        status,
 		Language:      detectLanguage(path),
-		Before:        emptyFileVersion(beforeName),
+		Before:        emptyFileVersion(beforePath),
 		After:         emptyFileVersion(path),
 	}
-
-	var beforeResult cachedFileVersion
-	var afterResult cachedFileVersion
-	var err error
-
-	switch status {
-	case StatusAdded:
-		afterResult, err = s.readWorkingTreeVersion(path)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		result.After = afterResult.version
-	case StatusDeleted:
-		beforeResult, err = s.readGitVersion(ctx, comparison.BaseCommit, path)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-		result.Before = beforeResult.version
-	case StatusRenamed:
-		beforePath := previousPath
-		if beforePath == "" {
-			beforePath = path
-			result.PreviousPath = beforePath
-		}
-
-		err = runParallel(
-			func() error {
-				var readErr error
-				beforeResult, readErr = s.readGitVersion(ctx, comparison.BaseCommit, beforePath)
-				return readErr
-			},
-			func() error {
-				var readErr error
-				afterResult, readErr = s.readWorkingTreeVersion(path)
-				return readErr
-			},
-		)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-
-		result.Before = beforeResult.version
-		result.After = afterResult.version
-	case StatusConflicted:
-		err = runParallel(
-			func() error {
-				var readErr error
-				beforeResult, readErr = s.readOptionalGitVersion(ctx, comparison.BaseCommit, path)
-				return readErr
-			},
-			func() error {
-				var readErr error
-				afterResult, readErr = s.readOptionalWorkingTreeVersion(path)
-				return readErr
-			},
-		)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-
-		result.Before = beforeResult.version
-		result.After = afterResult.version
-	default:
-		err = runParallel(
-			func() error {
-				var readErr error
-				beforeResult, readErr = s.readGitVersion(ctx, comparison.BaseCommit, path)
-				return readErr
-			},
-			func() error {
-				var readErr error
-				afterResult, readErr = s.readWorkingTreeVersion(path)
-				return readErr
-			},
-		)
-		if err != nil {
-			return FileDiffResult{}, err
-		}
-
-		result.Before = beforeResult.version
-		result.After = afterResult.version
+	if status == StatusRenamed && previousPath == "" {
+		result.PreviousPath = path
 	}
 
-	result.Binary = beforeResult.binary || afterResult.binary
-	result.TooLarge = beforeResult.tooLarge || afterResult.tooLarge
+	before := func() (cachedFileVersion, error) {
+		return s.readGitVersion(ctx, comparison.BaseCommit, beforePath)
+	}
+	after := func() (cachedFileVersion, error) {
+		return s.readWorkingTreeVersion(path)
+	}
+	if status == StatusConflicted {
+		before = func() (cachedFileVersion, error) {
+			return s.readOptionalGitVersion(ctx, comparison.BaseCommit, beforePath)
+		}
+		after = func() (cachedFileVersion, error) {
+			return s.readOptionalWorkingTreeVersion(path)
+		}
+	}
+
+	versions, err := assembleFileDiffVersions(status, result.Before, result.After, before, after)
+	if err != nil {
+		return FileDiffResult{}, err
+	}
+
+	result.Before = versions.before
+	result.After = versions.after
+	result.Binary = versions.binary
+	result.TooLarge = versions.tooLarge
 	if comparison.Mode == ComparisonModeHead && status != StatusConflicted {
 		indexResult, ok, err := s.readOptionalIndexVersion(ctx, path)
 		if err != nil {

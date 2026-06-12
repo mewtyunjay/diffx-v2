@@ -18,6 +18,11 @@ export {
   renderHunkPatch,
 } from "@/diff-viewer/annotations/patch-metadata"
 export { loadSavedAnnotations, persistSavedAnnotations } from "@/diff-viewer/annotations/storage"
+export {
+  useAnnotationDraftState,
+  type DraftTarget,
+  type RenderedAnnotationMetadata,
+} from "@/diff-viewer/annotations/useAnnotationDraftState"
 
 export type {
   DraftDiffAnnotation,

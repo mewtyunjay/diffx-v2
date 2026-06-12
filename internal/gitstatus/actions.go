@@ -252,7 +252,7 @@ func (s *Service) CheckoutBranch(ctx context.Context, branch string) error {
 
 	targetBranch := strings.TrimSpace(branch)
 	if targetBranch == "" {
-		return fmt.Errorf("branch is required")
+		return ErrBranchRequired
 	}
 
 	statusFiles, err := s.listStatusFiles(ctx)
@@ -266,7 +266,7 @@ func (s *Service) CheckoutBranch(ctx context.Context, branch string) error {
 	if strings.HasPrefix(targetBranch, "origin/") {
 		localBranch := strings.TrimPrefix(targetBranch, "origin/")
 		if localBranch == "" {
-			return fmt.Errorf("branch is required")
+			return ErrBranchRequired
 		}
 
 		exists, err := s.localBranchExists(ctx, localBranch)
@@ -350,7 +350,7 @@ func (s *Service) CurrentUpstreamRef(ctx context.Context) (string, error) {
 
 func (s *Service) ensureScopedDiffPath(path string, previousPath string) error {
 	if path == "" {
-		return fmt.Errorf("path is required")
+		return ErrPathRequired
 	}
 	if !s.AllowsDiff(path, previousPath) {
 		return ErrPathOutsideScope

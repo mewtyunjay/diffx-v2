@@ -1,16 +1,12 @@
 import {
   UnresolvedFile,
-  type AnnotationSide,
-  type DiffLineAnnotation,
   type DiffLineEventBaseProps,
   type MergeConflictResolution,
 } from "@pierre/diffs/react"
-import { useCallback, useMemo, useState } from "react"
 
 import {
-  createAnnotationTargetKey,
-  createDraftDiffAnnotation,
-  type DraftDiffAnnotation,
+  useAnnotationDraftState,
+  type RenderedAnnotationMetadata,
   type SavedDiffAnnotation,
 } from "@/diff-viewer/annotations"
 import { DiffCommentDraft } from "@/components/diff/DiffCommentDraft"
@@ -21,21 +17,7 @@ import type { PreparedFileDiffResult } from "@/diffs/create"
 import type { ConflictFileResult } from "@/git/types"
 import "@/components/diff/diff-pane-theme.css"
 
-type DraftTarget = {
-  lineNumber: number
-  side: AnnotationSide
-}
-
 type DiffLinePointerEvent = DiffLineEventBaseProps & { event: PointerEvent }
-
-type RenderedAnnotationMetadata =
-  | {
-      kind: "draft"
-    }
-  | {
-      kind: "saved"
-      comment: string
-    }
 
 type MergeConflictPaneProps = {
   selectedFilePath: string | null
@@ -56,14 +38,6 @@ type MergeConflictPaneProps = {
 
 function hasMergeConflictMarkers(contents: string) {
   return contents.includes("<<<<<<<") && contents.includes("=======") && contents.includes(">>>>>>>")
-}
-
-function isSameDraftTarget(a: DraftTarget | null, b: DraftTarget | null) {
-  if (a == null || b == null) {
-    return false
-  }
-
-  return a.lineNumber === b.lineNumber && a.side === b.side
 }
 
 function MergeConflictResolver({
@@ -88,110 +62,23 @@ function MergeConflictResolver({
   onDeleteAnnotation: (target: Pick<SavedDiffAnnotation, "side" | "lineNumber">) => void
   onResolveConflict: (contents: string) => Promise<void>
 }) {
-  const [draft, setDraft] = useState<DraftDiffAnnotation | null>(() => null)
-
-  const draftTarget = useMemo(
-    () =>
-      draft
-        ? {
-            lineNumber: draft.lineNumber,
-            side: draft.side,
-          }
-        : null,
-    [draft]
-  )
-
-  const draftText = draft?.comment ?? ""
-  const savedAnnotationMap = useMemo(
-    () =>
-      new Map(savedAnnotations.map((annotation) => [createAnnotationTargetKey(annotation), annotation])),
-    [savedAnnotations]
-  )
-
-  const handleOpenDraft = useCallback(
-    (target: DraftTarget) => {
-      if (isSameDraftTarget(draftTarget, target)) {
-        setDraft(null)
-        return
-      }
-
-      if (!currentDiff) {
-        return
-      }
-
-      const existingAnnotation = savedAnnotationMap.get(createAnnotationTargetKey(target))
-      setDraft(createDraftDiffAnnotation(currentDiff, target, existingAnnotation?.comment ?? ""))
-    },
-    [currentDiff, draftTarget, savedAnnotationMap]
-  )
-
-  const lineAnnotations = useMemo<DiffLineAnnotation<RenderedAnnotationMetadata>[]>(
-    () => {
-      const draftKey = draftTarget ? createAnnotationTargetKey(draftTarget) : null
-      const annotations: DiffLineAnnotation<RenderedAnnotationMetadata>[] = savedAnnotations
-        .filter((annotation) => createAnnotationTargetKey(annotation) !== draftKey)
-        .map((annotation) => ({
-          side: annotation.side,
-          lineNumber: annotation.lineNumber,
-          metadata: {
-            kind: "saved",
-            comment: annotation.comment,
-          },
-        }))
-
-      if (draftTarget) {
-        annotations.push({
-          side: draftTarget.side,
-          lineNumber: draftTarget.lineNumber,
-          metadata: {
-            kind: "draft",
-          },
-        })
-      }
-
-      return annotations
-    },
-    [draftTarget, savedAnnotations]
-  )
-
-  const canSaveDraft = useMemo(() => {
-    const trimmed = draftText.trim()
-    return (
-      trimmed.length > 0 ||
-      (draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget)))
-    )
-  }, [draftTarget, draftText, savedAnnotationMap])
-
-  const handleCloseDraft = () => {
-    setDraft(null)
-  }
-
-  const handleSaveDraft = () => {
-    if (!draftTarget) {
-      return
-    }
-
-    const trimmed = draftText.trim()
-    if (trimmed.length === 0) {
-      if (savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))) {
-        onDeleteAnnotation(draftTarget)
-      }
-      handleCloseDraft()
-      return
-    }
-
-    onSaveAnnotation(draftTarget, trimmed)
-    handleCloseDraft()
-  }
-
-  const handleDeleteDraft = () => {
-    if (!draftTarget) {
-      return
-    }
-
-    onDeleteAnnotation(draftTarget)
-    handleCloseDraft()
-  }
+  const {
+    draftText,
+    lineAnnotations,
+    canSaveDraft,
+    isEditingExisting,
+    focusKey,
+    openDraft,
+    closeDraft,
+    changeDraft,
+    saveDraft,
+    deleteDraft,
+  } = useAnnotationDraftState({
+    diff: currentDiff,
+    savedAnnotations,
+    onSaveAnnotation,
+    onDeleteAnnotation,
+  })
 
   return (
     <UnresolvedFile<RenderedAnnotationMetadata>
@@ -205,7 +92,7 @@ function MergeConflictResolver({
         onLineNumberClick: (line: DiffLinePointerEvent) => {
           line.event.preventDefault()
           line.event.stopPropagation()
-          handleOpenDraft({
+          openDraft({
             lineNumber: line.lineNumber,
             side: line.annotationSide,
           })
@@ -218,7 +105,7 @@ function MergeConflictResolver({
           }
 
           const contents = resolveMergeConflictContents(file.contents, action.conflict, resolution)
-          setDraft(null)
+          closeDraft()
           void onResolveConflict(contents)
         }
 
@@ -260,14 +147,10 @@ function MergeConflictResolver({
           return (
             <DiffSavedComment
               comment={annotation.metadata.comment}
-              onOpen={() => handleOpenDraft(annotation)}
+              onOpen={() => openDraft(annotation)}
             />
           )
         }
-
-        const focusKey = draftTarget == null ? "closed" : `${draftTarget.side}:${draftTarget.lineNumber}`
-        const isEditingExisting =
-          draftTarget != null && savedAnnotationMap.has(createAnnotationTargetKey(draftTarget))
 
         return (
           <DiffCommentDraft
@@ -275,16 +158,10 @@ function MergeConflictResolver({
             value={draftText}
             canSave={canSaveDraft}
             isEditingExisting={isEditingExisting}
-            onChange={(value) => {
-              if (!draftTarget || !currentDiff) {
-                return
-              }
-
-              setDraft(createDraftDiffAnnotation(currentDiff, draftTarget, value))
-            }}
-            onDelete={isEditingExisting ? handleDeleteDraft : undefined}
-            onSave={handleSaveDraft}
-            onEscape={handleCloseDraft}
+            onChange={changeDraft}
+            onDelete={isEditingExisting ? deleteDraft : undefined}
+            onSave={saveDraft}
+            onEscape={closeDraft}
           />
         )
       }}
