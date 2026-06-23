@@ -599,7 +599,6 @@ Rules:
 - Do not imitate previous commit messages or local commit history.
 - Name the actual behavior or user-visible outcome when the diff shows one.
 - Avoid vague subjects like "update files" or "improve code".
-- Use a conventional prefix such as feat:, fix:, refactor:, test:, docs:, or chore: only when it clearly fits.
 
 Staged context:
 ` + "\n" + diffText)
