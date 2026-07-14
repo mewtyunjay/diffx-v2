@@ -44,7 +44,7 @@ The skill is written once to `~/.local/share/diffx/skills/diffx/` and symlinked 
 The installer can run setup for you:
 
 ```sh
-curl -fsSL .../install.sh | bash -s -- --setup --yes
+curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash -s -- --setup --yes
 ```
 
 ## Development

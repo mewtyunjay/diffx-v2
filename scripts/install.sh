@@ -163,7 +163,7 @@ verify_archive_checksum() {
   local checksum_path="$3"
   local expected actual
 
-  expected="$(awk -v file="${asset_name}" '$2 == file || $2 == "./" file { print $1; exit }' "${checksum_path}")"
+  expected="$(awk -v file="${asset_name}" '{ name = $2; sub(/^.*\//, "", name); if (name == file) { print $1; exit } }' "${checksum_path}")"
   [[ -z "${expected}" ]] && fail "checksum file did not contain ${asset_name}"
 
   actual="$(checksum_for_file "${archive_path}")"
@@ -186,7 +186,7 @@ download_and_install_binary() {
   url="https://github.com/${REPO_SLUG}/releases/${release_path}/${asset_name}"
   checksum_url="https://github.com/${REPO_SLUG}/releases/${release_path}/SHA256SUMS.txt"
   temp_dir="$(mktemp -d)"
-  trap 'rm -rf "${temp_dir}"' RETURN
+  trap 'rm -rf "${temp_dir:-}"; trap - RETURN' RETURN
   archive_path="${temp_dir}/${asset_name}"
   checksum_path="${temp_dir}/SHA256SUMS.txt"
 
@@ -231,30 +231,11 @@ run_diffx_setup() {
 print_path_hint_if_needed() {
   if [[ ":${PATH}:" != *":${INSTALL_DIR}:"* ]]; then
     echo ""
-    log "${INSTALL_DIR} is not on your PATH."
-    case "${SHELL##*/}" in
-      zsh)
-        cat <<TXT
-Add it with:
-  echo 'export PATH="${INSTALL_DIR}:\$PATH"' >> ~/.zshrc
-  source ~/.zshrc
+    cat <<TXT
+You may need to restart your shell to gain access to the 'diffx' command.
+Alternatively, add ${INSTALL_DIR} to your PATH:
+    export PATH="${INSTALL_DIR}:\$PATH"
 TXT
-        ;;
-      bash)
-        cat <<TXT
-Add it with:
-  echo 'export PATH="${INSTALL_DIR}:\$PATH"' >> ~/.bashrc
-  source ~/.bashrc
-TXT
-        ;;
-      *)
-        cat <<TXT
-Add it with:
-  export PATH="${INSTALL_DIR}:\$PATH"
-Then persist it in your shell startup file.
-TXT
-        ;;
-    esac
   fi
 }
 
