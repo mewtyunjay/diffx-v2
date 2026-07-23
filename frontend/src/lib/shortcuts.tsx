@@ -110,6 +110,13 @@ export const SHORTCUTS = {
     scope: "diff",
     group: "Diff actions",
   },
+  toggleRenderMode: {
+    id: "toggleRenderMode",
+    keys: ["t"],
+    label: "Toggle code / rendered view",
+    scope: "diff",
+    group: "Diff actions",
+  },
   focusCommitMessage: {
     id: "focusCommitMessage",
     keys: ["shift", "c"],
