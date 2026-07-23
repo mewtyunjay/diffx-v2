@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const maxCommitPromptDiffChars = 120000
+const (
+	maxCommitPromptDiffChars     = 120000
+	maxCommitPromptFileDiffChars = 20000
+)
 
 const (
 	defaultCodexCommitModel  = "gpt-5.4-mini"
@@ -211,7 +214,7 @@ func (s *Service) SuggestCommitMessage(ctx context.Context) (CommitMessageSugges
 		}
 	}
 
-	diffText, err := s.loadScopedStagedDiff(ctx)
+	diffText, err := s.loadScopedStagedDiffContext(ctx)
 	if err != nil {
 		return CommitMessageSuggestion{}, err
 	}
@@ -336,7 +339,7 @@ func (s *Service) generateCommitMessageWithProvider(
 	return message, nil
 }
 
-func (s *Service) loadScopedStagedDiff(ctx context.Context) (string, error) {
+func (s *Service) loadScopedStagedDiffContext(ctx context.Context) (string, error) {
 	allNames, err := s.readStagedNames(ctx, false)
 	if err != nil {
 		return "", err
@@ -356,11 +359,19 @@ func (s *Service) loadScopedStagedDiff(ctx context.Context) (string, error) {
 		return "", &HiddenScopedStagedChangesError{HiddenCount: hiddenCount}
 	}
 
+	summary, err := s.readStagedSummary(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	var builder strings.Builder
+	builder.WriteString(summary)
+	builder.WriteString("\n\nFile diff excerpts:\n")
+
 	diffArgs := []string{"diff", "--cached", "--no-color"}
 	if s.scopePath != "." {
 		diffArgs = append(diffArgs, "--", s.scopePath)
 	}
-
 	diffOutput, err := s.runGit(ctx, diffArgs...)
 	if err != nil {
 		return "", err
@@ -369,12 +380,99 @@ func (s *Service) loadScopedStagedDiff(ctx context.Context) (string, error) {
 		return "", &NoStagedChangesInScopeError{}
 	}
 
-	if len(diffOutput) > maxCommitPromptDiffChars {
-		trimmed := diffOutput[:maxCommitPromptDiffChars]
-		diffOutput = trimmed + "\n\n[diff truncated by diffx for prompt safety]\n"
+	sections := splitGitDiffSections(diffOutput)
+	for index, section := range sections {
+		if builder.Len() >= maxCommitPromptDiffChars {
+			builder.WriteString("\n[remaining file diffs omitted by diffx for prompt safety]\n")
+			break
+		}
+
+		builder.WriteString("\n")
+
+		remainingFiles := len(sections) - index
+		remainingChars := maxCommitPromptDiffChars - builder.Len()
+		fileLimit := maxCommitPromptFileDiffChars
+		if perFileLimit := remainingChars / remainingFiles; perFileLimit < fileLimit {
+			fileLimit = perFileLimit
+		}
+		if fileLimit <= 0 {
+			builder.WriteString("[diff omitted by diffx for prompt safety]\n")
+			continue
+		}
+
+		builder.WriteString(truncatePromptSection(section, fileLimit, "[file diff truncated by diffx for prompt safety]\n"))
 	}
 
-	return diffOutput, nil
+	contextText := builder.String()
+	if !strings.Contains(contextText, "diff --git") {
+		return "", &NoStagedChangesInScopeError{}
+	}
+
+	return contextText, nil
+}
+
+func splitGitDiffSections(diffOutput string) []string {
+	var sections []string
+	var builder strings.Builder
+
+	for _, line := range strings.SplitAfter(diffOutput, "\n") {
+		if strings.HasPrefix(line, "diff --git ") && builder.Len() > 0 {
+			sections = append(sections, builder.String())
+			builder.Reset()
+		}
+		builder.WriteString(line)
+	}
+	if builder.Len() > 0 {
+		sections = append(sections, builder.String())
+	}
+
+	return sections
+}
+
+func (s *Service) readStagedSummary(ctx context.Context) (string, error) {
+	branch, _ := s.runGit(ctx, "branch", "--show-current")
+
+	nameStatusArgs := []string{"diff", "--cached", "--name-status"}
+	statArgs := []string{"diff", "--cached", "--stat"}
+	if s.scopePath != "." {
+		nameStatusArgs = append(nameStatusArgs, "--", s.scopePath)
+		statArgs = append(statArgs, "--", s.scopePath)
+	}
+
+	nameStatus, err := s.runGit(ctx, nameStatusArgs...)
+	if err != nil {
+		return "", err
+	}
+	stat, err := s.runGit(ctx, statArgs...)
+	if err != nil {
+		return "", err
+	}
+
+	var builder strings.Builder
+	builder.WriteString("Repository context:\n")
+	builder.WriteString("- branch: ")
+	if trimmedBranch := strings.TrimSpace(branch); trimmedBranch != "" {
+		builder.WriteString(trimmedBranch)
+	} else {
+		builder.WriteString("detached or unknown")
+	}
+	builder.WriteString("\n- scope: ")
+	builder.WriteString(s.scopePath)
+	builder.WriteString("\n\nStaged files:\n")
+	builder.WriteString(strings.TrimSpace(nameStatus))
+	builder.WriteString("\n\nStaged stat:\n")
+	builder.WriteString(strings.TrimSpace(stat))
+
+	return builder.String(), nil
+}
+
+func truncatePromptSection(value string, limit int, note string) string {
+	if len(value) <= limit {
+		return value
+	}
+
+	trimmed := strings.TrimSpace(value[:limit])
+	return trimmed + "\n\n" + note
 }
 
 func (s *Service) readStagedNames(ctx context.Context, scoped bool) ([]string, error) {
@@ -498,8 +596,11 @@ Rules:
 - Use imperative mood.
 - Keep it under 72 characters when possible.
 - Prefer clarity over cleverness.
+- Do not imitate previous commit messages or local commit history.
+- Name the actual behavior or user-visible outcome when the diff shows one.
+- Avoid vague subjects like "update files" or "improve code".
 
-Staged diff:
+Staged context:
 ` + "\n" + diffText)
 }
 
