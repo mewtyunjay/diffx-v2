@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"diffx/internal/gitstatus"
 )
@@ -149,4 +153,44 @@ func (a *App) handleFileDiff(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (a *App) handleFilePreview(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+	if !a.service.AllowsDiff(path, "") {
+		http.Error(w, "path is outside the current workspace scope", http.StatusBadRequest)
+		return
+	}
+
+	contentType := ""
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".svg":
+		contentType = "image/svg+xml"
+	case ".png":
+		contentType = "image/png"
+	case ".jpg", ".jpeg":
+		contentType = "image/jpeg"
+	default:
+		http.Error(w, "file type cannot be previewed", http.StatusBadRequest)
+		return
+	}
+
+	contents, err := a.service.ReadFilePreview(path)
+	if err != nil {
+		writeAPIError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Security-Policy", "script-src 'none'; object-src 'none'; base-uri 'none'")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeContent(w, r, filepath.Base(path), time.Time{}, bytes.NewReader(contents))
 }

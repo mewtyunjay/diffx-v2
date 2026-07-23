@@ -15,6 +15,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/pull-request/merge", a.handleMergePullRequest)
 	mux.HandleFunc("/api/files", a.handleFiles)
 	mux.HandleFunc("/api/file-diff", a.handleFileDiff)
+	mux.HandleFunc("/api/file-preview", a.handleFilePreview)
 	mux.HandleFunc("/api/events", a.handleEvents)
 	mux.HandleFunc("/api/git/stage", a.handleStageFile)
 	mux.HandleFunc("/api/git/stage-all", a.handleStageAll)

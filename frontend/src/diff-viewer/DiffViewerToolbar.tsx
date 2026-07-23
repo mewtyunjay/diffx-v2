@@ -3,7 +3,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
+  Code2,
   Columns2,
+  Eye,
   Minus,
   Plus,
   Rows3,
@@ -24,6 +26,8 @@ type DiffViewerToolbarProps = {
   selectedFile: ChangedFileItem | null
   isStagePending: boolean
   isDiscardPending: boolean
+  canPreview: boolean
+  renderMode: "code" | "preview"
   viewMode: "split" | "unified"
   isExpanded: boolean
   canGoPrev: boolean
@@ -33,6 +37,7 @@ type DiffViewerToolbarProps = {
   onToggleExpandAll: () => void
   onToggleStage: (file: ChangedFileItem) => void
   onDiscardFile: (file: ChangedFileItem) => void
+  onToggleRenderMode: () => void
   onViewModeChange: (mode: "split" | "unified") => void
   onGoPrev: () => void
   onGoNext: () => void
@@ -127,6 +132,8 @@ export function DiffViewerToolbar({
   selectedFile,
   isStagePending,
   isDiscardPending,
+  canPreview,
+  renderMode,
   viewMode,
   isExpanded,
   canGoPrev,
@@ -136,14 +143,17 @@ export function DiffViewerToolbar({
   onToggleExpandAll,
   onToggleStage,
   onDiscardFile,
+  onToggleRenderMode,
   onViewModeChange,
   onGoPrev,
   onGoNext,
 }: DiffViewerToolbarProps) {
   const showFileNav = totalFiles > 0 && selectedFile != null
   const counterLabel = showFileNav ? `${fileIndex + 1} / ${totalFiles}` : null
-  const showExpandToggle = canExpandEntireFile(diff) || isExpanded
+  const showExpandToggle = renderMode === "code" && (canExpandEntireFile(diff) || isExpanded)
   const expandLabel = isExpanded ? "Collapse to diff view" : "Expand full file"
+  const previewLabel = renderMode === "preview" ? "Show code" : "Preview file"
+  const PreviewIcon = renderMode === "preview" ? Code2 : Eye
   const showStageToggle = comparisonMode === "head" && selectedFile != null
   const stageState = selectedFile ? getStageState(selectedFile) : "unstaged"
   const stageTooltipText = getStageTooltipText(stageState)
@@ -187,6 +197,7 @@ export function DiffViewerToolbar({
                     variant={isActive ? "secondary" : "ghost"}
                     aria-label={label}
                     aria-pressed={isActive}
+                    disabled={renderMode === "preview"}
                     onClick={() => onViewModeChange(value)}
                   >
                     <Icon className="size-3.5" />
@@ -201,6 +212,27 @@ export function DiffViewerToolbar({
             )
           })}
         </div>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant={renderMode === "preview" ? "secondary" : "ghost"}
+              className="surface-segmented p-0.5"
+              aria-label={previewLabel}
+              aria-pressed={renderMode === "preview"}
+              disabled={!canPreview}
+              onClick={onToggleRenderMode}
+            >
+              <PreviewIcon className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {canPreview ? previewLabel : "Preview unavailable for this file"}
+            <Kbd keys={SHORTCUTS.toggleRenderMode.keys} />
+          </TooltipContent>
+        </Tooltip>
 
         {showExpandToggle ? (
           <Tooltip>
