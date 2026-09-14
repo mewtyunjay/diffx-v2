@@ -1,52 +1,54 @@
 # diffx
 
-`diffx` is a local git diff review app. It gives you a browser UI for reviewing changes, switching comparison branches, staging and unstaging files, and creating commits — plus an agent review mode that hands your annotations back to a coding agent.
+A local Git diff review app with a browser UI. Review changes, switch comparison branches, stage and unstage files, and create commits.
 
 ## Install
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash
-```
-
-This downloads the latest release binary, verifies its checksum, and installs it to `~/.local/bin/diffx`. If that directory is not on your `PATH`, the installer prints the exact command to add it.
-
-To install somewhere else or pin a version:
+macOS and Linux, on Intel/AMD or ARM64:
 
 ```sh
-INSTALL_DIR=/usr/local/bin bash scripts/install.sh --version v1.2.3
+curl -fsSL https://github.com/mewtyunjay/diffx-v2/releases/latest/download/install.sh | bash
 ```
 
-To build from source instead, see [docs/development.md](docs/development.md).
+The installer downloads a prebuilt binary, verifies its SHA-256 checksum, and installs it to `~/.local/bin/diffx`. It prints a command if that directory is missing from your `PATH`; it never edits shell configuration or sets up coding agents.
 
-## Usage
+You need Git and a browser. Node and Go are only needed to build from source.
+
+## Use
 
 ```sh
-diffx          # open the review UI for the current repository
-diffx review   # agent review mode: annotate in the UI, feedback prints to stdout
+cd /path/to/your/repository
+diffx
 ```
 
-In review mode, annotate the diff and press **Send to agent** — `diffx` prints your feedback to stdout and exits, so a calling agent can pick it up and continue in the same thread.
-
-Useful flags: `--no-browser` skips opening the browser, `--review-timeout 30m` bounds how long review mode waits, `-p 9000` pins the port.
-
-## Agent setup
-
-`diffx setup` installs the diffx skill for your coding agents, so they know how to run a review and consume the feedback:
+Diffx starts a local server and opens your browser. It uses your terminal's current directory, including when you start inside a repository subfolder. Press **Ctrl+C** to stop it.
 
 ```sh
-diffx setup                # install for the default agents (universal, claude)
-diffx setup --list-agents  # see supported agents
-diffx setup --yes --agents universal,claude,codex
+diffx /path/to/repository     # choose a different directory
+diffx --no-browser           # print the URL without opening it
+diffx -p 9000                # choose a port
+diffx --version              # show the installed version
 ```
 
-The skill is written once to `~/.local/share/diffx/skills/diffx/` and symlinked into each agent's skills directory, so upgrading `diffx` upgrades the skill everywhere. Use `--copy` if you prefer copies over symlinks.
+Settings are stored in `~/.diffx/config.json` and survive upgrades.
 
-The installer can run setup for you:
+## Upgrade or choose a version
+
+Rerun the install command to upgrade. To pin a release (replace the example tag with a published version):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mewtyunjay/diffx-v2/main/scripts/install.sh | bash -s -- --setup --yes
+curl -fsSL https://github.com/mewtyunjay/diffx-v2/releases/download/v0.1.0/install.sh | bash -s -- --version v0.1.0
 ```
 
-## Development
+To choose a writable install directory:
 
-See [docs/development.md](docs/development.md) for building from source, dev mode with hot reload, and running tests.
+```sh
+curl -fsSL https://github.com/mewtyunjay/diffx-v2/releases/latest/download/install.sh | env INSTALL_DIR="$HOME/bin" bash
+```
+
+To uninstall, remove the executable from the install directory. Remove `~/.diffx` separately only if you also want to delete your settings.
+
+## Development and releases
+
+- [Development](docs/development.md): run from source and verify changes.
+- [Releasing](docs/releasing.md): test installation locally and publish a release.

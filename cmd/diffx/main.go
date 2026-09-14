@@ -42,6 +42,11 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	if cfg.showVersion {
+		fmt.Fprintf(stdout, "diffx %s\n", version)
+		return nil
+	}
+
 	workspace, err := gitstatus.ResolveWorkspaceTarget(cfg.targetPath)
 	if err != nil {
 		return err

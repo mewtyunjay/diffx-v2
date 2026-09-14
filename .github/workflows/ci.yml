@@ -2,32 +2,56 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
-
+    name: Verify (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Frontend lint
-        working-directory: frontend
+      - name: Build embedded frontend
+        run: go generate ./frontend
+      - name: Lint frontend
+        run: npm --prefix frontend run lint
+      - name: Test backend and installer
+        run: go test ./cmd/... ./internal/... ./scripts/...
+      - name: Build and smoke-test native binary
+        env:
+          CGO_ENABLED: '0'
         run: |
-          npm ci
-          npm run lint
-
-      - name: Backend tests
-        run: go test ./cmd/... ./internal/...
+          go build -trimpath -o "$RUNNER_TEMP/diffx" ./cmd/diffx
+          python3 scripts/smoke-test.py "$RUNNER_TEMP/diffx"
+      - name: Build all release archives without publishing
+        if: runner.os == 'Linux'
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: v2.18.1
+          args: release --snapshot --clean --skip=before
+      - name: Test installation from release archive
+        if: runner.os == 'Linux'
+        run: |
+          INSTALL_DIR="$RUNNER_TEMP/diffx-install" bash scripts/install.sh --from-dir dist
+          "$RUNNER_TEMP/diffx-install/diffx" --version
+          python3 scripts/smoke-test.py "$RUNNER_TEMP/diffx-install/diffx"

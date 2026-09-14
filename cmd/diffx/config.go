@@ -27,6 +27,7 @@ type config struct {
 	reviewMode    bool
 	font          string
 	targetPath    string
+	showVersion   bool
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
@@ -45,6 +46,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 
 	flagSet := flag.NewFlagSet("diffx", flag.ContinueOnError)
 	flagSet.SetOutput(stderr)
+	flagSet.BoolVar(&cfg.showVersion, "version", false, "Print version and exit")
 	flagSet.StringVar(&cfg.address, "a", cfg.address, "HTTP address to bind")
 	flagSet.StringVar(&cfg.address, "address", cfg.address, "HTTP address to bind")
 	flagSet.IntVar(&cfg.port, "p", cfg.port, "HTTP port to bind")

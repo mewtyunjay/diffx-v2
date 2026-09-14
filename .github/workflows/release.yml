@@ -2,42 +2,42 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ['v*']
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
+  checks:
+    uses: ./.github/workflows/ci.yml
 
+  publish:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Build frontend bundle
-        run: go generate ./frontend
-
-      - name: Run GoReleaser
+      # GoReleaser's before hook builds the frontend exactly once in this job.
+      - name: Publish binaries, checksums, and installer
         uses: goreleaser/goreleaser-action@v7
         with:
-          distribution: goreleaser
-          version: "~> v2"
+          version: v2.18.1
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

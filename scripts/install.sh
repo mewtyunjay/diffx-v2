@@ -1,266 +1,170 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_SLUG_DEFAULT="mewtyunjay/diffx-v2"
-RELEASE_VERSION_DEFAULT="latest"
-
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
-DIFFX_BIN_PATH="${INSTALL_DIR}/diffx"
+REPO_SLUG="mewtyunjay/diffx-v2"
+VERSION="latest"
+FROM_DIR=""
+TEMP_DIR=""
+STAGED_BINARY=""
 
-RUN_SETUP=0
-ASSUME_YES=0
-USE_SYMLINK=1
-LIST_AGENTS=0
-AGENTS_CSV=""
-SETUP_ARGS_USED=0
-REPO_SLUG="${REPO_SLUG_DEFAULT}"
-RELEASE_VERSION="${RELEASE_VERSION_DEFAULT}"
+fail() { printf '[install] error: %s\n' "$*" >&2; exit 1; }
+log() { printf '[install] %s\n' "$*"; }
 
-fail() {
-  echo "[install] error: $1" >&2
-  exit 1
-}
-
-log() {
-  echo "[install] $1"
+cleanup() {
+  [[ -z "$TEMP_DIR" ]] || rm -rf "$TEMP_DIR"
+  [[ -z "$STAGED_BINARY" ]] || rm -f "$STAGED_BINARY"
+  return 0
 }
 
 usage() {
   cat <<'TXT'
-diffx installer
+Install diffx for macOS or Linux (x86-64 or ARM64).
 
-Usage:
-  bash install.sh [options]
-
-Options:
-  --repo <owner/repo>     GitHub repo slug (default: mewtyunjay/diffx-v2)
-  --version <tag|latest>  Release version to install (default: latest)
-  --setup                 Run `diffx setup` after installing the binary
-  --yes                   Setup only: run setup non-interactively
-  --agents <csv>          Setup only: comma-separated agent IDs
-  --copy                  Setup only: copy skill files instead of symlinking
-  --symlink               Setup only: symlink skill files (default)
-  --list-agents           Setup only: print curated agent targets after install
-  -h, --help              Show this help
+Usage: bash install.sh [options]
+  --version <tag>      Install a specific version, e.g. v0.1.0 (default: latest)
+  --repo <owner/repo>  Download from another GitHub repository
+  --from-dir <dir>    Install local release archives and SHA256SUMS.txt (no download)
+  -h, --help          Show help
 
 Environment:
-  INSTALL_DIR             Install directory (default: $HOME/.local/bin)
+  INSTALL_DIR         Destination (default: $HOME/.local/bin)
+
+Rerun to upgrade. Shell configuration, app settings, and agent setup are untouched.
 TXT
 }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --repo)
-        REPO_SLUG="${2:-}"
-        [[ -z "${REPO_SLUG}" ]] && fail "--repo requires a value"
+      --version|--repo|--from-dir)
+        [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || fail "$1 requires a value"
+        case "$1" in
+          --version) VERSION="$2" ;;
+          --repo) REPO_SLUG="$2" ;;
+          --from-dir) FROM_DIR="$2" ;;
+        esac
         shift 2
         ;;
-      --version)
-        RELEASE_VERSION="${2:-}"
-        [[ -z "${RELEASE_VERSION}" ]] && fail "--version requires a value"
-        shift 2
-        ;;
-      --setup)
-        RUN_SETUP=1
-        shift
-        ;;
-      --yes)
-        ASSUME_YES=1
-        SETUP_ARGS_USED=1
-        shift
-        ;;
-      --agents)
-        AGENTS_CSV="${2:-}"
-        [[ -z "${AGENTS_CSV}" ]] && fail "--agents requires a comma-separated value"
-        SETUP_ARGS_USED=1
-        shift 2
-        ;;
-      --copy)
-        USE_SYMLINK=0
-        SETUP_ARGS_USED=1
-        shift
-        ;;
-      --symlink)
-        USE_SYMLINK=1
-        SETUP_ARGS_USED=1
-        shift
-        ;;
-      --list-agents)
-        LIST_AGENTS=1
-        SETUP_ARGS_USED=1
-        shift
-        ;;
-      -h|--help)
-        usage
-        exit 0
-        ;;
-      *)
-        fail "unknown argument: $1"
-        ;;
+      -h|--help) usage; exit 0 ;;
+      *) fail "unknown option: $1 (see --help)" ;;
     esac
   done
-
-  if [[ "${RUN_SETUP}" == "0" && "${SETUP_ARGS_USED}" == "1" ]]; then
-    fail "setup flags require --setup"
+  [[ "$REPO_SLUG" =~ ^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$ ]] || fail "invalid repository: $REPO_SLUG"
+  if [[ -n "$FROM_DIR" && "$VERSION" != latest ]]; then
+    fail "--from-dir cannot be combined with --version"
   fi
 }
 
-ensure_command() {
-  local command_name="$1"
-  if ! command -v "${command_name}" >/dev/null 2>&1; then
-    fail "missing required command: ${command_name}"
-  fi
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
 }
 
 resolve_platform() {
-  local uname_s uname_m os arch
-  uname_s="$(uname -s)"
-  uname_m="$(uname -m)"
-
-  case "${uname_s}" in
-    Darwin) os="darwin" ;;
-    Linux) os="linux" ;;
-    *) fail "unsupported OS: ${uname_s} (supported: macOS, Linux)" ;;
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os=darwin ;;
+    Linux) os=linux ;;
+    *) fail "unsupported OS (supported: macOS and Linux)" ;;
   esac
-
-  case "${uname_m}" in
-    x86_64|amd64) arch="x86_64" ;;
-    arm64|aarch64) arch="arm64" ;;
-    *) fail "unsupported architecture: ${uname_m} (supported: x86_64, arm64)" ;;
+  case "$(uname -m)" in
+    x86_64|amd64) arch=x86_64 ;;
+    arm64|aarch64) arch=arm64 ;;
+    *) fail "unsupported CPU (supported: x86-64 and ARM64)" ;;
   esac
-
-  echo "${os} ${arch}"
+  printf 'diffx_%s_%s.tar.gz\n' "$os" "$arch"
 }
 
-ensure_install_dir() {
-  if ! mkdir -p "${INSTALL_DIR}"; then
-    fail "could not create install directory: ${INSTALL_DIR}"
-  fi
-  if [[ ! -w "${INSTALL_DIR}" ]]; then
-    fail "install directory is not writable: ${INSTALL_DIR}. Set INSTALL_DIR to a writable directory."
-  fi
+fetch() {
+  curl --proto '=https' --proto-redir '=https' -fsSL --retry 3 \
+    --connect-timeout 10 --max-time 300 "$@"
 }
 
-checksum_for_file() {
-  local file_path="$1"
+resolve_version() {
+  if [[ "$VERSION" == latest ]]; then
+    local release_url
+    # Resolve once so a release published mid-install cannot mix archive/checksum versions.
+    release_url="$(fetch -o /dev/null -w '%{url_effective}' "https://github.com/$REPO_SLUG/releases/latest")" \
+      || fail "could not find a published release in $REPO_SLUG"
+    [[ "$release_url" == "https://github.com/$REPO_SLUG/releases/tag/"* ]] \
+      || fail "unexpected latest release URL: $release_url"
+    VERSION="${release_url##*/}"
+  fi
+  [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][a-zA-Z0-9.+-]+)?$ ]] \
+    || fail "invalid version: $VERSION (expected a tag such as v0.1.0)"
+}
 
+verify_checksum() {
+  local asset="$1" expected actual
+  expected="$(awk -v name="$asset" '$2 == name { print $1 }' "$TEMP_DIR/SHA256SUMS.txt")"
+  [[ "$expected" =~ ^[a-fA-F0-9]{64}$ ]] || fail "missing or invalid checksum for $asset"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "${file_path}" | awk '{print $1}'
-    return
-  fi
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "${file_path}" | awk '{print $1}'
-    return
-  fi
-
-  fail "missing checksum command: install sha256sum or shasum"
-}
-
-verify_archive_checksum() {
-  local asset_name="$1"
-  local archive_path="$2"
-  local checksum_path="$3"
-  local expected actual
-
-  expected="$(awk -v file="${asset_name}" '{ name = $2; sub(/^.*\//, "", name); if (name == file) { print $1; exit } }' "${checksum_path}")"
-  [[ -z "${expected}" ]] && fail "checksum file did not contain ${asset_name}"
-
-  actual="$(checksum_for_file "${archive_path}")"
-  if [[ "${actual}" != "${expected}" ]]; then
-    fail "checksum verification failed for ${asset_name}"
-  fi
-}
-
-download_and_install_binary() {
-  local os arch asset_name release_path url checksum_url temp_dir archive_path checksum_path binary_path
-  read -r os arch <<<"$(resolve_platform)"
-
-  asset_name="diffx_${os}_${arch}.tar.gz"
-  if [[ "${RELEASE_VERSION}" == "latest" ]]; then
-    release_path="latest/download"
+    actual="$(sha256sum "$TEMP_DIR/$asset" | awk '{print $1}')"
   else
-    release_path="download/${RELEASE_VERSION}"
+    require_command shasum
+    actual="$(shasum -a 256 "$TEMP_DIR/$asset" | awk '{print $1}')"
   fi
-
-  url="https://github.com/${REPO_SLUG}/releases/${release_path}/${asset_name}"
-  checksum_url="https://github.com/${REPO_SLUG}/releases/${release_path}/SHA256SUMS.txt"
-  temp_dir="$(mktemp -d)"
-  trap 'rm -rf "${temp_dir:-}"; trap - RETURN' RETURN
-  archive_path="${temp_dir}/${asset_name}"
-  checksum_path="${temp_dir}/SHA256SUMS.txt"
-
-  log "Downloading ${asset_name} from ${REPO_SLUG}..."
-  if ! curl -fL --retry 3 --connect-timeout 10 -o "${archive_path}" "${url}"; then
-    fail "could not download ${asset_name}. If you need source install, follow README instructions."
-  fi
-  log "Downloading SHA256SUMS.txt..."
-  if ! curl -fL --retry 3 --connect-timeout 10 -o "${checksum_path}" "${checksum_url}"; then
-    fail "could not download SHA256SUMS.txt for checksum verification"
-  fi
-
-  verify_archive_checksum "${asset_name}" "${archive_path}" "${checksum_path}"
-
-  tar -xzf "${archive_path}" -C "${temp_dir}"
-  binary_path="$(find "${temp_dir}" -type f -name diffx | head -n 1 || true)"
-  [[ -z "${binary_path}" ]] && fail "release archive did not contain a 'diffx' binary"
-
-  cp "${binary_path}" "${DIFFX_BIN_PATH}"
-  chmod +x "${DIFFX_BIN_PATH}"
+  [[ "$actual" == "$expected" ]] || fail "checksum verification failed for $asset"
 }
 
-run_diffx_setup() {
-  local setup_args=()
-
-  if [[ "${LIST_AGENTS}" == "1" ]]; then
-    setup_args+=(--list-agents)
-  fi
-  if [[ "${ASSUME_YES}" == "1" ]]; then
-    setup_args+=(--yes)
-  fi
-  if [[ -n "${AGENTS_CSV}" ]]; then
-    setup_args+=(--agents "${AGENTS_CSV}")
-  fi
-  if [[ "${USE_SYMLINK}" == "0" ]]; then
-    setup_args+=(--copy)
-  fi
-
-  "${DIFFX_BIN_PATH}" setup "${setup_args[@]}"
-}
-
-print_path_hint_if_needed() {
-  if [[ ":${PATH}:" != *":${INSTALL_DIR}:"* ]]; then
-    echo ""
-    cat <<TXT
-You may need to restart your shell to gain access to the 'diffx' command.
-Alternatively, add ${INSTALL_DIR} to your PATH:
-    export PATH="${INSTALL_DIR}:\$PATH"
-TXT
-  fi
+print_path_hint() {
+  [[ ":$PATH:" != *":$INSTALL_DIR:"* ]] || return 0
+  local quoted_dir
+  # Single-quote literal paths, including spaces, dollars, and embedded apostrophes.
+  quoted_dir="'${INSTALL_DIR//\'/\'\\\'\'}'"
+  printf '\n%s\n' 'diffx is not on PATH. Run this in your shell:'
+  case "${SHELL##*/}" in
+    fish) printf '  fish_add_path %s\n' "$quoted_dir" ;;
+    *)
+      printf '  export PATH=%s:"$PATH"\n' "$quoted_dir"
+      printf '%s\n' 'For future terminals, add that line to your shell startup file.'
+      ;;
+  esac
 }
 
 main() {
   parse_args "$@"
-  ensure_command curl
-  ensure_command tar
-  ensure_install_dir
+  local asset base_url
+  asset="$(resolve_platform)" || exit 1
+  require_command tar
+  require_command awk
+  TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/diffx-install.XXXXXXXX")"
+  trap cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
 
-  download_and_install_binary
-  if [[ "${RUN_SETUP}" == "1" ]]; then
-    run_diffx_setup
+  if [[ -n "$FROM_DIR" ]]; then
+    log "Installing local archive $asset"
+    cp "$FROM_DIR/$asset" "$TEMP_DIR/$asset" || fail "could not read local archive"
+    cp "$FROM_DIR/SHA256SUMS.txt" "$TEMP_DIR/SHA256SUMS.txt" || fail "could not read local checksums"
+  else
+    require_command curl
+    resolve_version
+    base_url="https://github.com/$REPO_SLUG/releases/download/$VERSION"
+    log "Downloading diffx $VERSION ($asset)"
+    fetch -o "$TEMP_DIR/$asset" "$base_url/$asset" || fail "could not download $asset"
+    fetch -o "$TEMP_DIR/SHA256SUMS.txt" "$base_url/SHA256SUMS.txt" || fail "could not download checksums"
   fi
+  verify_checksum "$asset"
 
-  cat <<TXT
-[install] Done.
-[install] Installed binary: ${DIFFX_BIN_PATH}
+  mkdir -p "$INSTALL_DIR" || fail "could not create $INSTALL_DIR; set INSTALL_DIR to a writable directory"
+  INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd -P)"
+  [[ ! -d "$INSTALL_DIR/diffx" ]] || fail "$INSTALL_DIR/diffx is a directory"
+  STAGED_BINARY="$(mktemp "$INSTALL_DIR/.diffx.XXXXXXXX")"
+  # Extract only the executable to stdout; archive entries cannot write arbitrary paths.
+  tar -xOzf "$TEMP_DIR/$asset" diffx > "$STAGED_BINARY" || fail "archive does not contain diffx"
+  [[ -s "$STAGED_BINARY" ]] || fail "archive contains an empty executable"
+  chmod 755 "$STAGED_BINARY"
+  # Rename on the same filesystem: existing/running binaries are never truncated.
+  mv -f "$STAGED_BINARY" "$INSTALL_DIR/diffx"
+  STAGED_BINARY=""
 
-Use:
-  diffx
-  diffx review
-  diffx setup
-TXT
-
-  print_path_hint_if_needed
+  log "Installed $INSTALL_DIR/diffx"
+  log 'Run diffx from your Git repository to open it in your browser.'
+  if ! command -v git >/dev/null 2>&1; then
+    log 'Git is required to use diffx. Install Git before starting the app.'
+  fi
+  print_path_hint
 }
 
 main "$@"
