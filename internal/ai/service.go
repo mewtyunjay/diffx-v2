@@ -19,7 +19,7 @@ const (
 )
 
 const (
-	defaultCodexCommitModel  = "gpt-5.4-mini"
+	defaultCodexCommitModel  = "gpt-5.6-luna"
 	defaultClaudeCommitModel = "claude-sonnet-4-6"
 )
 
