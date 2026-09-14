@@ -7,12 +7,14 @@ import {
 } from "@/diff-viewer/annotations"
 import { DiffPlaceholder } from "@/components/diff/DiffPlaceholder"
 import DiffPaneRenderer from "@/components/diff/DiffPaneRenderer"
+import { RenderedFilePane, canPreviewFile } from "@/components/diff/RenderedFilePane"
 import type { PreparedFileDiffResult } from "@/diffs/create"
 import type { HunkActionInput } from "@/git/types"
 
 type DiffPaneProps = {
   diff: PreparedFileDiffResult | null
   hasSelectedFile: boolean
+  renderMode: "code" | "preview"
   viewMode: "split" | "unified"
   expandAll: boolean
   savedAnnotations: SavedDiffAnnotation[]
@@ -35,6 +37,7 @@ type RenderablePreparedDiff = PreparedFileDiffResult & {
 export function DiffPane({
   diff,
   hasSelectedFile,
+  renderMode,
   viewMode,
   expandAll,
   savedAnnotations,
@@ -54,6 +57,10 @@ export function DiffPane({
     }
 
     return <DiffPlaceholder>Select a file to view its diff.</DiffPlaceholder>
+  }
+
+  if (renderMode === "preview" && canPreviewFile(diff.path)) {
+    return <RenderedFilePane diff={diff} />
   }
 
   if (diff.binary) {

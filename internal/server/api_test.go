@@ -350,6 +350,45 @@ func TestHandleFilesDoesNotPublishRepoEvents(t *testing.T) {
 	assertNoRepoChangedEvent(t, events, 600*time.Millisecond)
 }
 
+func TestHandleFilePreviewServesImages(t *testing.T) {
+	t.Parallel()
+
+	repoRoot := createServerActionRepo(t)
+	imageContents := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a}
+	tests := []struct {
+		name        string
+		contentType string
+	}{
+		{name: "preview.svg", contentType: "image/svg+xml"},
+		{name: "preview.png", contentType: "image/png"},
+		{name: "preview.jpg", contentType: "image/jpeg"},
+		{name: "preview.jpeg", contentType: "image/jpeg"},
+	}
+	for _, test := range tests {
+		if err := os.WriteFile(filepath.Join(repoRoot, test.name), imageContents, 0o644); err != nil {
+			t.Fatalf("write %s: %v", test.name, err)
+		}
+	}
+	app := newRepoBackedTestApp(t, repoRoot, ".")
+
+	for _, test := range tests {
+		request := httptest.NewRequest(http.MethodGet, "/api/file-preview?path="+test.name, nil)
+		recorder := httptest.NewRecorder()
+
+		app.Handler().ServeHTTP(recorder, request)
+
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("expected status 200 for %s, got %d: %s", test.name, recorder.Code, recorder.Body.String())
+		}
+		if recorder.Header().Get("Content-Type") != test.contentType {
+			t.Fatalf("expected %s for %s, got %q", test.contentType, test.name, recorder.Header().Get("Content-Type"))
+		}
+		if !bytes.Equal(recorder.Body.Bytes(), imageContents) {
+			t.Fatalf("unexpected image body for %s: %v", test.name, recorder.Body.Bytes())
+		}
+	}
+}
+
 func TestHandleCommitsReturnsCurrentBranchCommits(t *testing.T) {
 	t.Parallel()
 

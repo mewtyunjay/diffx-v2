@@ -16,6 +16,7 @@ import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPrefere
 import { resolveCommitSuggestionDisabledReason } from "@/app/diff-viewer/commit-suggestion-guard"
 import { DiffViewerStatusBanners } from "@/app/diff-viewer/DiffViewerStatusBanners"
 import { WorkingTreeSurface } from "@/app/diff-viewer/WorkingTreeSurface"
+import { canPreviewFile } from "@/components/diff/RenderedFilePane"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
 import { useAnnotationSession } from "@/diff-viewer/hooks/useAnnotationSession"
 import { useBranchesState } from "@/diff-viewer/hooks/useBranchesState"
@@ -43,6 +44,7 @@ export function DiffViewerPage() {
     useState<ChangedFilesResult | null>(null)
   const [isAISettingsModalOpen, setIsAISettingsModalOpen] = useState(false)
   const [fileSearchQuery, setFileSearchQuery] = useState("")
+  const [renderMode, setRenderMode] = useState<"code" | "preview">("code")
   const [sidebarTab, setSidebarTab] = useState<SidebarPanelTab>("current")
   const [selectedChangeSet, setSelectedChangeSet] =
     useState<ChangeSetSource>({ kind: "working-tree" })
@@ -364,12 +366,24 @@ export function DiffViewerPage() {
 
   const viewMode = diffViewerPreferences.viewMode
   const isCurrentFileExpanded = diffViewerPreferences.diffDetailMode === "fullFile"
+  const canPreviewSelectedFile =
+    isWorkingTreeSource &&
+    !isConflictMode &&
+    selectedFile != null &&
+    canPreviewFile(selectedFile.path)
+
+  const toggleRenderMode = useCallback(() => {
+    if (canPreviewSelectedFile) {
+      setRenderMode((current) => (current === "code" ? "preview" : "code"))
+    }
+  }, [canPreviewSelectedFile])
 
   useShortcut("toggleViewMode", () => {
     void updateActivePreferences({
       viewMode: viewMode === "split" ? "unified" : "split",
     })
   })
+  useShortcut("toggleRenderMode", toggleRenderMode)
 
   useEffect(() => {
     document.title = repoName ? `DiffX - ${repoName}` : "DiffX"
@@ -650,6 +664,8 @@ export function DiffViewerPage() {
               comparisonMode={comparisonMode}
               isMergeInProgress={mergeState.inProgress}
               scopePath={scopePath}
+              canPreview={canPreviewSelectedFile}
+              renderMode={canPreviewSelectedFile ? renderMode : "code"}
               viewMode={viewMode}
               isExpanded={isCurrentFileExpanded}
               isDiffLoading={isDiffLoading}
@@ -663,6 +679,7 @@ export function DiffViewerPage() {
               onToggleExpandAll={handleToggleCurrentFileExpanded}
               onToggleStage={gitActions.handleToggleStage}
               onDiscardFile={gitActions.handleDiscardFile}
+              onToggleRenderMode={toggleRenderMode}
               onViewModeChange={handleViewModeChange}
               onGoPrev={goPrevFile}
               onGoNext={goNextFile}

@@ -22,6 +22,8 @@ type WorkingTreeSurfaceProps = {
   comparisonMode: ComparisonMode
   isMergeInProgress: boolean
   scopePath: string
+  canPreview: boolean
+  renderMode: "code" | "preview"
   viewMode: DiffViewMode
   isExpanded: boolean
   isDiffLoading: boolean
@@ -35,6 +37,7 @@ type WorkingTreeSurfaceProps = {
   onToggleExpandAll: () => void
   onToggleStage: (file: ChangedFileItem) => void
   onDiscardFile: (file: ChangedFileItem) => void
+  onToggleRenderMode: () => void
   onViewModeChange: (viewMode: DiffViewMode) => void
   onGoPrev: () => void
   onGoNext: () => void
@@ -65,6 +68,8 @@ export function WorkingTreeSurface({
   comparisonMode,
   isMergeInProgress,
   scopePath,
+  canPreview,
+  renderMode,
   viewMode,
   isExpanded,
   isDiffLoading,
@@ -78,6 +83,7 @@ export function WorkingTreeSurface({
   onToggleExpandAll,
   onToggleStage,
   onDiscardFile,
+  onToggleRenderMode,
   onViewModeChange,
   onGoPrev,
   onGoNext,
@@ -111,6 +117,8 @@ export function WorkingTreeSurface({
               selectedFile={selectedFile}
               isStagePending={isStagePending}
               isDiscardPending={isDiscardPending}
+              canPreview={canPreview}
+              renderMode={renderMode}
               viewMode={viewMode}
               isExpanded={isExpanded}
               canGoPrev={canGoPrev}
@@ -120,6 +128,7 @@ export function WorkingTreeSurface({
               onToggleExpandAll={onToggleExpandAll}
               onToggleStage={onToggleStage}
               onDiscardFile={onDiscardFile}
+              onToggleRenderMode={onToggleRenderMode}
               onViewModeChange={onViewModeChange}
               onGoPrev={onGoPrev}
               onGoNext={onGoNext}
@@ -155,6 +164,7 @@ export function WorkingTreeSurface({
         <DiffPane
           diff={selectedFile ? currentDiff : null}
           hasSelectedFile={!!selectedFile}
+          renderMode={renderMode}
           viewMode={viewMode}
           expandAll={isExpanded}
           savedAnnotations={savedAnnotations}

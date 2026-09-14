@@ -85,6 +85,15 @@ func (s *Service) ReadFileContent(relPath string) (string, string, error) {
 	return result.version.Contents, result.version.CacheKey, nil
 }
 
+func (s *Service) ReadFilePreview(relPath string) ([]byte, error) {
+	absPath, err := ResolveRepoPath(s.repoRoot, relPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return os.ReadFile(absPath)
+}
+
 func (s *Service) ReadConflictFile(relPath string) (ConflictFileResult, error) {
 	if strings.TrimSpace(relPath) == "" {
 		return ConflictFileResult{}, ErrPathRequired
