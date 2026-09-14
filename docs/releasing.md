@@ -24,7 +24,7 @@ From the repository root:
 goreleaser check
 goreleaser release --snapshot --clean
 npm --prefix frontend run lint
-go test ./cmd/... ./internal/... ./scripts/...
+go test -count=1 ./cmd/... ./internal/... ./scripts/...
 ```
 
 The snapshot command runs the frontend build once and creates all four archives plus `SHA256SUMS.txt` in `dist/`. It does not publish, create tags, or require a GitHub token. `--clean` replaces only the generated release output in `dist/`.

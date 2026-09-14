@@ -109,9 +109,13 @@ verify_checksum() {
 
 print_path_hint() {
   [[ ":$PATH:" != *":$INSTALL_DIR:"* ]] || return 0
-  local quoted_dir
-  # Single-quote literal paths, including spaces, dollars, and embedded apostrophes.
-  quoted_dir="'${INSTALL_DIR//\'/\'\\\'\'}'"
+  local quoted_dir="" rest="$INSTALL_DIR" apostrophe="'"
+  # Avoid replacement-string escaping, which differs between Bash 3.2 and Bash 5.
+  while [[ "$rest" == *"$apostrophe"* ]]; do
+    quoted_dir="${quoted_dir}${rest%%"$apostrophe"*}'\\''"
+    rest="${rest#*"$apostrophe"}"
+  done
+  quoted_dir="'${quoted_dir}${rest}'"
   printf '\n%s\n' 'diffx is not on PATH. Run this in your shell:'
   case "${SHELL##*/}" in
     fish) printf '  fish_add_path %s\n' "$quoted_dir" ;;
@@ -148,7 +152,8 @@ main() {
   verify_checksum "$asset"
 
   mkdir -p "$INSTALL_DIR" || fail "could not create $INSTALL_DIR; set INSTALL_DIR to a writable directory"
-  INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd -P)"
+  # Preserve logical paths such as macOS /var -> /private/var when checking PATH.
+  INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd -L)"
   [[ ! -d "$INSTALL_DIR/diffx" ]] || fail "$INSTALL_DIR/diffx is a directory"
   STAGED_BINARY="$(mktemp "$INSTALL_DIR/.diffx.XXXXXXXX")"
   # Extract only the executable to stdout; archive entries cannot write arbitrary paths.

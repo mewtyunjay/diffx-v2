@@ -233,3 +233,19 @@ func TestInstallerDefaultDirectoryAndFishHint(t *testing.T) {
 		t.Fatal(output)
 	}
 }
+
+func TestInstallerRespectsSymlinkedPath(t *testing.T) {
+	f := newInstallerFixture(t)
+	f.archive(t, "diffx_linux_x86_64.tar.gz", "diffx", "binary")
+	link := filepath.Join(f.root, "linked-bin")
+	if err := os.Symlink(f.bin, link); err != nil {
+		t.Fatal(err)
+	}
+	output, err := f.run(t, []string{"INSTALL_DIR=" + link, "PATH=" + link + ":" + f.tools + ":" + os.Getenv("PATH")}, "--from-dir", f.assets)
+	if err != nil {
+		t.Fatalf("%v: %s", err, output)
+	}
+	if strings.Contains(output, "PATH") {
+		t.Fatalf("unnecessary PATH hint for symlinked install directory: %s", output)
+	}
+}

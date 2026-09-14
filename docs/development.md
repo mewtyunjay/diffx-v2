@@ -24,13 +24,13 @@ The Go server serves API requests and proxies frontend traffic to Vite. The app 
 ```sh
 go generate ./frontend
 npm --prefix frontend run lint
-go test ./cmd/... ./internal/... ./scripts/...
+go test -count=1 ./cmd/... ./internal/... ./scripts/...
 CGO_ENABLED=0 go build -o /tmp/diffx-dev ./cmd/diffx
 python3 scripts/smoke-test.py /tmp/diffx-dev
 ```
 
 The smoke test uses a temporary home directory and Git repository. It verifies version reporting outside a repository, current-directory selection, the Git API, and the embedded HTML, JavaScript, and CSS, then stops the server and removes its temporary files. It does not open a browser.
 
-`go test ./scripts/...` covers installer behavior and the optional maintainer release helper. Installer tests fake network responses and OS/CPU detection while exercising real archive extraction, checksums, PATH hints, cleanup, and executable replacement.
+`go test -count=1 ./scripts/...` covers installer behavior and the optional maintainer release helper. Installer tests fake network responses and OS/CPU detection while exercising real archive extraction, checksums, PATH hints, cleanup, and executable replacement.
 
 See [releasing.md](releasing.md) for testing the actual release archives and installer.
