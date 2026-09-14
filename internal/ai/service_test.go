@@ -277,6 +277,11 @@ func (runner serviceCommitRunner) Run(
 	if !strings.Contains(prompt, "diff --git") {
 		return "", "", fmt.Errorf("expected staged diff in prompt")
 	}
+	if !strings.Contains(prompt, "Repository context:") ||
+		!strings.Contains(prompt, "Staged files:") ||
+		!strings.Contains(prompt, "Do not imitate previous commit messages") {
+		return "", "", fmt.Errorf("expected staged summary and quality rules in prompt")
+	}
 
 	return "feat: improve notes content\n\nextra details", "", nil
 }
@@ -320,6 +325,11 @@ func (runner serviceClaudeCommitRunner) Run(
 	prompt := args[printPromptIndex]
 	if !strings.Contains(prompt, "diff --git") {
 		return "", "", fmt.Errorf("expected staged diff in prompt")
+	}
+	if !strings.Contains(prompt, "Repository context:") ||
+		!strings.Contains(prompt, "Staged files:") ||
+		!strings.Contains(prompt, "Do not imitate previous commit messages") {
+		return "", "", fmt.Errorf("expected staged summary and quality rules in prompt")
 	}
 
 	return "fix: clarify settings model defaults\n\nextra context", "", nil
