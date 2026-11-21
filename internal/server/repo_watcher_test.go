@@ -46,7 +46,7 @@ func TestRepoWatcherPublishesWorktreeEvents(t *testing.T) {
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestRepoWatcherPublishesGitEvents(t *testing.T) {
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestRepoWatcherIgnoresIndexLockChanges(t *testing.T) {
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestRepoWatcherIgnoresOtherGitLockChanges(t *testing.T) {
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestRepoWatcherSkipsGitIgnoredTree(t *testing.T) {
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}

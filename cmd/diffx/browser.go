@@ -2,25 +2,17 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"os/exec"
 	"runtime"
 )
 
-func tryOpenBrowser(targetURL string, stderr io.Writer) {
+func openBrowser(targetURL string) error {
 	command, args, ok := browserOpenCommand(targetURL)
 	if !ok {
-		return
+		return fmt.Errorf("no browser opener for %s", runtime.GOOS)
 	}
 
-	if _, err := exec.LookPath(command); err != nil {
-		return
-	}
-
-	cmd := exec.Command(command, args...)
-	if err := cmd.Start(); err != nil && stderr != nil {
-		fmt.Fprintf(stderr, "warning: failed to open browser: %v\n", err)
-	}
+	return exec.Command(command, args...).Run()
 }
 
 func browserOpenCommand(targetURL string) (string, []string, bool) {

@@ -19,7 +19,7 @@ func TestRepoWatcherIgnoresGitIgnoredFilesCreatedAfterStartup(t *testing.T) {
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestRepoWatcherDoesNotAddWatchesForGitIgnoredDirectoriesCreatedAfterStartup
 	watcher, err := newRepoWatcher(gitstatus.WorkspaceTarget{
 		RepoRoot:  repoRoot,
 		ScopePath: ".",
-	}, hub)
+	}, hub, "", nil)
 	if err != nil {
 		t.Fatalf("newRepoWatcher returned error: %v", err)
 	}

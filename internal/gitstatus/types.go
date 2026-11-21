@@ -1,6 +1,9 @@
 package gitstatus
 
-import "sync"
+import (
+	"log/slog"
+	"sync"
+)
 
 type ChangedFileStatus string
 
@@ -128,6 +131,7 @@ type ConflictResolveResult struct {
 }
 
 type Service struct {
+	logger       *slog.Logger
 	repoRoot     string
 	scopePath    string
 	versionCache *versionCache

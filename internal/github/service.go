@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"diffx/internal/diagnostics"
 )
 
 const (
@@ -20,12 +23,14 @@ const (
 type Service struct {
 	repoRoot string
 	timeout  time.Duration
+	logger   *slog.Logger
 }
 
-func NewService(repoRoot string) *Service {
+func NewService(repoRoot string, logger *slog.Logger) *Service {
 	return &Service{
 		repoRoot: repoRoot,
 		timeout:  ghCommandTimeout,
+		logger:   logger,
 	}
 }
 
@@ -205,9 +210,12 @@ func (s *Service) runGH(ctx context.Context, args ...string) ([]byte, error) {
 
 	cmd := exec.CommandContext(commandCtx, "gh", args...)
 	cmd.Dir = s.repoRoot
+	started := time.Now()
 	output, err := cmd.CombinedOutput()
+	operation := strings.Join(args[:2], " ")
+	diagnostics.Command(commandCtx, s.logger, operation, started, err, output)
 	if commandCtx.Err() != nil {
-		return output, fmt.Errorf("gh %s timed out: %w", strings.Join(args, " "), commandCtx.Err())
+		return output, fmt.Errorf("gh %s: %w", operation, commandCtx.Err())
 	}
 
 	return output, err

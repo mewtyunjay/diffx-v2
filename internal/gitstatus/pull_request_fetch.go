@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"diffx/internal/diagnostics"
 )
 
 const gitFetchTimeout = 30 * time.Second
@@ -58,7 +60,9 @@ func (s *Service) fetchFirstRefspec(ctx context.Context, refspecs []fetchRefspec
 
 func (s *Service) runGitFetch(ctx context.Context, remote string, refspec string) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", s.repoRoot, "fetch", "--no-tags", remote, refspec)
+	started := time.Now()
 	output, err := cmd.CombinedOutput()
+	diagnostics.Command(ctx, s.logger, "fetch PR refs", started, err, output)
 	if ctx.Err() != nil {
 		return fmt.Errorf("git fetch timed out: %w", ctx.Err())
 	}

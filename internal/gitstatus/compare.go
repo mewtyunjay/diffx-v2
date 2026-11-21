@@ -8,6 +8,9 @@ import (
 	"io/fs"
 	"os/exec"
 	"strings"
+	"time"
+
+	"diffx/internal/diagnostics"
 )
 
 type ComparisonMode string
@@ -293,7 +296,15 @@ func (s *Service) listFilesAgainstBase(
 func (s *Service) runGitOutput(ctx context.Context, args ...string) ([]byte, error) {
 	commandArgs := append([]string{"-C", s.repoRoot}, args...)
 	cmd := exec.CommandContext(ctx, "git", commandArgs...)
-	return cmd.Output()
+	started := time.Now()
+	output, err := cmd.Output()
+	var exitErr *exec.ExitError
+	var stderr []byte
+	if errors.As(err, &exitErr) {
+		stderr = exitErr.Stderr
+	}
+	diagnostics.Command(ctx, s.logger, args[0], started, err, stderr)
+	return output, err
 }
 
 func parseNameStatusDiff(output []byte, repoRoot string) ([]ChangedFileItem, error) {

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,11 +23,13 @@ type repoWatchRoots struct {
 }
 
 type repoWatcher struct {
+	logger       *slog.Logger
 	watcher      *fsnotify.Watcher
 	repoEvents   *repoEventHub
 	debounce     time.Duration
 	worktreeRoot string
 	gitDir       string
+	logDir       string
 	ignoredPaths *repoIgnoreMatcher
 	watched      map[string]repoChangeKind
 	suppressMu   sync.Mutex
@@ -35,7 +38,7 @@ type repoWatcher struct {
 	closeOnce    sync.Once
 }
 
-func newRepoWatcher(workspace gitstatus.WorkspaceTarget, repoEvents *repoEventHub) (*repoWatcher, error) {
+func newRepoWatcher(workspace gitstatus.WorkspaceTarget, repoEvents *repoEventHub, logDir string, logger *slog.Logger) (*repoWatcher, error) {
 	roots, err := resolveRepoWatchRoots(workspace)
 	if err != nil {
 		return nil, err
@@ -52,11 +55,13 @@ func newRepoWatcher(workspace gitstatus.WorkspaceTarget, repoEvents *repoEventHu
 	}
 
 	watcher := &repoWatcher{
+		logger:       logger,
 		watcher:      fswatcher,
 		repoEvents:   repoEvents,
 		debounce:     repoWatchDebounce,
 		worktreeRoot: roots.worktreeRoot,
 		gitDir:       roots.gitDir,
+		logDir:       logDir,
 		ignoredPaths: ignoredPaths,
 		watched:      make(map[string]repoChangeKind),
 		done:         make(chan struct{}),
@@ -65,6 +70,9 @@ func newRepoWatcher(workspace gitstatus.WorkspaceTarget, repoEvents *repoEventHu
 	if err := watcher.addInitialWatches(); err != nil {
 		_ = fswatcher.Close()
 		return nil, err
+	}
+	if logger != nil {
+		logger.Debug("watcher ready", "directories", len(watcher.watched))
 	}
 
 	go watcher.run()
@@ -111,6 +119,9 @@ func (w *repoWatcher) addTree(root string, kind repoChangeKind) error {
 }
 
 func (w *repoWatcher) shouldSkipWorktreePath(path string) bool {
+	if pathWithinRoot(path, w.logDir) {
+		return true
+	}
 	if path != w.worktreeRoot {
 		for _, segment := range strings.Split(filepath.ToSlash(path), "/") {
 			if segment == "node_modules" {
@@ -173,10 +184,11 @@ func (w *repoWatcher) run() {
 
 			pendingKind = mergeRepoChangeKind(pendingKind, kind)
 			resetRepoWatchTimer(timer, &timerArmed, w.debounce)
-		case _, ok := <-w.watcher.Errors:
+		case err, ok := <-w.watcher.Errors:
 			if !ok {
 				return
 			}
+			w.logFailure("repository watcher error", err)
 		case <-timer.C:
 			timerArmed = false
 			if pendingKind == "" {
@@ -195,6 +207,9 @@ func (w *repoWatcher) handleEvent(event fsnotify.Event) (repoChangeKind, bool) {
 	}
 
 	cleanPath := filepath.Clean(event.Name)
+	if pathWithinRoot(cleanPath, w.logDir) {
+		return "", false
+	}
 	if w.shouldIgnoreGitPath(cleanPath) {
 		return "", false
 	}
@@ -261,6 +276,7 @@ func (w *repoWatcher) refreshIgnoredPaths() {
 	}
 
 	if err := w.ignoredPaths.reload(); err != nil {
+		w.logFailure("reload Git ignore rules failed", err)
 		return
 	}
 
@@ -276,7 +292,7 @@ func (w *repoWatcher) refreshIgnoredPaths() {
 		delete(w.watched, watchedPath)
 	}
 
-	_ = w.addTree(w.worktreeRoot, repoChangeWorktree)
+	w.logFailure("refresh repository watches failed", w.addTree(w.worktreeRoot, repoChangeWorktree))
 }
 
 func (w *repoWatcher) suppressGitEvents() func() {
@@ -317,7 +333,13 @@ func (w *repoWatcher) addCreatedDirectory(path string, kind repoChangeKind) {
 		return
 	}
 
-	_ = w.addTree(path, kind)
+	w.logFailure("watch new directory failed", w.addTree(path, kind))
+}
+
+func (w *repoWatcher) logFailure(message string, err error) {
+	if w.logger != nil && err != nil {
+		w.logger.Warn(message, "error", err)
+	}
 }
 
 func (w *repoWatcher) removeWatchSubtree(path string) {

@@ -32,6 +32,17 @@ diffx --version              # show the installed version
 
 Settings are stored in `~/.diffx/config.json` and survive upgrades.
 
+## Troubleshooting
+
+Diffx writes private daily JSON logs to `~/.diffx/logs/`. They include startup and shutdown, API requests and timings, Git and GitHub CLI failures, file watcher errors, and AI provider diagnostics. To follow today's log or also print diagnostics to your terminal:
+
+```sh
+tail -f "$HOME/.diffx/logs/diffx-$(date -u +%F).jsonl"
+diffx --debug
+```
+
+Diffx purges log files older than 30 days at startup and hourly while running. Logs can contain repository paths, branch names, and error details. Inspect them before sharing.
+
 ## Upgrade or choose a version
 
 Rerun the install command to upgrade. To pin a release (replace the example tag with a published version):

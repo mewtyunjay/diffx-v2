@@ -29,6 +29,10 @@ func NewDefaultStore() (Store, error) {
 	return NewStore(homeDir), nil
 }
 
+func (store Store) LogDir() string {
+	return filepath.Join(filepath.Dir(store.ConfigPath), "logs")
+}
+
 func (store Store) LoadRootMap() (map[string]any, error) {
 	data, err := os.ReadFile(store.ConfigPath)
 	if err != nil {

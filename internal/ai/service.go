@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"diffx/internal/diagnostics"
 )
 
 const (
@@ -285,30 +287,16 @@ func (s *Service) generateCommitMessageWithProvider(
 	runCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 
+	logger := s.logger
+	if logger != nil {
+		logger = logger.With("provider", provider, "binary", agentStatus.BinaryPath)
+		logger.Debug("generating commit message", "diff_chars", len(diffText))
+	}
 	started := time.Now()
-	logArgs := redactProviderCommandArgs(provider, args)
-	s.logDebug(
-		fmt.Sprintf("%s exec start", provider),
-		"binary", agentStatus.BinaryPath,
-		"working_dir", displayWorkingDir(workingDir),
-		"args", strings.Join(logArgs, " "),
-		"diff_chars", len(diffText),
-	)
-
 	stdout, stderr, err := s.runner.Run(runCtx, agentStatus.BinaryPath, args, workingDir)
-	duration := time.Since(started).Round(time.Millisecond)
 	if err != nil {
 		diagnostic := providerFailureDiagnostic(stderr, stdout, err)
-		s.logError(
-			fmt.Sprintf("%s: %s", provider, diagnostic),
-			"binary", agentStatus.BinaryPath,
-			"working_dir", displayWorkingDir(workingDir),
-			"args", strings.Join(logArgs, " "),
-			"duration", duration,
-			"stderr", truncateLogValue(providerFailureDiagnostic(stderr, "", nil), 300),
-			"stdout", truncateLogValue(providerFailureDiagnostic("", stdout, nil), 300),
-			"error", err.Error(),
-		)
+		diagnostics.Command(runCtx, logger, "generate commit message", started, err, []byte(diagnostic))
 		return "", fmt.Errorf("%s headless execution failed: %s", provider, diagnostic)
 	}
 
@@ -317,24 +305,10 @@ func (s *Service) generateCommitMessageWithProvider(
 		message = sanitizeCommitMessage(stderr)
 	}
 	if message == "" {
-		s.logError(
-			fmt.Sprintf("%s exec empty", provider),
-			"binary", agentStatus.BinaryPath,
-			"working_dir", displayWorkingDir(workingDir),
-			"args", strings.Join(logArgs, " "),
-			"duration", duration,
-			"stderr", truncateLogValue(firstNonEmptyLine(stderr), 300),
-			"stdout", truncateLogValue(firstNonEmptyLine(stdout), 300),
-		)
+		s.logError("provider returned an empty commit message", "provider", provider, "duration_ms", time.Since(started).Milliseconds())
 		return "", fmt.Errorf("%s returned an empty commit message", provider)
 	}
-
-	s.logDebug(
-		fmt.Sprintf("%s exec ok", provider),
-		"binary", agentStatus.BinaryPath,
-		"working_dir", displayWorkingDir(workingDir),
-		"duration", duration,
-	)
+	diagnostics.Command(runCtx, logger, "generate commit message", started, nil, nil)
 
 	return message, nil
 }
@@ -720,44 +694,6 @@ func (s *Service) logError(message string, args ...any) {
 	}
 
 	s.logger.Error(message, args...)
-}
-
-func redactProviderCommandArgs(provider ProviderID, args []string) []string {
-	redacted := append([]string(nil), args...)
-	switch provider {
-	case ProviderCodex:
-		if len(redacted) > 0 {
-			redacted[len(redacted)-1] = "<prompt>"
-		}
-	case ProviderClaude:
-		for index := 0; index < len(redacted)-1; index++ {
-			if redacted[index] == "-p" || redacted[index] == "--print" {
-				redacted[index+1] = "<prompt>"
-				index++
-			}
-		}
-	}
-
-	return redacted
-}
-
-func displayWorkingDir(workingDir string) string {
-	if strings.TrimSpace(workingDir) == "" {
-		return "<default>"
-	}
-
-	return workingDir
-}
-
-func truncateLogValue(value string, maxLength int) string {
-	if len(value) <= maxLength {
-		return value
-	}
-	if maxLength <= 3 {
-		return value[:maxLength]
-	}
-
-	return value[:maxLength-3] + "..."
 }
 
 func formatAgentSummary(agents []AgentStatus) string {

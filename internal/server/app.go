@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -19,10 +18,8 @@ import (
 
 type FrontendConfig struct {
 	Dev        bool
-	Debug      bool
 	WorkingDir string
 	DevURL     string
-	LogOutput  io.Writer
 	FontFamily string
 }
 
@@ -30,6 +27,7 @@ type Config struct {
 	Workspace gitstatus.WorkspaceTarget
 	Frontend  FrontendConfig
 	Review    ReviewConfig
+	Logger    *slog.Logger
 }
 
 type AppConfig struct {
@@ -70,16 +68,13 @@ type App struct {
 }
 
 func New(cfg Config) (*App, error) {
-	repoEvents := newRepoEventHub()
-	logger := newBackendLogger(cfg.Frontend)
-
 	if shouldUseFrontendDev(cfg.Frontend) {
 		frontendHandler, frontendCloser, err := newFrontendDevServer(cfg.Frontend)
 		if err != nil {
 			return nil, err
 		}
 
-		app, err := newApp(cfg, repoEvents, logger)
+		app, err := newApp(cfg, newRepoEventHub())
 		if err != nil {
 			_ = frontendCloser()
 			return nil, err
@@ -87,8 +82,6 @@ func New(cfg Config) (*App, error) {
 
 		app.frontendHandler = frontendHandler
 		app.frontendCloser = frontendCloser
-		app.logger = loggerWithComponent(logger, "api")
-
 		return app, nil
 	}
 
@@ -97,13 +90,7 @@ func New(cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	app, err := newWithAssetFS(cfg, assets)
-	if err != nil {
-		return nil, err
-	}
-	app.logger = loggerWithComponent(logger, "api")
-
-	return app, nil
+	return newWithAssetFS(cfg, assets)
 }
 
 func newWithAssets(cfg Config, embeddedAssets fs.FS) (*App, error) {
@@ -121,7 +108,7 @@ func newWithAssetFS(cfg Config, assets fs.FS) (*App, error) {
 		return nil, err
 	}
 
-	app, err := newApp(cfg, newRepoEventHub(), newBackendLogger(cfg.Frontend))
+	app, err := newApp(cfg, newRepoEventHub())
 	if err != nil {
 		return nil, err
 	}
@@ -166,8 +153,15 @@ func (a *App) Close() error {
 	return a.closeErr
 }
 
-func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, error) {
-	watcher, err := newRepoWatcher(cfg.Workspace, repoEvents)
+func newApp(cfg Config, repoEvents *repoEventHub) (*App, error) {
+	logger := cfg.Logger
+	userConfigStore, err := userconfig.NewDefaultStore()
+	if err != nil {
+		_ = repoEvents.Close()
+		return nil, err
+	}
+
+	watcher, err := newRepoWatcher(cfg.Workspace, repoEvents, userConfigStore.LogDir(), loggerWithComponent(logger, "watcher"))
 	if err != nil {
 		_ = repoEvents.Close()
 		return nil, err
@@ -180,15 +174,8 @@ func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, er
 		return nil, err
 	}
 
-	userConfigStore, err := userconfig.NewDefaultStore()
-	if err != nil {
-		_ = repoEvents.Close()
-		_ = watcher.Close()
-		return nil, err
-	}
-
-	service := gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath)
-	githubService := githubservice.NewService(cfg.Workspace.RepoRoot)
+	service := gitstatus.NewService(cfg.Workspace.RepoRoot, cfg.Workspace.ScopePath, loggerWithComponent(logger, "git"))
+	githubService := githubservice.NewService(cfg.Workspace.RepoRoot, loggerWithComponent(logger, "github"))
 
 	return &App{
 		service:           service,

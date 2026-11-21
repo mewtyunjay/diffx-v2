@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -19,6 +20,7 @@ func runReviewSession(
 	app *server.App,
 	httpServer *http.Server,
 	serverErrCh <-chan error,
+	logger *slog.Logger,
 ) error {
 	type feedbackResult struct {
 		feedback server.ReviewFeedback
@@ -40,6 +42,7 @@ func runReviewSession(
 			return err
 		}
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			logger.Warn("review timed out before feedback")
 			fmt.Fprintln(stdout, "Code review session timed out before feedback was submitted.")
 			return nil
 		}
@@ -53,15 +56,18 @@ func runReviewSession(
 		}
 
 		if result.feedback.Approved {
+			logger.Info("review approved")
 			fmt.Fprintln(stdout, "Code review completed — no changes requested.")
 			return nil
 		}
 
 		if result.feedback.Feedback == "" {
+			logger.Info("review submitted empty feedback")
 			fmt.Fprintln(stdout, "Code review completed — feedback was empty.")
 			return nil
 		}
 
+		logger.Info("review feedback submitted")
 		fmt.Fprintln(stdout, result.feedback.Feedback)
 		fmt.Fprintln(stdout)
 		fmt.Fprintln(stdout, "Intent routing:")

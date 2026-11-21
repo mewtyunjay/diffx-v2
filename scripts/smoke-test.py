@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 
 
@@ -22,6 +23,12 @@ def main():
         repo = root / "repo"
         home.mkdir()
         repo.mkdir()
+        log_dir = home / ".diffx" / "logs"
+        log_dir.mkdir(mode=0o700, parents=True)
+        expired_log = log_dir / "diffx-2000-01-01.jsonl"
+        expired_log.touch(mode=0o600)
+        expired_at = time.time() - 31 * 24 * 60 * 60
+        os.utime(expired_log, (expired_at, expired_at))
         env = dict(os.environ, HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"),
                    XDG_DATA_HOME=str(home / ".local/share"), GIT_CONFIG_NOSYSTEM="1",
                    GIT_CONFIG_GLOBAL=os.devnull)
@@ -78,7 +85,20 @@ def main():
                 assert get(asset), "Empty embedded asset: " + asset
             files = json.loads(get("/api/files"))["files"]
             assert any(item["path"] == "example.txt" for item in files), files
-            print(f"Smoke test passed: {version.strip()}, embedded UI/assets, API, current directory")
+            try:
+                get("/api/file-diff?token=do-not-log")
+                raise AssertionError("Expected missing file path to fail")
+            except urllib.error.HTTPError as error:
+                assert error.code == 400, error
+                error.close()
+
+            assert not expired_log.exists(), "Expired log survived startup"
+            logs = "\n".join(path.read_text() for path in log_dir.glob("diffx-*.jsonl"))
+            records = [json.loads(line) for line in logs.splitlines() if line]
+            assert "do-not-log" not in logs, "Log contains a query token"
+            assert any(record.get("status") == 200 and record.get("path") == "/api/files" for record in records)
+            assert any(record.get("status") == 400 and record.get("error") == "path is required" for record in records)
+            print(f"Smoke test passed: {version.strip()}, embedded UI/assets, API, and diagnostics retention")
         finally:
             process.terminate()
             try:

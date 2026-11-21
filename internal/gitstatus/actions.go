@@ -9,6 +9,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
+
+	"diffx/internal/diagnostics"
 )
 
 var (
@@ -374,7 +377,9 @@ func (s *Service) runGitCombined(ctx context.Context, stdin string, args ...stri
 		cmd.Stdin = strings.NewReader(stdin)
 	}
 
+	started := time.Now()
 	output, err := cmd.CombinedOutput()
+	diagnostics.Command(ctx, s.logger, args[0], started, err, output)
 	if err != nil {
 		return "", formatGitCombinedError(args, output, err)
 	}

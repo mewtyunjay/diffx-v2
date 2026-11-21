@@ -61,6 +61,9 @@ func (a *App) handlePullRequests(w http.ResponseWriter, r *http.Request) {
 		writeGitHubAPIError(w, err)
 		return
 	}
+	if a.logger != nil && result.State.Status != githubservice.IntegrationOK {
+		a.logger.WarnContext(r.Context(), "pull request list unavailable", "filter", state, "reason", result.State.Status, "error", result.State.Message)
+	}
 
 	writeJSON(w, http.StatusOK, result)
 }
@@ -98,6 +101,9 @@ func (a *App) handlePullRequestDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if detail.LocalDiffError != nil {
+		if a.logger != nil {
+			a.logger.WarnContext(r.Context(), "pull request local diff unavailable", "number", number, "error", detail.LocalDiffError)
+		}
 		response.LocalDiff = &pullRequestLocalDiffState{
 			Status:  "local_diff_failed",
 			Message: fmt.Sprintf("PR metadata loaded, but DiffX could not fetch local Git objects for the diff. %s", detail.LocalDiffError.Error()),
