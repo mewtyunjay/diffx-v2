@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { AlertCircle, Check, Copy, LoaderCircle, Send } from "lucide-react"
+import { AlertCircle, Check, Copy, GraduationCap, LoaderCircle, Send } from "lucide-react"
 
 import { BranchPicker } from "@/diff-viewer/BranchPicker"
 import type { BranchOption } from "@/git/types"
@@ -121,6 +121,14 @@ export function SiteHeader({
           />
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button asChild size="icon-sm" variant="outline">
+                <a href="/quiz" aria-label="Open quiz mode"><GraduationCap /></a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>Quiz mode</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

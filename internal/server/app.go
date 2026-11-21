@@ -13,6 +13,7 @@ import (
 	"diffx/internal/ai"
 	githubservice "diffx/internal/github"
 	"diffx/internal/gitstatus"
+	"diffx/internal/quiz"
 	"diffx/internal/userconfig"
 )
 
@@ -52,19 +53,20 @@ type App struct {
 	githubService     *githubservice.Service
 	pullRequestReview *pullRequestReview
 	aiService         *ai.Service
-	repoEvents      *repoEventHub
-	repoWatcher     *repoWatcher
-	reviewFeedback  *reviewFeedbackCoordinator
-	userConfigStore userconfig.Store
-	appConfig       AppConfig
-	assets          fs.FS
-	indexHTML       []byte
-	fileSrv         http.Handler
-	frontendHandler http.Handler
-	frontendCloser  func() error
-	logger          *slog.Logger
-	closeOnce       sync.Once
-	closeErr        error
+	quizService       *quiz.Service
+	repoEvents        *repoEventHub
+	repoWatcher       *repoWatcher
+	reviewFeedback    *reviewFeedbackCoordinator
+	userConfigStore   userconfig.Store
+	appConfig         AppConfig
+	assets            fs.FS
+	indexHTML         []byte
+	fileSrv           http.Handler
+	frontendHandler   http.Handler
+	frontendCloser    func() error
+	logger            *slog.Logger
+	closeOnce         sync.Once
+	closeErr          error
 }
 
 func New(cfg Config) (*App, error) {
@@ -193,6 +195,7 @@ func newApp(cfg Config, repoEvents *repoEventHub, logger *slog.Logger) (*App, er
 		githubService:     githubService,
 		pullRequestReview: newPullRequestReview(githubService, service),
 		aiService:         aiService,
+		quizService:       quiz.NewService(),
 		repoEvents:        repoEvents,
 		repoWatcher:       watcher,
 		logger:            loggerWithComponent(logger, "api"),
