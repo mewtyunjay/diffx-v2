@@ -26,6 +26,7 @@ export type ChangedFileItem = {
   conflictBlocksRemaining?: number
   contentKey: string
   language?: string
+  lineChanges?: { additions: number; deletions: number }
 }
 
 export type ChangedFilesResult = {
@@ -127,6 +128,7 @@ export type PullRequestListItem = {
   title: string
   url: string
   author: string
+  state: "OPEN" | "CLOSED" | "MERGED"
   isDraft: boolean
   baseRefName: string
   headRefName: string
@@ -141,6 +143,8 @@ export type PullRequestListItem = {
   commitsCount?: number
   changedFilesCount?: number
 }
+
+export type PullRequestFilter = "open" | "closed"
 
 export type PullRequestsResult = {
   repo: GitHubRepository

@@ -12,7 +12,7 @@ import (
 
 const (
 	ghCommandTimeout = 20 * time.Second
-	prListFields     = "number,title,url,author,isDraft,baseRefName,headRefName,headRepositoryOwner,headRepository,updatedAt,createdAt,labels,reviewDecision,changedFiles,statusCheckRollup"
+	prListFields     = "number,title,url,author,state,isDraft,baseRefName,headRefName,headRepositoryOwner,headRepository,updatedAt,createdAt,labels,reviewDecision,changedFiles,statusCheckRollup"
 	prDetailFields   = "number,title,url,author,body,state,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,headRepositoryOwner,headRepository,createdAt,updatedAt,labels,reviewDecision,reviewRequests,latestReviews,comments,commits,changedFiles,mergeable,mergeStateStatus,statusCheckRollup"
 	repoFields       = "name,owner,url,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,viewerDefaultMergeMethod"
 )
@@ -29,7 +29,7 @@ func NewService(repoRoot string) *Service {
 	}
 }
 
-func (s *Service) ListOpenPullRequests(ctx context.Context) (PullRequestsResult, error) {
+func (s *Service) ListPullRequests(ctx context.Context, stateFilter string) (PullRequestsResult, error) {
 	repo, state := s.integrationState(ctx)
 	if state.Status != IntegrationOK {
 		return PullRequestsResult{
@@ -39,7 +39,7 @@ func (s *Service) ListOpenPullRequests(ctx context.Context) (PullRequestsResult,
 		}, nil
 	}
 
-	output, err := s.runGH(ctx, "pr", "list", "--state", "open", "--limit", "1000", "--json", prListFields)
+	output, err := s.runGH(ctx, "pr", "list", "--state", stateFilter, "--limit", "1000", "--json", prListFields)
 	if err != nil {
 		return PullRequestsResult{
 			Repo:  repo,

@@ -219,6 +219,11 @@ func (s *Service) listCommitFiles(ctx context.Context, parentHash string, commit
 		return nil, err
 	}
 
+	lineChanges, err := s.readLineChanges(ctx, parentHash, commitHash)
+	if err != nil {
+		return nil, err
+	}
+
 	filteredFiles := make([]ChangedFileItem, 0, len(files))
 	for _, file := range files {
 		if !s.AllowsDiff(file.Path, file.PreviousPath) {
@@ -229,6 +234,7 @@ func (s *Service) listCommitFiles(ctx context.Context, parentHash string, commit
 		file.HasStagedChanges = false
 		file.HasUnstagedChanges = false
 		file.ContentKey = commitFileContentKey(parentHash, commitHash, file)
+		file.LineChanges = lineChanges[file.Path]
 		filteredFiles = append(filteredFiles, file)
 	}
 

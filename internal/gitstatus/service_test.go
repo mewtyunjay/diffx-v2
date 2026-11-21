@@ -190,6 +190,16 @@ func TestReadCommitDetailListsChangedFiles(t *testing.T) {
 	if filesByPath["remove-me.txt"].Status != StatusDeleted {
 		t.Fatalf("expected remove-me.txt deleted, got %#v", filesByPath["remove-me.txt"])
 	}
+	for path, want := range map[string]LineChanges{
+		"added.txt":     {Additions: 1},
+		"mod.txt":       {Additions: 1, Deletions: 1},
+		"remove-me.txt": {Deletions: 1},
+		"renamed.txt":   {},
+	} {
+		if got := filesByPath[path].LineChanges; got != want {
+			t.Errorf("%s line changes = %+v, want %+v", path, got, want)
+		}
+	}
 }
 
 func TestReadCommitDetailRootCommitUsesEmptyTree(t *testing.T) {
@@ -353,6 +363,9 @@ func TestReadPullRequestDiffUsesMergeBaseAndScope(t *testing.T) {
 	}
 	if file.HasStagedChanges || file.HasUnstagedChanges {
 		t.Fatalf("expected PR object file to ignore local stage/worktree state, got %#v", file)
+	}
+	if want := (LineChanges{Additions: 1, Deletions: 1}); file.LineChanges != want {
+		t.Errorf("PR line changes = %+v, want %+v", file.LineChanges, want)
 	}
 }
 
@@ -809,6 +822,7 @@ func TestListChangedFilesAgainstBaseIncludesBranchAndUntrackedChanges(t *testing
 	t.Parallel()
 
 	repoRoot := createComparisonRepo(t)
+	writeFile(t, filepath.Join(repoRoot, "scratch.txt"), "untracked file\nunterminated last line")
 	service := NewService(repoRoot, ".")
 
 	result, err := service.ListChangedFiles(context.Background(), "main")
@@ -851,6 +865,17 @@ func TestListChangedFilesAgainstBaseIncludesBranchAndUntrackedChanges(t *testing
 	}
 	if file := filesByPath["new.txt"]; file.Status != StatusRenamed || file.PreviousPath != "old.txt" {
 		t.Fatalf("expected new.txt to be a rename from old.txt, got %#v", file)
+	}
+	for path, want := range map[string]LineChanges{
+		"alpha.txt":   {Additions: 1, Deletions: 1},
+		"tracked.txt": {Additions: 1},
+		"scratch.txt": {Additions: 2},
+		"keep.txt":    {Deletions: 1},
+		"new.txt":     {},
+	} {
+		if got := filesByPath[path].LineChanges; got != want {
+			t.Errorf("%s line changes = %+v, want %+v", path, got, want)
+		}
 	}
 }
 

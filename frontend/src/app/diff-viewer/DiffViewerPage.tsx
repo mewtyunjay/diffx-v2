@@ -15,6 +15,7 @@ import { usePullRequestsState } from "@/app/diff-viewer/pull-request/usePullRequ
 import { useDiffViewerPreferences } from "@/app/diff-viewer/useDiffViewerPreferences"
 import { resolveCommitSuggestionDisabledReason } from "@/app/diff-viewer/commit-suggestion-guard"
 import { DiffViewerStatusBanners } from "@/app/diff-viewer/DiffViewerStatusBanners"
+import { DiffTotals } from "@/app/diff-viewer/DiffTotals"
 import { WorkingTreeSurface } from "@/app/diff-viewer/WorkingTreeSurface"
 import { canPreviewFile } from "@/components/diff/RenderedFilePane"
 import { useRepoEventsRefresh } from "@/diff-viewer/useRepoEventsRefresh"
@@ -26,7 +27,7 @@ import { useFileTreeNav } from "@/diff-viewer/hooks/useFileTreeNav"
 import { useGitActionCommands } from "@/diff-viewer/hooks/useGitActionCommands"
 import { useMergeConflictState } from "@/diff-viewer/hooks/useMergeConflictState"
 import { useSelectedDiff } from "@/diff-viewer/hooks/useSelectedDiff"
-import type { ChangedFilesResult, CommitItem, MergeMethod, PullRequestListItem } from "@/git/types"
+import type { ChangedFilesResult, CommitItem, MergeMethod, PullRequestFilter, PullRequestListItem } from "@/git/types"
 import { fuzzyFilterChangedFiles } from "@/components/file-tree/fuzzy-search"
 import { AppShell } from "@/components/app-shell"
 import { FileTreePanel } from "@/components/sidebar/FileTreePanel"
@@ -46,6 +47,7 @@ export function DiffViewerPage() {
   const [fileSearchQuery, setFileSearchQuery] = useState("")
   const [renderMode, setRenderMode] = useState<"code" | "preview">("code")
   const [sidebarTab, setSidebarTab] = useState<SidebarPanelTab>("current")
+  const [pullRequestFilter, setPullRequestFilter] = useState<PullRequestFilter>("open")
   const [selectedChangeSet, setSelectedChangeSet] =
     useState<ChangeSetSource>({ kind: "working-tree" })
   const isPullRequestSurface = sidebarTab === "pull-request" || selectedChangeSet.kind === "pull-request"
@@ -256,6 +258,7 @@ export function DiffViewerPage() {
     refresh: refreshPullRequests,
   } = usePullRequestsState({
     enabled: activeSidebarTab === "pull-request",
+    filter: pullRequestFilter,
   })
   const {
     detail: pullRequestDetail,
@@ -316,6 +319,12 @@ export function DiffViewerPage() {
     setSidebarTab("pull-request")
     setSelectedChangeSet({ kind: "pull-request", number: pr.number })
   }, [])
+
+  function handlePullRequestFilterChange(filter: PullRequestFilter) {
+    if (filter === pullRequestFilter) return
+    setPullRequestFilter(filter)
+    setSelectedChangeSet({ kind: "working-tree" })
+  }
 
   const handleApprovePullRequest = useCallback(
     (body?: string) => {
@@ -438,6 +447,19 @@ export function DiffViewerPage() {
   const isSelectedFileDiscardPending =
     selectedFile != null && gitActions.discardPendingPaths.includes(selectedFile.path)
   const isBranchCompareLoading = isFilesLoading && selectedBaseRef !== "HEAD"
+  const commitDetail = commitChangeSetState.detail
+  const pullRequestDiffFiles =
+    !isPullRequestDetailLoading && !pullRequestDetail?.localDiff &&
+    pullRequestDetail?.pr.number === selectedPullRequestNumber
+      ? pullRequestDetail?.files
+      : undefined
+  const diffFiles = isPullRequestSurface
+    ? pullRequestDiffFiles
+    : isWorkingTreeSource
+      ? !isFilesLoading && !filesError ? filteredVisibleFiles : undefined
+      : !commitChangeSetState.isLoading && commitDetail?.commit.hash === selectedCommitHash
+        ? commitDetail?.files
+        : undefined
   const mergeModeSummary =
     mergeState.unresolvedCount === 1
       ? "1 conflicted file remaining"
@@ -505,8 +527,10 @@ export function DiffViewerPage() {
                   prs={pullRequests}
                   state={pullRequestsIntegrationState}
                   error={pullRequestsError}
+                  filter={pullRequestFilter}
                   isLoading={isPullRequestsLoading}
                   selectedNumber={selectedPullRequestNumber}
+                  onFilterChange={handlePullRequestFilterChange}
                   onRefresh={() => void refreshPullRequests()}
                   onSelectPullRequest={handleSelectPullRequest}
                 />
@@ -559,6 +583,7 @@ export function DiffViewerPage() {
           onSelectBaseRef={handleSelectBaseRef}
           onCopyAnnotations={copyAnnotations}
           onSendAnnotations={sendAnnotations}
+          diffTotals={diffFiles && <DiffTotals files={diffFiles} />}
           settingsControl={
             <>
               <Tooltip>

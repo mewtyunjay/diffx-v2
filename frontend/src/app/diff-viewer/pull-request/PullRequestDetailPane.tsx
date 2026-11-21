@@ -181,7 +181,7 @@ export function PullRequestDetailPane({
       <PullRequestPaneMessage
         Icon={GitPullRequest}
         title="Select a pull request"
-        description="Choose an open pull request from the PR sidebar to review metadata and local diffs."
+        description="Choose a pull request from the sidebar to review metadata and diffs."
       />
     )
   }

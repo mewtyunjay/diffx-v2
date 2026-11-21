@@ -200,11 +200,17 @@ func (s *Service) listPullRequestFiles(
 		return nil, 0, err
 	}
 
+	lineChanges, err := s.readLineChanges(ctx, mergeBase, headCommit)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	filteredFiles := make([]ChangedFileItem, 0, len(files))
 	outsideScopeCount := 0
 	for _, file := range files {
 		file.DisplayPath = displayPathForScope(file.Path, file.PreviousPath, s.scopePath)
 		file.ContentKey = pullRequestFileContentKey(mergeBase, headCommit, file)
+		file.LineChanges = lineChanges[file.Path]
 		if s.AllowsDiff(file.Path, file.PreviousPath) {
 			filteredFiles = append(filteredFiles, file)
 		} else {

@@ -1,70 +1,61 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { fetchPullRequests } from "@/git/api"
-import type {
-  GitHubIntegrationState,
-  GitHubRepository,
-  PullRequestListItem,
-} from "@/git/types"
+import type { PullRequestFilter, PullRequestsResult } from "@/git/types"
 
-type UsePullRequestsStateOptions = {
-  enabled: boolean
+type ListSnapshot = {
+  result?: PullRequestsResult
+  error?: string
+  isLoading?: boolean
 }
 
-export function usePullRequestsState({ enabled }: UsePullRequestsStateOptions) {
-  const [repo, setRepo] = useState<GitHubRepository | null>(null)
-  const [prs, setPRs] = useState<PullRequestListItem[]>([])
-  const [state, setState] = useState<GitHubIntegrationState | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [hasLoaded, setHasLoaded] = useState(false)
+export function usePullRequestsState({ enabled, filter }: {
+  enabled: boolean
+  filter: PullRequestFilter
+}) {
+  const [snapshots, setSnapshots] = useState<Partial<Record<PullRequestFilter, ListSnapshot>>>({})
+  const requests = useRef<Partial<Record<PullRequestFilter, AbortController>>>({})
+  const snapshot = snapshots[filter]
 
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    setIsLoading(true)
-    setError(null)
+  const refresh = useCallback(async () => {
+    requests.current[filter]?.abort()
+    const controller = new AbortController()
+    requests.current[filter] = controller
+    setSnapshots((current) => ({
+      ...current,
+      [filter]: { result: current[filter]?.result, isLoading: true },
+    }))
 
     try {
-      const result = await fetchPullRequests(signal)
-      if (signal?.aborted) {
-        return
-      }
-
-      setRepo(result.repo)
-      setPRs(result.prs)
-      setState(result.state)
-      setHasLoaded(true)
+      const result = await fetchPullRequests(filter, controller.signal)
+      if (controller.signal.aborted) return
+      setSnapshots((current) => ({ ...current, [filter]: { result } }))
     } catch (requestError) {
-      if (signal?.aborted) {
-        return
-      }
-
-      setError(requestError instanceof Error ? requestError.message : "Unable to load pull requests.")
-      setHasLoaded(true)
+      if (controller.signal.aborted) return
+      const error = requestError instanceof Error ? requestError.message : "Unable to load pull requests."
+      setSnapshots((current) => ({ ...current, [filter]: { error } }))
     } finally {
-      if (!signal?.aborted) {
-        setIsLoading(false)
-      }
+      if (requests.current[filter] === controller) delete requests.current[filter]
+    }
+  }, [filter])
+
+  useEffect(() => {
+    if (enabled) void refresh()
+  }, [enabled, refresh])
+
+  useEffect(() => {
+    return () => {
+      for (const controller of Object.values(requests.current)) controller.abort()
+      requests.current = {}
     }
   }, [])
 
-  useEffect(() => {
-    if (!enabled || hasLoaded) {
-      return
-    }
-
-    const controller = new AbortController()
-    void refresh(controller.signal)
-
-    return () => controller.abort()
-  }, [enabled, hasLoaded, refresh])
-
   return {
-    repo,
-    prs,
-    state,
-    error,
-    isLoading,
-    hasLoaded,
+    repo: snapshot?.result?.repo ?? null,
+    prs: snapshot?.result?.prs ?? [],
+    state: snapshot?.result?.state ?? null,
+    error: snapshot?.error ?? null,
+    isLoading: enabled && (!snapshot || snapshot.isLoading === true),
     refresh,
   }
 }

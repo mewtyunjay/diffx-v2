@@ -1,4 +1,4 @@
-import { GitPullRequest } from "lucide-react"
+import { GitMerge, GitPullRequest, GitPullRequestClosed } from "lucide-react"
 
 import type { PullRequestListItem as PullRequestListItemType } from "@/git/types"
 import { cn } from "@/lib/utils"
@@ -24,6 +24,8 @@ function formatUpdatedDate(value: string) {
 }
 
 function statusLabel(pr: PullRequestListItemType) {
+  if (pr.state === "MERGED") return "Merged"
+  if (pr.state === "CLOSED") return "Closed"
   if (pr.isDraft) {
     return "Draft"
   }
@@ -50,6 +52,8 @@ function statusLabel(pr: PullRequestListItemType) {
 }
 
 function statusClassName(pr: PullRequestListItemType) {
+  if (pr.state === "MERGED") return "border-violet-500/25 bg-violet-500/10 text-violet-300"
+  if (pr.state === "CLOSED") return "border-sidebar-border bg-sidebar-accent/45 text-sidebar-foreground/72"
   if (pr.isDraft) {
     return "border-sidebar-border bg-sidebar-accent/55 text-sidebar-foreground/62"
   }
@@ -77,6 +81,7 @@ export function PullRequestListItem({
       ? null
       : `${pr.changedFilesCount} ${pr.changedFilesCount === 1 ? "file" : "files"}`
   const branchLabel = `${pr.headRefName} -> ${pr.baseRefName}`
+  const StatusIcon = pr.state === "MERGED" ? GitMerge : pr.state === "CLOSED" ? GitPullRequestClosed : GitPullRequest
 
   return (
     <button
@@ -90,7 +95,7 @@ export function PullRequestListItem({
       onClick={() => onSelectPullRequest(pr)}
     >
       <span className="flex min-w-0 items-start gap-2">
-        <GitPullRequest
+        <StatusIcon
           className={cn(
             "mt-0.5 size-3.5 shrink-0 text-sidebar-primary/70",
             isActive && "text-sidebar-primary"

@@ -118,6 +118,7 @@ func parsePullRequestList(output []byte) ([]PullRequestListItem, error) {
 			Title:               pr.Title,
 			URL:                 pr.URL,
 			Author:              bestAccountName(pr.Author),
+			State:               pr.State,
 			IsDraft:             pr.IsDraft,
 			BaseRefName:         pr.BaseRefName,
 			HeadRefName:         pr.HeadRefName,

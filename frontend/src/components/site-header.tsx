@@ -23,6 +23,7 @@ type SiteHeaderProps = {
   onSelectBaseRef: (baseRef: string) => void
   onCopyAnnotations: () => void
   onSendAnnotations: () => void
+  diffTotals?: ReactNode
   settingsControl?: ReactNode
 }
 
@@ -89,6 +90,7 @@ export function SiteHeader({
   onSelectBaseRef,
   onCopyAnnotations,
   onSendAnnotations,
+  diffTotals,
   settingsControl,
 }: SiteHeaderProps) {
   const copyButton = getCopyButtonContents(copyState)
@@ -119,6 +121,7 @@ export function SiteHeader({
             disabled={isBranchesLoading || branchesError != null}
             variant="header"
           />
+          {diffTotals}
         </div>
         <div className="ml-auto flex items-center gap-3">
           <Tooltip>

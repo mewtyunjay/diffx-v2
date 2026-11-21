@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   CheckCircle2,
-  CircleDot,
   GitBranch,
   LoaderCircle,
   RefreshCw,
@@ -11,6 +10,7 @@ import { PullRequestListItem as PullRequestListRow } from "@/app/diff-viewer/pul
 import type {
   GitHubIntegrationState,
   GitHubRepository,
+  PullRequestFilter,
   PullRequestListItem,
 } from "@/git/types"
 import { SidebarPanelStickyHeader } from "@/components/sidebar/SidebarPanelStickyHeader"
@@ -22,8 +22,10 @@ type PullRequestListPanelProps = {
   prs: PullRequestListItem[]
   state: GitHubIntegrationState | null
   error: string | null
+  filter: PullRequestFilter
   isLoading: boolean
   selectedNumber: number | null
+  onFilterChange: (filter: PullRequestFilter) => void
   onRefresh: () => void
   onSelectPullRequest: (pr: PullRequestListItem) => void
 }
@@ -72,8 +74,10 @@ export function PullRequestListPanel({
   prs,
   state,
   error,
+  filter,
   isLoading,
   selectedNumber,
+  onFilterChange,
   onRefresh,
   onSelectPullRequest,
 }: PullRequestListPanelProps) {
@@ -88,7 +92,7 @@ export function PullRequestListPanel({
             <div className="flex min-w-0 items-center gap-2 text-sidebar-foreground/72">
               <GitBranch className="size-3.5 shrink-0 text-sidebar-foreground/45" />
               <p className="min-w-0 truncate type-meta font-medium">
-                {prs.length} open {prs.length === 1 ? "PR" : "PRs"}
+                {prs.length} {filter} {prs.length === 1 ? "PR" : "PRs"}
               </p>
             </div>
             <p className="mt-0.5 truncate type-mono-meta text-sidebar-foreground/38">
@@ -116,6 +120,21 @@ export function PullRequestListPanel({
             </TooltipContent>
           </Tooltip>
         </div>
+        <div className="surface-segmented mt-2 flex gap-0.5 p-0.5" role="group" aria-label="Pull request state">
+          {(["open", "closed"] as const).map((option) => (
+            <Button
+              key={option}
+              type="button"
+              size="xs"
+              variant={filter === option ? "secondary" : "ghost"}
+              className="flex-1"
+              aria-pressed={filter === option}
+              onClick={() => onFilterChange(option)}
+            >
+              {option === "open" ? "Open" : "Closed"}
+            </Button>
+          ))}
+        </div>
       </SidebarPanelStickyHeader>
 
       {isLoading && prs.length === 0 ? <PullRequestListSkeleton /> : null}
@@ -135,8 +154,7 @@ export function PullRequestListPanel({
       {!isLoading && !error && !hasIntegrationError && prs.length === 0 ? (
         <PullRequestListMessage
           Icon={CheckCircle2}
-          title="No open pull requests"
-          description="Open PRs for this repository will appear here."
+          title={`No ${filter} pull requests`}
         />
       ) : null}
 
@@ -161,12 +179,6 @@ export function PullRequestListPanel({
         </div>
       ) : null}
 
-      {state?.status === "ok" && prs.length > 0 ? (
-        <div className="mt-2 flex items-center gap-1.5 border-t border-sidebar-border/45 px-1 pt-2 type-meta text-sidebar-foreground/45">
-          <CircleDot className="size-3" />
-          <span>Open PRs only</span>
-        </div>
-      ) : null}
     </div>
   )
 }

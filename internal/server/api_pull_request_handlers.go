@@ -46,7 +46,17 @@ func (a *App) handlePullRequests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := a.githubService.ListOpenPullRequests(r.Context())
+	state := r.URL.Query().Get("state")
+	switch state {
+	case "":
+		state = "open"
+	case "open", "closed":
+	default:
+		http.Error(w, "state must be open or closed", http.StatusBadRequest)
+		return
+	}
+
+	result, err := a.githubService.ListPullRequests(r.Context(), state)
 	if err != nil {
 		writeGitHubAPIError(w, err)
 		return

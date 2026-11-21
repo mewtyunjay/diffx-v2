@@ -15,6 +15,7 @@ func TestParsePullRequestListNormalizesSidebarMetadata(t *testing.T) {
 			"title": "Ship PR tab",
 			"url": "https://github.com/acme/diffx/pull/12",
 			"author": {"login": "alex"},
+			"state": "OPEN",
 			"isDraft": true,
 			"baseRefName": "main",
 			"headRefName": "feature/pr-tab",
@@ -31,18 +32,20 @@ func TestParsePullRequestListNormalizesSidebarMetadata(t *testing.T) {
 				{"conclusion": "SUCCESS"},
 				{"state": "PENDING"}
 			]
-		}
+		},
+		{"number": 11, "state": "CLOSED"},
+		{"number": 10, "state": "MERGED"}
 	]`))
 	if err != nil {
 		t.Fatalf("parsePullRequestList returned error: %v", err)
 	}
 
-	if len(prs) != 1 {
-		t.Fatalf("expected one PR, got %#v", prs)
+	if len(prs) != 3 {
+		t.Fatalf("expected three PRs, got %#v", prs)
 	}
 
 	pr := prs[0]
-	if pr.Number != 12 || pr.Title != "Ship PR tab" || !pr.IsDraft {
+	if pr.Number != 12 || pr.Title != "Ship PR tab" || pr.State != "OPEN" || !pr.IsDraft {
 		t.Fatalf("unexpected PR list item: %#v", pr)
 	}
 	if pr.Author != "alex" || pr.HeadRepositoryOwner != "fork-owner" || pr.HeadRepositoryName != "diffx-fork" {
@@ -53,6 +56,9 @@ func TestParsePullRequestListNormalizesSidebarMetadata(t *testing.T) {
 	}
 	if len(pr.Labels) != 2 || pr.Labels[0] != "ui" || pr.Labels[1] != "backend" {
 		t.Fatalf("expected labels, got %#v", pr.Labels)
+	}
+	if prs[1].State != "CLOSED" || prs[2].State != "MERGED" {
+		t.Fatalf("expected distinct closed and merged states, got %#v", prs)
 	}
 }
 

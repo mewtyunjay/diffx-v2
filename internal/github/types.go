@@ -58,6 +58,7 @@ type PullRequestListItem struct {
 	Title               string   `json:"title"`
 	URL                 string   `json:"url"`
 	Author              string   `json:"author"`
+	State               string   `json:"state"`
 	IsDraft             bool     `json:"isDraft"`
 	BaseRefName         string   `json:"baseRefName"`
 	HeadRefName         string   `json:"headRefName"`

@@ -94,6 +94,21 @@ func (s *Service) ListChangedFiles(ctx context.Context, baseRef string) (Changed
 		return ChangedFilesResult{}, err
 	}
 
+	if len(filteredFiles) > 0 {
+		lineChanges, err := s.readLineChanges(ctx, comparison.BaseCommit)
+		if err != nil {
+			return ChangedFilesResult{}, err
+		}
+		for index, diff := range fileDiffs {
+			file := &filteredFiles[index]
+			if !file.IsTracked && !diff.Binary && !diff.TooLarge {
+				file.LineChanges.Additions = countTextLines(diff.After.Contents)
+			} else if file.IsTracked {
+				file.LineChanges = lineChanges[file.Path]
+			}
+		}
+	}
+
 	var initialDiff *FileDiffResult
 	if len(fileDiffs) > 0 {
 		initialDiff = &fileDiffs[0]

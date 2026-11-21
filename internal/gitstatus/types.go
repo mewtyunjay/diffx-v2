@@ -27,6 +27,7 @@ type ChangedFileItem struct {
 	ConflictBlocksRemaining int               `json:"conflictBlocksRemaining,omitempty"`
 	ContentKey              string            `json:"contentKey"`
 	Language                string            `json:"language,omitempty"`
+	LineChanges             LineChanges       `json:"lineChanges"`
 }
 
 type ChangedFilesResult struct {

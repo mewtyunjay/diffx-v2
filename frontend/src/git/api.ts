@@ -11,6 +11,7 @@ import type {
   FileDiffResult,
   HunkActionInput,
   MergePullRequestInput,
+  PullRequestFilter,
   PullRequestDetailResult,
   PullRequestsResult,
   PushResult,
@@ -95,8 +96,8 @@ export async function fetchCommitDetail(hash: string, signal?: AbortSignal) {
   return (await response.json()) as CommitDetailResult
 }
 
-export async function fetchPullRequests(signal?: AbortSignal) {
-  const response = await fetch("/api/pull-requests", { signal })
+export async function fetchPullRequests(filter: PullRequestFilter, signal?: AbortSignal) {
+  const response = await fetch(`/api/pull-requests?state=${filter}`, { signal })
   if (!response.ok) {
     throw new Error(await readError(response))
   }
